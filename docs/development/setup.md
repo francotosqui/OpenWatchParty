@@ -137,7 +137,6 @@ OpenWatchParty/
 ├── docs/                      # Documentation
 │
 ├── justfile                   # Build automation
-├── CLAUDE.md                  # AI assistant context
 └── README.md                  # Project overview
 ```
 

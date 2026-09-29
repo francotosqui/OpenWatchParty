@@ -95,7 +95,7 @@ fix: prevent feedback loop in HLS buffering
 docs: update installation instructions
 ```
 
-**Note:** Do not add AI signature lines (`Co-Authored-By: Claude` etc.) to commits.
+**Note:** Do not add AI signature or co-author lines (such as `Co-Authored-By` trailers) to commits.
 
 ## Pull Request Process
 
