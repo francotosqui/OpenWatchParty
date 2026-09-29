@@ -5,7 +5,7 @@ nav_order: 1
 ---
 
 <p align="center">
-  <img src="logo.png" alt="OpenWatchParty" width="400">
+  <img src="readme-logo.png" alt="OpenWatchParty — Real-time sync for Jellyfin" width="480">
 </p>
 
 # OpenWatchParty Documentation
