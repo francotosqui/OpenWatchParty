@@ -164,6 +164,14 @@ reset: down
     @just clean docker
     @just clean
 
+# -- Assets ------------------------------------------------------------------
+
+[doc('Regenerate the transparent branding assets (README logo + app icon)')]
+branding:
+    @echo -e "{{CYAN}}▶ Rebuilding branding assets...{{RESET}}"
+    @infra/scripts/build-branding.py
+    @echo -e "{{GREEN}}✓ Branding assets rebuilt{{RESET}}"
+
 # -- Setup -------------------------------------------------------------------
 
 [doc('Configure git hooks and local dev environment')]
