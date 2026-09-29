@@ -16,12 +16,14 @@ Before using OpenWatchParty, ensure your Jellyfin administrator has:
 ## Creating a Watch Party
 
 1. **Start playing a video** - Open any movie or TV episode in Jellyfin
-2. **Find the Watch Party button** - Open the player controls and select **Watch Party**
+2. **Find the Watch Party button** - Open the player controls and select the **Watch Party** (groups) icon
 3. **Click to open the panel** - A slide-out panel appears
-4. **Enter a room name** - Give your party a descriptive name
-5. **Click "Start Room"** - You are now the host
+4. **Click "Create Room"** - The room is created and named after you (`Room de <you>`)
+5. **Wait for participants** - The room appears in everyone's "Available Rooms" list and on the Jellyfin home page
 
 As the host, you control playback for everyone. When you play, pause, or seek, all participants follow.
+
+![The Watch Party panel during an active session]({{ '/assets/images/watch-party-panel.png' | relative_url }})
 
 ## Joining a Watch Party
 
@@ -35,12 +37,14 @@ As the host, you control playback for everyone. When you play, pause, or seek, a
 
 The Jellyfin homepage displays active watch parties in a dedicated "Watch Parties" section, making it easy to discover and join ongoing sessions.
 
+![Active watch parties on the Jellyfin home page]({{ '/assets/images/watch-parties-home.png' | relative_url }})
+
 **How it works:**
 
 1. **Go to Jellyfin home** - Active watch parties appear in a dedicated section below your media libraries
 2. **Browse party cards** - Each card shows:
    - Media cover image (movie poster or episode thumbnail)
-   - Room name (set by the host)
+   - Room name (generated from the host's username)
    - Participant count (e.g., "2 watching")
    - Play button overlay for quick join
 3. **Join options:**
@@ -86,9 +90,11 @@ As a participant:
 
 ## The Panel Interface
 
+![Close-up of an active room: participants, chat, latency and room ID]({{ '/assets/images/watch-party-panel-closeup.png' | relative_url }})
+
 ### Lobby View (Not in a room)
 - **Room list** - Active watch parties with names and participant counts
-- **Create room** - Input for room name and "Start Room" button
+- **Create room** - "Create Room" button; the room is named after you
 - **Connection status** - Online/Offline indicator
 
 ### In-Room View
@@ -97,7 +103,7 @@ As a participant:
 - **Sync indicator** - Shows sync status (participants only)
 - **Chat** - Text messaging with other participants
 - **RTT** - Round-trip time to server (latency indicator)
-- **Leave button** - Exit the watch party
+- **Leave button** - Exit the watch party (the host closes the room for everyone)
 
 ## Using Chat
 
@@ -129,6 +135,8 @@ Participants see a sync status indicator that shows how well their playback is a
 | Waiting for sync | Spinner | Synchronized play is being scheduled |
 
 The "Out of sync" state is normal for a few seconds after joining or after the host seeks. The system automatically adjusts your playback speed to catch up.
+
+![The participant view showing the In sync badge]({{ '/assets/images/watch-party-sync.png' | relative_url }})
 
 ## Notifications
 

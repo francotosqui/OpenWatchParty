@@ -57,7 +57,7 @@ nav_order: 2
 |---------|--------|
 | 12.0 / 12.1 | Validated package (`12.0.0`, ABI `12.0.0.0`) and image (`12.1`) for OpenWatchParty `0.4.0` |
 | ABI 12.0.0.0 | Plugin compatibility target |
-| 10.11.3 / ABI 10.11.0.0 | Last supported by OpenWatchParty `0.3.3` |
+| 10.11.3 / ABI 10.11.0.0 | Last supported by OpenWatchParty `0.3.4` |
 | Others | See compatibility matrix |
 
 Full details: [Compatibility Matrix](../operations/compatibility.md)
