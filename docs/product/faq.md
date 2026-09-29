@@ -118,6 +118,5 @@ Open an issue on the [GitHub repository](https://github.com/mhbxyz/OpenWatchPart
 See the [Contributing Guide](../development/contributing.md) for how to submit pull requests.
 
 ### Where can I get help?
-- GitHub Issues for bugs and feature requests
-- GitHub Discussions for questions
+- [GitHub Issues](https://github.com/mhbxyz/OpenWatchParty/issues/new/choose) for bugs, feature requests, and questions
 - Jellyfin community forums

@@ -45,7 +45,7 @@ See the [Development Setup Guide](https://mhbxyz.github.io/OpenWatchParty/develo
 
 - [Report bugs](https://github.com/mhbxyz/OpenWatchParty/issues)
 - [Submit pull requests](https://github.com/mhbxyz/OpenWatchParty/pulls)
-- [Contributing Guide](https://mhbxyz.github.io/OpenWatchParty/development/contributing.html)
+- [Contributing Guide](CONTRIBUTING.md)
 
 ## License
 

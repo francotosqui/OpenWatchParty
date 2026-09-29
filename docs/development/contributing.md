@@ -106,6 +106,7 @@ docs: update installation instructions
 - [ ] Documentation updated
 - [ ] Commit messages are clear
 - [ ] Branch is up to date with main
+- [ ] The [Code of Conduct](https://github.com/mhbxyz/OpenWatchParty/blob/main/CODE_OF_CONDUCT.md) has been reviewed
 
 ### 2. Creating a PR
 
@@ -139,7 +140,7 @@ docs: update installation instructions
 
 ### Good First Issues
 
-Look for issues labeled `good-first-issue`:
+Look for issues labeled `good first issue`:
 - Documentation improvements
 - Bug fixes with clear reproduction steps
 - Small feature additions
@@ -158,7 +159,7 @@ Look for issues labeled `good-first-issue`:
 
 Before implementing:
 1. Check existing issues
-2. Open a discussion or issue
+2. Open a feature request issue
 3. Get feedback on approach
 4. Then implement
 
@@ -262,25 +263,7 @@ just build    # Build all components
 
 ## Code of Conduct
 
-### Be Respectful
-
-- Welcome newcomers
-- Be patient with questions
-- Accept constructive criticism
-- Focus on what's best for the project
-
-### Be Professional
-
-- No harassment or discrimination
-- Keep discussions on-topic
-- Respect others' time
-
-### Report Issues
-
-If you experience or witness unacceptable behavior:
-- Contact maintainers privately
-- Provide specific details
-- Allow time for investigation
+Please read the [Code of Conduct](https://github.com/mhbxyz/OpenWatchParty/blob/main/CODE_OF_CONDUCT.md) for community expectations and how to report unacceptable behavior.
 
 ## Recognition
 
@@ -291,9 +274,9 @@ Contributors are recognized in:
 
 ## Questions?
 
-- Open a GitHub Discussion for general questions
+- Open a question issue for general questions
 - Open an Issue for bugs or feature requests
-- Check existing issues and discussions first
+- Check existing issues first
 
 ## License
 

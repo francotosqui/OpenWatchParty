@@ -273,14 +273,14 @@ If a release has critical issues:
 1. **Immediate**: Advise users to use previous version
 2. **GitHub**: Mark release as pre-release or delete
 3. **Fix**: Create hotfix release
-4. **Communicate**: Update issue/discussion with status
+4. **Communicate**: Update the relevant issue or release notes with status
 
 ## Release Communication
 
 ### Channels
 
 - GitHub Releases (primary)
-- GitHub Discussions (announcements)
+- GitHub Issues (follow-up on reported problems)
 - Jellyfin forums (if applicable)
 
 ### Template

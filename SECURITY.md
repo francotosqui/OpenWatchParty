@@ -4,8 +4,9 @@
 
 | Version | Supported |
 | --- | --- |
-| 0.2.x | Yes |
-| 0.1.x and older | No |
+| 0.4.x (Jellyfin 12) | Yes |
+| 0.3.4 (Jellyfin 10.11) | Yes |
+| 0.3.3 and older | No |
 
 ## Reporting a Vulnerability
 
