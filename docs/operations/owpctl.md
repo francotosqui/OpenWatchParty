@@ -23,8 +23,15 @@ Release assets also contain Sigstore and provenance bundles for independent veri
 ## Graphical Setup
 
 ```bash
-owpctl --scope system setup --web
+owpctl setup --web
 ```
+
+This uses user scope and requires Docker access for that user. For system
+scope, use `sudo owpctl --scope system setup --web` and open the one-time URL
+printed in the terminal if it does not launch a browser. The
+[illustrated walkthrough]({{ '/product/first-watch-party/#path-b-existing-jellyfin' | relative_url }})
+shows where to create a temporary Jellyfin API key, what to enter in the
+assistant and how to verify the result.
 
 The command opens a one-time URL bound to `127.0.0.1`. The browser assistant:
 

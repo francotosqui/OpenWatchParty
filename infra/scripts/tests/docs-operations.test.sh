@@ -73,16 +73,24 @@ awk '
     }
 ' "$installation"
 
-for document in "$repository_root"/docs/operations/*.md; do
+for document in "$repository_root"/docs/operations/*.md \
+    "$repository_root"/docs/product/first-watch-party.md \
+    "$repository_root"/docs/product/user-guide.md; do
     while IFS= read -r markdown_link; do
         target=${markdown_link#*](}
         target=${target%)}
         target=${target%%#*}
         case "$target" in
             '' | http://* | https://* | mailto:*) continue ;;
+            "{{ '/"*)
+                # Jekyll's relative_url links use a site-root path, not the
+                # source document's directory. Check the corresponding page.
+                path=${target#*\'}
+                path=${path%%\'*}
+                candidate="$repository_root/docs${path%/}"
+                ;;
+            *) candidate="$(dirname -- "$document")/$target" ;;
         esac
-
-        candidate="$(dirname -- "$document")/$target"
         if [[ ! -e $candidate && ! -e ${candidate}.md && ! -e $candidate/index.md ]]; then
             printf 'Broken local link in %s: %s\n' "${document#"$repository_root/"}" "$target" >&2
             exit 1

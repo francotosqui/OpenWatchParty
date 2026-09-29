@@ -8,17 +8,19 @@ nav_order: 1
 
 ## Recommended: Guided Setup
 
+For screenshots of every step, including a two-person demonstration, follow
+the [illustrated first watch-party tutorial]({{ '/product/first-watch-party/' | relative_url }}).
 Download `owpctl` and run the local graphical assistant:
 
 ```bash
-owpctl --scope system setup --web
+owpctl setup --web
 ```
 
-See [Guided Setup and owpctl](owpctl.md) for download verification, headless installation, diagnostics, upgrades and uninstall. The remaining sections on this page are manual and advanced alternatives.
+This uses the current user's configuration and Docker access. For a system-wide installation, run `sudo owpctl --scope system setup --web` and open its printed one-time URL if the browser does not start. See [Guided Setup and owpctl]({{ '/operations/owpctl/' | relative_url }}) for download verification, headless installation, diagnostics, upgrades and uninstall. The remaining sections on this page are manual and advanced alternatives.
 
 ## Prerequisites
 
-- **Jellyfin Server** version compatible with your OpenWatchParty build (see [Compatibility Matrix](compatibility.md))
+- **Jellyfin Server** version compatible with your OpenWatchParty build (see [Compatibility Matrix]({{ '/operations/compatibility/' | relative_url }}))
 - **Docker** and **Docker Compose** (recommended)
 - **Port 3000** available for the session server
 - Admin access to Jellyfin
@@ -75,6 +77,9 @@ Keep the generated value temporarily. It must be entered in the plugin configura
 3. Set the session WebSocket URL, or explicitly trust same-host port 3000 auto-detection.
 4. Save, reload Jellyfin Web, and open a movie.
 5. Confirm that the **Watch Party** button appears in the video player.
+
+If guests connect from another network, first configure a publicly reachable
+`wss://` URL as shown in the [remote access example]({{ '/product/first-watch-party/#4-if-your-guest-is-on-another-network' | relative_url }}). `127.0.0.1:3000` is reachable only from the server machine, not from a guest's browser.
 
 ![OpenWatchParty settings reporting the plugin, client injection and session server as ready](../assets/images/plugin-configuration.png)
 
@@ -235,7 +240,7 @@ This method provides automatic update notifications when new versions are releas
 # Check if server is running
 curl http://localhost:3000/health
 
-# Expected response: 200 OK with "OK"
+# Expected response: HTTP 200 with JSON containing "status":"ok"
 ```
 
 ### Check Plugin
@@ -325,10 +330,10 @@ sudo firewall-cmd --reload
 - Check firewall rules
 - Verify the WebSocket URL in client
 
-For more troubleshooting, see [Troubleshooting Guide](troubleshooting.md).
+For more troubleshooting, see [Troubleshooting Guide]({{ '/operations/troubleshooting/' | relative_url }}).
 
 ## Next Steps
 
-- [Configuration](configuration.md) - Configure options
-- [Security](security.md) - Set up authentication
-- [Deployment](deployment.md) - Production deployment
+- [Configuration]({{ '/operations/configuration/' | relative_url }}) - Configure options
+- [Security]({{ '/operations/security/' | relative_url }}) - Set up authentication
+- [Deployment]({{ '/operations/deployment/' | relative_url }}) - Production deployment

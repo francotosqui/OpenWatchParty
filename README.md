@@ -25,13 +25,7 @@ OpenWatchParty enables synchronized media playback for [Jellyfin](https://jellyf
 
 ### Users
 
-```bash
-docker run -d --name owp-session -p 3000:3000 \
-  -e ALLOWED_ORIGINS="http://your-jellyfin:8096" \
-  ghcr.io/mhbxyz/owp-session-server:latest
-```
-
-Then install the plugin from Jellyfin's catalog. See the [Installation Guide](https://mhbxyz.github.io/OpenWatchParty/operations/installation.html) for full instructions.
+Already running Jellyfin? Follow the [illustrated first watch-party tutorial](https://mhbxyz.github.io/OpenWatchParty/product/first-watch-party/) to install the plugin and session server, verify them, and invite a second user. The server needs authentication configured on **both** sides; starting its container alone is not a complete installation.
 
 ### Developers
 
@@ -41,7 +35,7 @@ cd OpenWatchParty
 just up
 ```
 
-See the [Development Setup Guide](https://mhbxyz.github.io/OpenWatchParty/development/setup.html) for the full workflow.
+See the [Development Setup Guide](https://mhbxyz.github.io/OpenWatchParty/development/setup/) and then the [illustrated two-user walkthrough](https://mhbxyz.github.io/OpenWatchParty/product/first-watch-party/#host-create-a-room).
 
 ## Documentation
 

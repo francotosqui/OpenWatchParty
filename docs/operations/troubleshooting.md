@@ -10,7 +10,7 @@ nav_order: 5
 
 1. [ ] Session server running? (`curl http://localhost:3000/health`)
 2. [ ] Plugin installed? (Check Dashboard > Plugins)
-3. [ ] Script tag in Custom HTML? (Dashboard > General)
+3. [ ] Client injection ready in the OpenWatchParty plugin dashboard? (Custom HTML is only a fallback.)
 4. [ ] Browser cache cleared? (Ctrl+F5)
 5. [ ] Correct WebSocket URL?
 6. [ ] Firewall allowing port 3000?
@@ -30,9 +30,10 @@ nav_order: 5
 
 **Solutions:**
 
-1. **Check Custom HTML configuration**
-   - Go to Dashboard > General > Branding
-   - Verify this line is in "Custom HTML body":
+1. **Check the OpenWatchParty plugin dashboard**
+   - Go to Dashboard > Plugins > OpenWatchParty and run diagnostics.
+   - Verify client injection reports ready. Native injection does not need a Custom HTML entry.
+   - If native injection is blocked, follow [Client Injection Compatibility Fallbacks]({{ '/operations/installation/#client-injection-compatibility-fallbacks' | relative_url }}). For the Custom HTML fallback, add this line under Dashboard > General > Branding:
      ```html
      <script src="/OpenWatchParty/ClientScript"></script>
      ```

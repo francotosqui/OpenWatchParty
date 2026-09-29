@@ -1,10 +1,13 @@
 ---
 title: User Guide
 parent: Getting Started
-nav_order: 3
+nav_order: 4
 ---
 
 # User Guide
+
+New here? Start with the [illustrated first watch-party tutorial]({{ '/product/first-watch-party/' | relative_url }})
+for installation, screenshots and a complete two-user example.
 
 ## Getting Started
 
@@ -48,15 +51,14 @@ The Jellyfin homepage displays active watch parties in a dedicated "Watch Partie
    - Participant count (e.g., "2 watching")
    - Play button overlay for quick join
 3. **Join options:**
-   - **Click the card** - Navigates to the video player and joins the room
-   - **Click the play button** - Starts playback immediately and auto-joins
+    - **Click the card** - Opens the movie details; play the movie, then join from the player panel
+    - **Click the play overlay** - Attempts to start playback and join automatically; use the player panel if it does not complete
 
 **What happens when you click:**
 
-1. The correct media automatically loads in the video player
-2. You join the watch party room
-3. Your playback syncs to the host's current position
-4. You'll see a brief catch-up period as your video aligns with others
+1. The movie details open; start playback if needed
+2. In the player, open **Watch Party** and select **Join** if you are not already in the room
+3. Your playback syncs to the host's current position after a brief catch-up period
 
 **Notes:**
 - The Watch Parties section only appears when there are active rooms
@@ -197,4 +199,4 @@ When the chat panel is closed, incoming messages appear as toasts in the top-rig
 - Server may have restarted
 - Create a new room to continue
 
-For more troubleshooting, see [Troubleshooting Guide](../operations/troubleshooting.md).
+For more troubleshooting, see [Troubleshooting Guide]({{ '/operations/troubleshooting/' | relative_url }}).

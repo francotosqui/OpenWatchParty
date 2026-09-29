@@ -17,7 +17,7 @@ OpenWatchParty is a Jellyfin plugin that enables synchronized media playback acr
 ### For Users
 
 Deploy the session server and install the plugin.
-See [Installation Guide](operations/installation) for step-by-step instructions.
+Follow the [illustrated first watch-party tutorial](product/first-watch-party/) for installation, screenshots and a two-person walkthrough. The [Installation Guide](operations/installation/) covers manual alternatives.
 
 ### For Developers
 
@@ -32,7 +32,7 @@ just dev     # Start with log following
 just watch   # Auto-restart on file changes
 ```
 
-See [Development Setup](development/setup) for the full workflow.
+See [Development Setup](development/setup/) for the full workflow and [First Watch Party](product/first-watch-party/#host-create-a-room) for the illustrated host/guest steps.
 
 ---
 
@@ -40,22 +40,22 @@ See [Development Setup](development/setup) for the full workflow.
 
 | Getting Started | Operations | Technical |
 |-----------------|------------|-----------|
-| [Overview](product/overview) | [Installation](operations/installation) | [Architecture](technical/architecture) |
-| [Features](product/features) | [Configuration](operations/configuration) | [Protocol](technical/protocol) |
-| [User Guide](product/user-guide) | [Deployment](operations/deployment) | [Server](technical/server) |
-| | [Compatibility](operations/compatibility) | |
-| [FAQ](product/faq) | [Security](operations/security) | [Client](technical/client) |
-| | [Troubleshooting](operations/troubleshooting) | [Plugin](technical/plugin) |
-| | [Monitoring](operations/monitoring) | [Sync Algorithms](technical/sync) |
-| | | [REST API](technical/api) |
+| [First Watch Party](product/first-watch-party/) | [Installation](operations/installation/) | [Architecture](technical/architecture/) |
+| [Overview](product/overview/) | [Guided Setup](operations/owpctl/) | [Protocol](technical/protocol/) |
+| [Features](product/features/) | [Configuration](operations/configuration/) | [Server](technical/server/) |
+| [User Guide](product/user-guide/) | [Deployment](operations/deployment/) | [Client](technical/client/) |
+| [FAQ](product/faq/) | [Compatibility](operations/compatibility/) | [Plugin](technical/plugin/) |
+| | [Security](operations/security/) | [Sync Algorithms](technical/sync/) |
+| | [Troubleshooting](operations/troubleshooting/) | [REST API](technical/api/) |
+| | [Monitoring](operations/monitoring/) | |
 
 ## Development
 
-- [Development Setup](development/setup) - Get started contributing
-- [Contributing Guide](development/contributing) - Code style and PR process
-- [Testing](development/testing) - Running tests
-- [CI/CD](development/ci) - Automated workflows
-- [Release Process](development/release) - How releases are made
+- [Development Setup](development/setup/) - Get started contributing
+- [Contributing Guide](development/contributing/) - Code style and PR process
+- [Testing](development/testing/) - Running tests
+- [CI/CD](development/ci/) - Automated workflows
+- [Release Process](development/release/) - How releases are made
 
 ## Architecture Overview
 
