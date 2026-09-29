@@ -76,7 +76,7 @@ Keep the generated value temporarily. It must be entered in the plugin configura
 4. Save, reload Jellyfin Web, and open a movie.
 5. Confirm that the **Watch Party** button appears in the video player.
 
-![OpenWatchParty settings reporting the plugin, client injection and session server as ready]({{ '/assets/images/plugin-configuration.png' | relative_url }})
+![OpenWatchParty settings reporting the plugin, client injection and session server as ready](../assets/images/plugin-configuration.png)
 
 Use the verification and troubleshooting sections below if any status remains blocked.
 
