@@ -226,10 +226,9 @@ For testing, use:
 
 ### Test Users
 
-Create test users in Jellyfin:
-- `testhost` - For hosting
-- `testclient1` - For joining
-- `testclient2` - For joining
+`just up` creates `testhost` (admin/host), `testclient1` and `testclient2`
+(guests) automatically. All use the local-only password `owp-dev-test` by
+default; see [Development logins](setup.md#development-logins) for overrides.
 
 ## Continuous Integration
 

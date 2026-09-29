@@ -34,6 +34,31 @@ This will:
 2. Build and mount the plugin
 3. Start the Rust session server on `http://localhost:3000`
 4. Auto-inject the client script into Jellyfin's `index.html`
+5. Complete the Jellyfin setup wizard and provision three local test users
+
+### Development logins
+
+Open `http://localhost:8096/web/` and sign in with any of these accounts:
+
+| Username | Password | Purpose |
+| --- | --- | --- |
+| `testhost` | `owp-dev-test` | Jellyfin administrator and watch-party host |
+| `testclient1` | `owp-dev-test` | First guest |
+| `testclient2` | `owp-dev-test` | Second guest |
+
+These are **local development credentials only**. The dev compose ports bind to
+`127.0.0.1`; do not expose this instance publicly. Set `OWP_DEV_PASSWORD` in your
+ignored `.env` to override the shared password before first startup. `just up` is
+idempotent: it creates missing guest users but does not change existing passwords.
+If you change the password after provisioning, update it in Jellyfin as well.
+
+The automated instance stores its configuration in the ignored
+`infra/docker/dev/config-auto/` directory. Older configurations in
+`infra/docker/dev/config/` are left untouched. To start the dev instance from
+scratch, stop it with `just down`, remove only `config-auto/`, then run `just up`.
+`just up` also configures the plugin's WebSocket URL and authentication to match
+the session server (`JWT_SECRET` from `.env`, or explicit insecure local mode
+when it is empty).
 
 ## First-Time Setup
 
@@ -41,16 +66,15 @@ This will:
 
 After running `just up`:
 
-1. Open `http://localhost:8096`
-2. Complete the Jellyfin setup wizard
-3. Add a media library (can use sample media)
-4. Create a user account
+1. Open `http://localhost:8096/web/` and log in with `testhost` / `owp-dev-test`
+2. Add a media library (can use sample media)
+3. Use `testclient1` and `testclient2` in separate browser profiles for multi-user tests
 
 ### 2. Plugin Configuration (Optional)
 
 1. Go to Dashboard > Plugins > OpenWatchParty
-2. Configure JWT Secret if testing authentication
-3. Save and restart Jellyfin
+2. Inspect the automatically configured WebSocket URL and authentication mode
+3. Adjust settings only if testing a different session server
 
 ### 3. Verify Installation
 

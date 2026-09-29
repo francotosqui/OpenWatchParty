@@ -76,6 +76,7 @@ up:
     @just build plugin
     @echo -e "{{GREEN}}▶ Starting services...{{RESET}}"
     @{{compose}} up -d session-server jellyfin-dev
+    @python3 infra/scripts/provision-dev-users.py
     @echo -e "{{GREEN}}✓ Stack started{{RESET}}"
     @echo ""
     @echo -e "  Jellyfin:  {{CYAN}}http://localhost:8096{{RESET}}"

@@ -7,7 +7,7 @@ services:
         BUILD_MODE: dev
     container_name: owp-session-server
     ports:
-      - "${SESSION_SERVER_PORT:-3000}:${PORT:-3000}"
+      - "127.0.0.1:${SESSION_SERVER_PORT:-3000}:${PORT:-3000}"
     volumes:
       - ${OWP_TRUST_STORE_DIR:-./trust}:/var/lib/openwatchparty:ro
     restart: unless-stopped
@@ -50,9 +50,9 @@ services:
     depends_on:
       - session-server
     ports:
-      - "${JELLYFIN_PORT:-8096}:8096"
+      - "127.0.0.1:${JELLYFIN_PORT:-8096}:8096"
     volumes:
-      - ./config:/config
+      - ./config-auto:/config
       - jellyfin-cache:/cache
       - ${MEDIA_DIR:-${HOME}/Videos/Movies}:/media/Movies:ro
       - ../../../src/clients/jellyfin-web:/jellyfin/jellyfin-web/plugins/openwatchparty:ro

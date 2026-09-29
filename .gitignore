@@ -4,6 +4,7 @@
 
 # Docker config
 infra/docker/dev/config/
+infra/docker/dev/config-auto/
 
 # Python
 __pycache__/
