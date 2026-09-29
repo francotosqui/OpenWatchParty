@@ -220,6 +220,7 @@ Target: < 100ms RTT on local network
 ### Sample Media
 
 For testing, use:
+- `just up`'s **Blender Open Movies (Dev)** library (*Wing It!* and *Sprite Fright*)
 - Short video clips (1-5 minutes)
 - Various formats (MP4, MKV)
 - HLS streams (to test buffering)

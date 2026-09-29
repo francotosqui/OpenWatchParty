@@ -72,6 +72,7 @@ default:
 
 [doc('Start the full stack (Jellyfin + session server)')]
 up:
+    @python3 infra/scripts/download-dev-media.py
     @just build ft
     @just build plugin
     @echo -e "{{GREEN}}▶ Starting services...{{RESET}}"

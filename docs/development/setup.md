@@ -35,6 +35,27 @@ This will:
 3. Start the Rust session server on `http://localhost:3000`
 4. Auto-inject the client script into Jellyfin's `index.html`
 5. Complete the Jellyfin setup wizard and provision three local test users
+6. Download two short Blender open movies and create a Jellyfin movie library
+
+### Sample movie library
+
+`just up` downloads *Wing It!* (2023, 66 MB) and *Sprite Fright* (2021,
+111 MB) into `media/dev/Movies/` and creates the **Blender Open Movies (Dev)**
+library at `/media/DevMovies`. Downloads are checked against pinned sizes and
+checksums and reused on subsequent runs. The media directory is ignored by Git,
+so the movies never increase the repository size. The first media download
+needs network access and roughly 176 MB of disk space; subsequent media checks
+use the local copies.
+
+Both films are by Blender Studio / Blender Foundation under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Attribution and
+project pages: [Wing It!](https://studio.blender.org/projects/wing-it/) and
+[Sprite Fright](https://studio.blender.org/projects/sprite-fright/). The
+downloadable MP4 files are mirrored on
+[Internet Archive](https://archive.org/details/wing_it) and
+[Internet Archive](https://archive.org/details/sprite-fright).
+The separate `MEDIA_DIR` mount remains available for manually adding your own
+movies in Jellyfin.
 
 ### Development logins
 
@@ -67,7 +88,7 @@ when it is empty).
 After running `just up`:
 
 1. Open `http://localhost:8096/web/` and log in with `testhost` / `owp-dev-test`
-2. Add a media library (can use sample media)
+2. Play either movie in the automatically created **Blender Open Movies (Dev)** library
 3. Use `testclient1` and `testclient2` in separate browser profiles for multi-user tests
 
 ### 2. Plugin Configuration (Optional)

@@ -6,6 +6,7 @@ import os
 import sys
 import time
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
@@ -13,6 +14,8 @@ BASE_URL = f"http://localhost:{os.environ.get('JELLYFIN_PORT', '8096')}"
 PASSWORD = os.environ.get("OWP_DEV_PASSWORD", "owp-dev-test")
 USERS = ("testhost", "testclient1", "testclient2")
 PLUGIN_ID = "0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d"
+LIBRARY_NAME = "Blender Open Movies (Dev)"
+LIBRARY_PATH = "/media/DevMovies"
 CLIENT = 'MediaBrowser Client="OpenWatchParty dev setup", Device="localhost", DeviceId="owp-dev-setup", Version="1.0"'
 
 
@@ -87,6 +90,41 @@ def main():
     plugin_token = request("/OpenWatchParty/Token", token=token)
     if plugin_token["auth_enabled"] != bool(secret):
         raise RuntimeError("Plugin and session server authentication modes do not match")
+
+    folders = request("/Library/VirtualFolders", token=token)
+    for folder in folders:
+        if folder["Name"] == LIBRARY_NAME:
+            if LIBRARY_PATH not in folder.get("Locations", []):
+                raise RuntimeError(f"{LIBRARY_NAME} exists with a different media path")
+            print(f"Existing Jellyfin dev library: {LIBRARY_NAME}")
+            break
+    else:
+        if any(LIBRARY_PATH in folder.get("Locations", []) for folder in folders):
+            raise RuntimeError(f"{LIBRARY_PATH} already belongs to another library")
+        query = urlencode({"name": LIBRARY_NAME, "collectionType": "movies", "paths": LIBRARY_PATH})
+        request(
+            f"/Library/VirtualFolders?{query}",
+            {"LibraryOptions": {"PathInfos": [{"Path": LIBRARY_PATH}], "EnableInternetProviders": False}},
+            token=token,
+        )
+        print(f"Created Jellyfin dev library: {LIBRARY_NAME} ({LIBRARY_PATH})")
+        request("/Library/Refresh", {}, token=token)
+        for _ in range(45):
+            media_folders = request("/Library/MediaFolders", token=token)["Items"]
+            folder = next((item for item in media_folders if item["Name"] == LIBRARY_NAME), None)
+            if folder is None:
+                time.sleep(2)
+                continue
+            items = request(
+                f"/Users/{auth['User']['Id']}/Items?ParentId={folder['Id']}&Recursive=true&IncludeItemTypes=Movie",
+                token=token,
+            )["Items"]
+            if {item["Name"] for item in items} >= {"Wing It!", "Sprite Fright"}:
+                print("Jellyfin dev movies indexed: Wing It!, Sprite Fright")
+                break
+            time.sleep(2)
+        else:
+            raise RuntimeError("Jellyfin did not index both dev movies within 90 seconds")
     print("Jellyfin dev users ready: " + ", ".join(USERS))
 
 
