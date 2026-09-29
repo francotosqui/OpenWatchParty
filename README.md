@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.png" alt="OpenWatchParty" width="400">
+  <img src="docs/readme-logo.png" alt="OpenWatchParty — Real-time sync for Jellyfin" width="640">
 </p>
 
 <p align="center">
