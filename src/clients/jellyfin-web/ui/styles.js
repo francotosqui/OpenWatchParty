@@ -1,7 +1,12 @@
 (() => {
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
-  const { PANEL_ID, STYLE_ID } = OWP.constants;
+  const { PANEL_ID, STYLE_ID, SYNCPLAY_HIDE_STYLE_ID } = OWP.constants;
+
+  // Jellyfin's built-in SyncPlay button: `.headerSyncButton` in the legacy
+  // header, and the MUI toolbar button that opens the `app-sync-play-menu`.
+  const NATIVE_SYNCPLAY_CSS =
+    '.headerSyncButton, button[aria-controls="app-sync-play-menu"] { display: none !important; }';
 
   const CSS_STYLES = `
     #${PANEL_ID} {
@@ -123,5 +128,21 @@
     document.head.appendChild(style);
   };
 
-  Object.assign(ui, { injectStyles });
+  // Hides or restores the native SyncPlay button to match the plugin setting.
+  // A stylesheet, rather than removing the buttons, survives Jellyfin
+  // re-rendering its headers.
+  const applyNativeSyncPlayVisibility = () => {
+    const existing = document.getElementById(SYNCPLAY_HIDE_STYLE_ID);
+    if (!OWP.state.hideNativeSyncPlayButton) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) return;
+    const style = document.createElement('style');
+    style.id = SYNCPLAY_HIDE_STYLE_ID;
+    style.textContent = NATIVE_SYNCPLAY_CSS;
+    document.head.appendChild(style);
+  };
+
+  Object.assign(ui, { injectStyles, applyNativeSyncPlayVisibility });
 })();

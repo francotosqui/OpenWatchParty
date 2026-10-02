@@ -96,6 +96,7 @@
     PANEL_ID: 'owp-panel',
     BTN_ID: 'owp-osd-btn',
     STYLE_ID: 'owp-style',
+    SYNCPLAY_HIDE_STYLE_ID: 'owp-hide-native-syncplay',
     HOME_SECTION_ID: 'owp-home-section',
     protocol,
     host,
@@ -213,6 +214,8 @@
     userName: '',
     tokenExpiresAt: 0,           // Timestamp when token expires
     tokenRefreshTimer: null,     // Timer for token refresh
+    // Web client settings delivered with the token response
+    hideNativeSyncPlayButton: false,
     // Interval tracking (P4 - memory leak prevention)
     intervals: {
       ui: null,

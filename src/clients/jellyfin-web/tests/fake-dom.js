@@ -183,6 +183,7 @@ class FakeElement extends FakeNode {
 
 class FakeDocument {
   constructor() {
+    this.head = new FakeElement('head');
     this.body = new FakeElement('body');
   }
 
@@ -195,7 +196,8 @@ class FakeDocument {
   }
 
   getElementById(id) {
-    return this.body.id === id ? this.body : descendants(this.body).find(element => element.id === id) || null;
+    return [this.body, this.head].flatMap(root => [root, ...descendants(root)])
+      .find(element => element.id === id) || null;
   }
 
   querySelector(selector) {
