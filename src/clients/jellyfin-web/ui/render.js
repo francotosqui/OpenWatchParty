@@ -34,6 +34,21 @@
     return button;
   };
 
+  const CREATE_ROOM_HINT_ID = 'owp-create-hint';
+  const CREATE_ROOM_HINT = 'Start playing something to create a room.';
+
+  // A room starts from what is playing; without it there is nothing to share.
+  const canCreateRoom = () => Boolean(OWP.utils?.getPlayingItemId?.());
+
+  const updateCreateRoomButton = () => {
+    const button = document.getElementById('owp-btn-create');
+    if (!button) return;
+    const enabled = canCreateRoom();
+    button.disabled = !enabled;
+    const hint = document.getElementById(CREATE_ROOM_HINT_ID);
+    if (hint) hint.hidden = enabled;
+  };
+
   const renderLobby = (panel) => {
     const header = createElement('div', 'owp-header');
     header.append(createElement('span', '', 'OpenWatchParty'), document.createTextNode(' '));
@@ -55,13 +70,17 @@
     btn.id = 'owp-btn-create';
     btn.style.width = '100%';
     btn.onclick = () => OWP.actions && OWP.actions.createRoom && OWP.actions.createRoom();
-    createSection.appendChild(btn);
+    btn.setAttribute('aria-describedby', CREATE_ROOM_HINT_ID);
+    const hint = createElement('div', 'owp-hint', CREATE_ROOM_HINT);
+    hint.id = CREATE_ROOM_HINT_ID;
+    createSection.append(btn, hint);
     lobby.append(roomSection, createSection);
 
     const footer = createElement('div', 'owp-footer');
     footer.append(document.createTextNode('Server: '), document.createTextNode(String(DEFAULT_WS_URL.replace(/^wss?:\/\//, '').replace('/ws', ''))));
     panel.replaceChildren(header, lobby, footer);
     ui.updateRoomListUI();
+    updateCreateRoomButton();
   };
 
   const renderRoom = (panel) => {
@@ -147,6 +166,7 @@
       ui.updateStatusIndicator();
       ui.updateSyncIndicator();
       ui.updateRoomListUI();
+      updateCreateRoomButton();
       ui.renderHomeWatchParties();
       return;
     }
@@ -188,5 +208,5 @@
     }
   };
 
-  Object.assign(ui, { render, injectOsdButton });
+  Object.assign(ui, { render, injectOsdButton, updateCreateRoomButton });
 })();

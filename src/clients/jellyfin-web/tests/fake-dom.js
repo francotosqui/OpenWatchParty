@@ -71,10 +71,16 @@ const matchesSimple = (element, selector) => {
     selector = selector.slice(0, notMatch.index);
     if (matchesSimple(element, notMatch[1])) return false;
   }
-  const attributes = [...selector.matchAll(/\[([\w-]+)(?:="([^"]*)")?\]/g)];
-  if (attributes.some(([, name, value]) => (value === undefined
-    ? !Object.prototype.hasOwnProperty.call(element.attributes, name)
-    : element.attributes[name] !== value))) return false;
+  const attributes = [...selector.matchAll(/\[([\w-]+)(?:(\*?=)"([^"]*)")?\]/g)];
+  const attributeValue = name => (name === 'class'
+    ? element.className || undefined
+    : (Object.prototype.hasOwnProperty.call(element.attributes, name) ? element.attributes[name] : undefined));
+  if (attributes.some(([, name, operator, value]) => {
+    const actual = attributeValue(name);
+    if (operator === undefined) return actual === undefined;
+    if (operator === '*=') return actual === undefined || !String(actual).includes(value);
+    return actual !== value;
+  })) return false;
   selector = selector.replace(/\[[^\]]*\]/g, '');
   const idMatch = selector.match(/#([\w-]+)/);
   if (idMatch && element.id !== idMatch[1]) return false;

@@ -57,6 +57,9 @@
     }
     .owp-btn.secondary { background: #1565c0; }
     .owp-btn.danger { background: #d32f2f; }
+    .owp-btn:disabled { background: #333; color: #888; cursor: not-allowed; }
+    .owp-hint { font-size: 11px; color: #888; margin-top: 8px; text-align: center; }
+    .owp-room-note { font-size: 10px; color: #ffb74d; }
     .owp-input {
       width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444;
       background: #000; color: #fff; box-sizing: border-box; margin-bottom: 10px; font-size: 14px;

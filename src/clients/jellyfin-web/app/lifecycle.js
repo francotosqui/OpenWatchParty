@@ -84,6 +84,9 @@
       if (document.visibilityState !== 'visible') return;
       retryConnectionAfterLogin();
       injectHeaderButtons();
+      // Playback starting or stopping while the lobby is open changes whether
+      // a room can be created.
+      if (ui.updateCreateRoomButton) ui.updateCreateRoomButton();
       const video = utils.getVideo();
       if (hadVideoElement && !video) {
         hadVideoElement = false;
