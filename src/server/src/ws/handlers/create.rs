@@ -2,7 +2,7 @@ use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
 use super::super::validation::{is_valid_media_id, is_valid_position, sanitize_name};
 use crate::messaging::{broadcast_room_list, send_message, send_to_senders, ClientSender};
 use crate::room::close_room_in_state;
-use crate::room::handle_leave;
+use crate::room::{handle_leave, participant_list_message, send_leave_notification};
 use crate::types::{IncomingMessage, PlaybackState, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
@@ -150,8 +150,13 @@ pub(in crate::ws) async fn handle_create_room(
         let room = build_room(client_id, &host_name, payload_ref);
         let crate::types::ServerState { clients, rooms } = &mut *state;
         let (sender, room_msg) = insert_and_notify(client_id, room, &payload_name, clients, rooms);
-        if let Some((senders, msg)) = previous_leave {
-            send_to_senders(&senders, &msg, "previous room leave");
+        let participant_list = room_msg
+            .room
+            .as_ref()
+            .and_then(|room_id| rooms.get(room_id))
+            .map(|room| participant_list_message(room, clients));
+        if let Some(notification) = previous_leave {
+            send_leave_notification(&notification, "previous room leave");
         }
         if let Some((closed_room_id, closed_senders)) = closed {
             send_to_senders(
@@ -167,7 +172,10 @@ pub(in crate::ws) async fn handle_create_room(
                 "room closed",
             );
         }
-        send_message(sender, &room_msg, Some(client_id));
+        send_message(sender.clone(), &room_msg, Some(client_id));
+        if let Some(msg) = participant_list {
+            send_message(sender, &msg, Some(client_id));
+        }
     }
 
     broadcast_room_list(state).await;
@@ -254,6 +262,34 @@ mod tests {
         let (name, payload_name) = resolve_host_name(Some(&serde_json::json!({})), &clients, "c1");
         assert_eq!(name, "FromClient");
         assert_eq!(payload_name, None);
+    }
+
+    #[tokio::test]
+    async fn create_room_sends_the_host_its_participant_list() {
+        let state = test_helpers::create_state();
+        let (host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
+        state.write().await.clients.insert("host".to_string(), host);
+        let parsed = IncomingMessage {
+            msg_type: crate::types::ClientMessageType::CreateRoom,
+            room: None,
+            client: Some("host".to_string()),
+            payload: Some(serde_json::json!({})),
+            ts: crate::utils::now_ms(),
+            server_ts: None,
+        };
+
+        handle_create_room("host", &parsed, &state).await;
+
+        assert_eq!(
+            test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
+            "room_state"
+        );
+        let list = test_helpers::recv_msg(&mut host_rx).unwrap();
+        assert_eq!(list.msg_type, "participant_list");
+        assert_eq!(
+            list.payload.unwrap()["participants"],
+            serde_json::json!([{ "name": "Franco", "is_host": true }])
+        );
     }
 
     #[tokio::test]

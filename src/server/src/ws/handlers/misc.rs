@@ -2,7 +2,7 @@ use super::super::constants::PLAY_SCHEDULE_MS;
 use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
 use super::super::pending_play::{all_ready, prepare_scheduled_play};
 use crate::messaging::{broadcast_room_list, send_to_client, send_to_senders};
-use crate::room::handle_leave;
+use crate::room::{handle_leave, send_leave_notification};
 use crate::types::{IncomingMessage, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::{info, warn};
@@ -176,8 +176,8 @@ pub(in crate::ws) async fn handle_leave_room(client_id: &str, state: &SharedStat
     let left = {
         let mut state = state.write().await;
         let crate::types::ServerState { clients, rooms } = &mut *state;
-        if let Some((senders, msg)) = handle_leave(client_id, clients, rooms) {
-            send_to_senders(&senders, &msg, "leave notification");
+        if let Some(notification) = handle_leave(client_id, clients, rooms) {
+            send_leave_notification(&notification, "leave notification");
             true
         } else {
             false
