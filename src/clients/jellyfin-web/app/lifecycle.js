@@ -48,9 +48,34 @@
 
   // The loader (/OpenWatchParty/ClientScript) can stay cached for up to an hour
   // after an upgrade while modules are always fetched fresh, so an older loader
-  // may not have loaded ui/header.js. Skip the header button rather than fail.
+  // may not have loaded ui/header.js. Load it the way the loader would, rather
+  // than going without the header button until the cached loader expires.
+  const HEADER_MODULE_MAX_ATTEMPTS = 3;
+  let headerModuleAttempts = 0;
+  let headerModuleLoading = false;
+
+  const loadHeaderModule = () => {
+    const loader = OWP.loader;
+    if (headerModuleLoading || headerModuleAttempts >= HEADER_MODULE_MAX_ATTEMPTS || !loader?.base) return;
+    headerModuleLoading = true;
+    headerModuleAttempts++;
+    const script = document.createElement('script');
+    script.src = `${loader.base}/ui/header.js?v=${encodeURIComponent(loader.cacheBust || '')}`;
+    script.onload = () => {
+      headerModuleLoading = false;
+      // Not after a cleanup that happened while the module was loading.
+      if (state.initialized && typeof ui.injectHeaderButtons === 'function') ui.injectHeaderButtons();
+    };
+    script.onerror = () => {
+      headerModuleLoading = false;
+      script.remove();
+    };
+    document.head.appendChild(script);
+  };
+
   const injectHeaderButtons = () => {
     if (typeof ui.injectHeaderButtons === 'function') ui.injectHeaderButtons();
+    else loadHeaderModule();
   };
 
   const authRetryDelayMs = (attempts) =>

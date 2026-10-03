@@ -48,15 +48,38 @@ describe('application lifecycle initialization', () => {
     assert.equal(headerInjections, 1);
   });
 
-  it('initializes without the header module when an older cached loader skipped it', () => {
+  it('loads the header module itself when an older cached loader skipped it', () => {
     const injectHeaderButtons = OWP.ui.injectHeaderButtons;
+    const appended = [];
     delete OWP.ui.injectHeaderButtons;
+    OWP.loader = { base: '/OpenWatchParty/Client', cacheBust: '42' };
+    globalThis.document.head = { appendChild: script => appended.push(script) };
     OWP.state.initialized = false;
     try {
       OWP.app.init();
       assert.equal(OWP.state.initialized, true);
+      assert.equal(appended.length, 1);
+      assert.equal(appended[0].src, '/OpenWatchParty/Client/ui/header.js?v=42');
+
+      // A second attempt while the module is loading does not request it again.
+      OWP.state.initialized = false;
+      OWP.app.init();
+      assert.equal(appended.length, 1);
+
+      let injected = 0;
+      OWP.ui.injectHeaderButtons = () => { injected++; };
+      // A cleanup while the module was loading: nothing to inject.
+      OWP.state.initialized = false;
+      appended[0].onload();
+      assert.equal(injected, 0);
+
+      OWP.state.initialized = true;
+      appended[0].onload();
+      assert.equal(injected, 1);
     } finally {
       OWP.ui.injectHeaderButtons = injectHeaderButtons;
+      delete OWP.loader;
+      delete globalThis.document.head;
     }
   });
 
