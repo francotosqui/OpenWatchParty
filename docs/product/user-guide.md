@@ -33,7 +33,7 @@ As the host, you control playback for everyone. When you play, pause, or seek, a
 ## Joining a Watch Party
 
 ### From the Header
-1. **Click the Watch Party button in the Jellyfin header** - Next to SyncPlay, Cast and Search, on any page; nothing needs to be playing
+1. **Click the Watch Party button in the Jellyfin header** - Next to SyncPlay, Cast and Search, on the pages that show the header (in the player, use the OSD button); nothing needs to be playing
 2. **Find the room** - Rooms appear in the list with participant counts
 3. **Click "Join"** - OpenWatchParty starts the room's movie and syncs you to the host's position
 
