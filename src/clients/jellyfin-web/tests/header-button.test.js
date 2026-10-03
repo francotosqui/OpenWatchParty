@@ -29,6 +29,14 @@ const {
 Object.getPrototypeOf(document.createElement('div')).getClientRects = function getClientRects() {
   return this.hiddenForTest ? [] : [{}];
 };
+let focused = null;
+Object.getPrototypeOf(document.createElement('div')).focus = function focus() {
+  focused = this;
+};
+Object.getPrototypeOf(document.createElement('div')).blur = function blur() {
+  if (focused === this) focused = null;
+  this.blurredForTest = true;
+};
 
 const element = (tag, className = '', attributes = {}) => {
   const node = document.createElement(tag);
@@ -381,6 +389,66 @@ describe('header Watch Party button', () => {
     assert.equal(panel().style.maxHeight, '');
   });
 
+  it('closes the panel from its X button, in the lobby and in a room', () => {
+    modernHeader();
+    OWP.ui.injectHeaderButtons();
+    OWP.ui.stopPlayerCapture = () => {};
+    OWP.chat.markRead = () => {};
+    OWP.chat.renderAllMessages = () => {};
+    const button = document.getElementById(MODERN_HEADER_BTN_ID);
+
+    button.click();
+    const lobbyClose = panel().querySelector('.owp-close-btn');
+    assert.equal(lobbyClose.getAttribute('aria-label'), 'Close panel');
+    assert.ok(lobbyClose.querySelector('.material-icons.close'));
+    focused = null;
+    lobbyClose.click();
+    assert.ok(panel().classList.contains('hide'));
+    assert.equal(focused, button);
+
+    OWP.state.inRoom = true;
+    OWP.state.isHost = true;
+    OWP.state.roomName = 'Movie night';
+    try {
+      button.click();
+      // The host's button ends the room for everyone; the X only hides the panel.
+      assert.equal(panel().querySelector('#owp-btn-leave').textContent, 'Close room');
+      panel().querySelector('.owp-close-btn').click();
+
+      assert.ok(panel().classList.contains('hide'));
+      assert.equal(OWP.state.inRoom, true);
+    } finally {
+      OWP.state.inRoom = false;
+      OWP.state.isHost = false;
+      OWP.state.roomName = '';
+    }
+  });
+
+  it('returns focus to the player button, and leaves it alone when the opener is hidden', () => {
+    modernHeader();
+    const osd = element('div', 'videoOsdBottom');
+    osd.appendChild(element('div', 'buttons'));
+    document.body.appendChild(osd);
+    OWP.ui.injectHeaderButtons();
+    OWP.ui.injectOsdButton();
+    const osdButton = document.getElementById(BTN_ID);
+
+    osdButton.click();
+    focused = null;
+    panel().querySelector('.owp-close-btn').click();
+    assert.equal(focused, osdButton);
+
+    const headerButton = document.getElementById(MODERN_HEADER_BTN_ID);
+    headerButton.click();
+    headerButton.hiddenForTest = true;
+    const close = panel().querySelector('.owp-close-btn');
+    close.focus();
+    close.click();
+    // Focus does not stay on the X inside the hidden panel.
+    assert.equal(focused, null);
+    assert.equal(close.blurredForTest, true);
+  });
+
   it('reports whether the panel is open with aria-expanded, however it closes', () => {
     const hooks = installPageHooks();
     legacyHeader();
@@ -406,6 +474,6 @@ describe('header Watch Party button', () => {
     assert.match(css, new RegExp(`#${PANEL_ID}\\.${PANEL_HEADER_CLASS} \\{ bottom: auto; \\}`));
     assert.match(css, new RegExp(`@media \\(max-width: 600px\\) \\{\\s*#${PANEL_ID}\\.${PANEL_HEADER_CLASS} \\{ left: 8px; right: 8px; width: auto; \\}`));
     assert.match(css, new RegExp(`\\.osdHeader \\.${HEADER_BTN_CLASS} \\{ display: none !important; \\}`));
-    assert.match(css, new RegExp(`#${MODERN_HEADER_BTN_ID} \\.material-icons \\{ font-size: 1\\.5rem; \\}`));
+    assert.match(css, new RegExp(`#${MODERN_HEADER_BTN_ID} \\.material-icons \\{ font-size: 1\\.5rem; width: 1em; height: 1em; line-height: 1; \\}`));
   });
 });

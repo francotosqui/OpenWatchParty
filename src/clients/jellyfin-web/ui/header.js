@@ -89,6 +89,7 @@
       panel.classList.add('hide');
     } else {
       openedFromHeader = true;
+      panel.dataset.opener = event.currentTarget.id;
       placePanelBelowHeader(panel, event.currentTarget);
       panel.classList.remove('hide');
       if (ui.render) ui.render(true);

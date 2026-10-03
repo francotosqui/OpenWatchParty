@@ -11,12 +11,37 @@
     return element;
   };
 
+  // Hides the panel from inside it, so closing does not mean reaching for the
+  // button that opened it; focus goes back to that button when it is shown.
+  const createCloseButton = () => {
+    const button = createElement('button', 'owp-close-btn');
+    button.type = 'button';
+    button.title = 'Close panel';
+    button.setAttribute('aria-label', 'Close panel');
+    const icon = createElement('span', 'material-icons close');
+    icon.setAttribute('aria-hidden', 'true');
+    button.appendChild(icon);
+    button.onclick = () => {
+      const panel = document.getElementById(PANEL_ID);
+      if (!panel) return;
+      panel.classList.add('hide');
+      // Keep keyboard focus out of the hidden panel: back on the button that
+      // opened it, or nowhere if that button is not shown any more.
+      const opener = panel.dataset.opener && document.getElementById(panel.dataset.opener);
+      if (opener && typeof opener.getClientRects === 'function' && opener.getClientRects().length > 0) opener.focus();
+      else button.blur();
+    };
+    return button;
+  };
+
   const renderLobby = (panel) => {
     const header = createElement('div', 'owp-header');
     header.append(createElement('span', '', 'OpenWatchParty'), document.createTextNode(' '));
     const status = createElement('span');
     status.id = 'owp-ws-indicator';
-    header.appendChild(status);
+    const actions = createElement('span', 'owp-header-actions');
+    actions.append(status, createCloseButton());
+    header.appendChild(actions);
 
     const lobby = createElement('div', 'owp-lobby-container');
     const roomSection = createElement('div', 'owp-section');
@@ -46,10 +71,10 @@
     online.style.color = '#69f0ae';
     const roomName = createElement('span', '', state.roomName);
     roomName.style.cssText = 'flex-grow:1; margin-left:8px;';
-    const leaveBtn = createElement('button', 'owp-btn danger', state.isHost ? 'Close' : 'Leave');
+    const leaveBtn = createElement('button', 'owp-btn danger', state.isHost ? 'Close room' : 'Leave');
     leaveBtn.id = 'owp-btn-leave';
     leaveBtn.onclick = () => OWP.actions && OWP.actions.leaveRoom && OWP.actions.leaveRoom();
-    header.append(online, roomName, leaveBtn);
+    header.append(online, roomName, leaveBtn, createCloseButton());
 
     const participantSection = createElement('div', 'owp-section');
     participantSection.style.flexShrink = '0';
@@ -150,6 +175,7 @@
       const panel = document.getElementById(PANEL_ID);
       panel.classList.toggle('hide');
       if (!panel.classList.contains('hide')) {
+        panel.dataset.opener = BTN_ID;
         if (ui.resetPanelPlacement) ui.resetPanelPlacement(panel);
         render(true);
       }

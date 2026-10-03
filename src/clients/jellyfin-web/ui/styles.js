@@ -32,8 +32,17 @@
     /* The player has its own Watch Party button */
     .osdHeader .${HEADER_BTN_CLASS} { display: none !important; }
     /* Same size as the MUI SVG icons next to it (MuiSvgIcon fontSizeMedium) */
-    #${MODERN_HEADER_BTN_ID} .material-icons { font-size: 1.5rem; }
+    #${MODERN_HEADER_BTN_ID} .material-icons { font-size: 1.5rem; width: 1em; height: 1em; line-height: 1; }
     .owp-header { font-weight: bold; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; }
+    .owp-header-actions { display: flex; align-items: center; gap: 8px; }
+    .owp-close-btn {
+      display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+      margin-left: 8px; padding: 4px; border: none; border-radius: 50%;
+      background: transparent; color: #aaa; cursor: pointer;
+    }
+    .owp-header-actions .owp-close-btn { margin-left: 0; }
+    .owp-close-btn:hover, .owp-close-btn:focus-visible { background: rgba(255,255,255,0.1); color: #fff; }
+    .owp-close-btn .material-icons { font-size: 20px; }
     .owp-section { margin-bottom: 15px; overflow-y: auto; }
     .owp-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
     .owp-room-item {
