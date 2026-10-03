@@ -46,6 +46,13 @@
     panel.addEventListener('keypress', panelStopPropagation);
   };
 
+  // The loader (/OpenWatchParty/ClientScript) can stay cached for up to an hour
+  // after an upgrade while modules are always fetched fresh, so an older loader
+  // may not have loaded ui/header.js. Skip the header button rather than fail.
+  const injectHeaderButtons = () => {
+    if (typeof ui.injectHeaderButtons === 'function') ui.injectHeaderButtons();
+  };
+
   const authRetryDelayMs = (attempts) =>
     Math.min(AUTH_RETRY_BASE_MS * Math.pow(2, Math.max(0, attempts - 1)), AUTH_RETRY_MAX_MS);
 
@@ -76,6 +83,7 @@
     state.intervals.ui = OWP.timers.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       retryConnectionAfterLogin();
+      injectHeaderButtons();
       const video = utils.getVideo();
       if (hadVideoElement && !video) {
         hadVideoElement = false;
@@ -122,6 +130,7 @@
     clearAllIntervals();
     ui.injectStyles();
     createPanel();
+    injectHeaderButtons();
     if (OWP.actions && OWP.actions.connect) {
       console.log('[OpenWatchParty] Initiating WebSocket connection...');
       OWP.actions.connect();

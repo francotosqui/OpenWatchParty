@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const OWP = require('./setup.js');
 let styleAttempts = 0;
 let connectCalls = 0;
+let headerInjections = 0;
 const elements = new Map();
 globalThis.document.getElementById = id => elements.get(id) || null;
 globalThis.document.createElement = () => ({
@@ -21,6 +22,7 @@ OWP.ui = {
   },
   injectOsdButton: () => {},
   injectGlobalButton: () => {},
+  injectHeaderButtons: () => { headerInjections++; },
   renderHomeWatchParties: () => {}
 };
 OWP.playback = { syncLoop: () => {} };
@@ -43,6 +45,19 @@ describe('application lifecycle initialization', () => {
 
     assert.equal(OWP.state.initialized, true);
     assert.equal(connectCalls, 1);
+    assert.equal(headerInjections, 1);
+  });
+
+  it('initializes without the header module when an older cached loader skipped it', () => {
+    const injectHeaderButtons = OWP.ui.injectHeaderButtons;
+    delete OWP.ui.injectHeaderButtons;
+    OWP.state.initialized = false;
+    try {
+      OWP.app.init();
+      assert.equal(OWP.state.initialized, true);
+    } finally {
+      OWP.ui.injectHeaderButtons = injectHeaderButtons;
+    }
   });
 
   it('retries connection after Jellyfin login becomes available', () => {

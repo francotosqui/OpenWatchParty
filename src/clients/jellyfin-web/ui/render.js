@@ -149,7 +149,10 @@
       e.stopPropagation(); e.preventDefault();
       const panel = document.getElementById(PANEL_ID);
       panel.classList.toggle('hide');
-      if (!panel.classList.contains('hide')) render(true);
+      if (!panel.classList.contains('hide')) {
+        if (ui.resetPanelPlacement) ui.resetPanelPlacement(panel);
+        render(true);
+      }
     };
     const favBtn = videoOsd.querySelector('[title="Add to favorites"], [title="Remove from favorites"]');
     if (favBtn) {

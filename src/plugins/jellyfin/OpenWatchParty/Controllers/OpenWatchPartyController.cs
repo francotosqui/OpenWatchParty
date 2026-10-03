@@ -36,6 +36,7 @@ public class OpenWatchPartyController : ControllerBase
         "ui/cards.js",
         "ui/home.js",
         "ui/render.js",
+        "ui/header.js",
         "playback/play.js",
         "playback/bind.js",
         "playback/sync.js",

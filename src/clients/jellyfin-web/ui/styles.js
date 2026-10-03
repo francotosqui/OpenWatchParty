@@ -1,7 +1,14 @@
 (() => {
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
-  const { PANEL_ID, STYLE_ID, SYNCPLAY_HIDE_STYLE_ID } = OWP.constants;
+  const {
+    PANEL_ID,
+    STYLE_ID,
+    SYNCPLAY_HIDE_STYLE_ID,
+    HEADER_BTN_CLASS,
+    MODERN_HEADER_BTN_ID,
+    PANEL_HEADER_CLASS
+  } = OWP.constants;
 
   // Jellyfin's built-in SyncPlay button: `.headerSyncButton` in the legacy
   // header, and the MUI toolbar button that opens the `app-sync-play-menu`.
@@ -17,6 +24,15 @@
       display: flex; flex-direction: column;
     }
     #${PANEL_ID}.hide { display: none; }
+    /* Opened from the header: placed below it (top is set when it opens) */
+    #${PANEL_ID}.${PANEL_HEADER_CLASS} { bottom: auto; }
+    @media (max-width: 600px) {
+      #${PANEL_ID}.${PANEL_HEADER_CLASS} { left: 8px; right: 8px; width: auto; }
+    }
+    /* The player has its own Watch Party button */
+    .osdHeader .${HEADER_BTN_CLASS} { display: none !important; }
+    /* Same size as the MUI SVG icons next to it (MuiSvgIcon fontSizeMedium) */
+    #${MODERN_HEADER_BTN_ID} .material-icons { font-size: 1.5rem; }
     .owp-header { font-weight: bold; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; }
     .owp-section { margin-bottom: 15px; overflow-y: auto; }
     .owp-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
