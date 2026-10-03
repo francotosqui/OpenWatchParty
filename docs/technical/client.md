@@ -94,6 +94,7 @@ Defines global shared state and configuration constants.
 | `joiningItemId` | string | Media ID being loaded |
 | `roomName` | string | Current room name |
 | `participantCount` | number | Room participant count |
+| `participants` | array | `{ name, isHost }` entries from `participant_list`; empty until the server sends one |
 | `lastSyncServerTs` | number | Server timestamp of last sync |
 | `lastSyncPosition` | number | Position of last sync (seconds) |
 | `lastSyncPlayState` | string | Play state of last sync |
@@ -292,6 +293,9 @@ Response to `create_room` or `join_room`:
 #### `participants_update`
 Updates participant counter and shows toast for new participant.
 
+#### `participant_list`
+Stores the participants' names for the current room and shows them instead of the count, one chip per name with a separate **Host** badge. Lists for another room are ignored, and joining another room clears the previous names.
+
 #### `room_closed`
 Resets state when room is closed (host disconnected).
 
@@ -358,6 +362,9 @@ Restores the default panel placement used by the player button.
 
 #### `updateCreateRoomButton() -> void`
 Enables "Create Room" only while something is playing; otherwise shows a hint.
+
+#### `updateParticipantList() -> void`
+Shows the participants' names (`state.participants`) in the room view, or the count when no names were received, for example from an older session server.
 
 #### `applyNativeSyncPlayVisibility() -> void`
 Adds or removes the stylesheet that hides Jellyfin's SyncPlay button, following `state.hideNativeSyncPlayButton` (from `hide_native_syncplay_button` in the token response).

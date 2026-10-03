@@ -60,6 +60,16 @@
     .owp-btn:disabled { background: #333; color: #888; cursor: not-allowed; }
     .owp-hint { font-size: 11px; color: #888; margin-top: 8px; text-align: center; }
     .owp-room-note { font-size: 10px; color: #ffb74d; }
+    .owp-participants { display: flex; flex-wrap: wrap; gap: 4px; }
+    .owp-participant {
+      display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+      padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.08); box-sizing: border-box;
+    }
+    .owp-participant-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .owp-host-badge {
+      flex-shrink: 0; padding: 0 4px; border-radius: 6px;
+      background: #69f0ae; color: #000; font-size: 9px; font-weight: bold; text-transform: uppercase;
+    }
     .owp-input {
       width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444;
       background: #000; color: #fff; box-sizing: border-box; margin-bottom: 10px; font-size: 14px;

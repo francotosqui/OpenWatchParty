@@ -83,6 +83,28 @@
     updateCreateRoomButton();
   };
 
+  // Names when the server sends them (participant_list), otherwise the count,
+  // so an older session server still shows something useful. Each name and the
+  // host badge are separate elements, so a name such as "Ana (host)" or one
+  // with commas cannot pass for the host or for several people.
+  const fillParticipantList = (list) => {
+    if (!state.participants.length) {
+      list.replaceChildren(document.createTextNode(`Online: ${String(state.participantCount || 1)}`));
+      return;
+    }
+    list.replaceChildren(...state.participants.map((participant) => {
+      const item = createElement('span', 'owp-participant');
+      item.appendChild(createElement('span', 'owp-participant-name', participant.name || 'Guest'));
+      if (participant.isHost) item.appendChild(createElement('span', 'owp-host-badge', 'Host'));
+      return item;
+    }));
+  };
+
+  const updateParticipantList = () => {
+    const list = document.getElementById('owp-participants-list');
+    if (list) fillParticipantList(list);
+  };
+
   const renderRoom = (panel) => {
     const syncIndicator = ui.buildSyncStatusIndicator();
     const header = createElement('div', 'owp-header');
@@ -98,9 +120,10 @@
     const participantSection = createElement('div', 'owp-section');
     participantSection.style.flexShrink = '0';
     participantSection.appendChild(createElement('div', 'owp-label', 'Participants'));
-    const participantList = createElement('div', '', `Online: ${String(state.participantCount || 1)}`);
+    const participantList = createElement('div', 'owp-participants');
     participantList.id = 'owp-participants-list';
     participantList.style.fontSize = '13px';
+    fillParticipantList(participantList);
     participantSection.appendChild(participantList);
     if (syncIndicator) participantSection.appendChild(syncIndicator);
 
@@ -208,5 +231,5 @@
     }
   };
 
-  Object.assign(ui, { render, injectOsdButton, updateCreateRoomButton });
+  Object.assign(ui, { render, injectOsdButton, updateCreateRoomButton, updateParticipantList });
 })();

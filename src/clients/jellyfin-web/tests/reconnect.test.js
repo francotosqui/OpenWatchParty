@@ -60,6 +60,7 @@ OWP.ui = {
   render: () => {},
   showToast: () => {},
   updateRoomListUI: () => {},
+  updateParticipantList: () => {},
   renderHomeWatchParties: () => {}
 };
 OWP.utils.getVideo = () => null;
@@ -134,12 +135,14 @@ describe('room reconnection lifecycle', () => {
       inRoom: true,
       roomId: 'room-a',
       isHost: false,
+      participants: [{ name: 'Old', isHost: true }],
       currentVideoElement: video
     });
 
     first.serverClose();
     assert.equal(video.playbackRate, 1);
     assert.equal(OWP.state.inRoom, false);
+    assert.deepEqual(OWP.state.participants, []);
     assert.equal(OWP.state.desiredRoomId, 'room-a');
     assert.equal(OWP.state.rejoinPending, true);
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -157,6 +160,16 @@ describe('room reconnection lifecycle', () => {
     assert.equal(OWP.state.roomId, 'room-a');
     assert.equal(OWP.state.desiredRoomId, 'room-a');
     assert.equal(OWP.state.rejoinPending, false);
+
+    second.receive({
+      type: 'participant_list',
+      room: 'room-a',
+      payload: { participants: [{ name: 'Host', is_host: true }, { name: 'Guest', is_host: false }] }
+    });
+    assert.deepEqual(OWP.state.participants, [
+      { name: 'Host', isHost: true },
+      { name: 'Guest', isHost: false }
+    ]);
   });
 
   it('does not attempt to recreate a host room after disconnect', async () => {

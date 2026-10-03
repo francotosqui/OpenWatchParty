@@ -127,6 +127,7 @@
         state.inRoom = false;
         state.roomId = '';
         state.readyRoomId = '';
+        state.participants = [];
       }
     }
     ui.render();
@@ -158,6 +159,7 @@
       case 'room_state': h.handleRoomState(msg, video); break;
       case 'participants_update': h.handleParticipantsUpdate(msg); break;
       case 'client_left': h.handleClientLeft(msg); break;
+      case 'participant_list': h.handleParticipantList(msg); break;
       case 'room_closed': h.handleRoomClosed(msg); break;
       case 'player_event': h.handlePlayerEvent(msg, video); break;
       case 'state_update': h.handleStateUpdate(msg, video); break;

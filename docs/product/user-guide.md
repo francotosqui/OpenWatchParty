@@ -111,7 +111,7 @@ As a participant:
 
 ### In-Room View
 - **Room name** - Current watch party name
-- **Participants** - Number of people watching
+- **Participants** - Who is watching, with a **Host** badge on the host (older session servers show only the number of people)
 - **Sync indicator** - Shows sync status (participants only)
 - **Chat** - Text messaging with other participants
 - **RTT** - Round-trip time to server (latency indicator)

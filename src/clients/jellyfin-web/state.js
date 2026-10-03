@@ -189,6 +189,7 @@
     pendingJoinRoomId: '',  // Room to join after navigating to video player
     roomName: '',
     participantCount: 0,
+    participants: [],      // [{ name, isHost }] from participant_list; empty until the server sends one
     lastSyncServerTs: 0,
     lastSyncPosition: 0,
     lastSyncPlayState: '',

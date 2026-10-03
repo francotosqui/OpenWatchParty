@@ -33,6 +33,7 @@
       roomId: '',
       roomName: '',
       participantCount: 0,
+      participants: [],
       lastParticipantCount: 0,
       isHost: false,
       readyRoomId: '',

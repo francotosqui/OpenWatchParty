@@ -7,6 +7,8 @@
   const { SEEK_THRESHOLD, VIDEO_ACTION_RETRY_MS, VIDEO_ACTION_MAX_WAIT_MS } = OWP.constants;
 
   const applyRoomState = (msg) => {
+    // Names from another room must not show until this room's list arrives.
+    if (msg.room !== state.roomId) state.participants = [];
     state.inRoom = true;
     state.roomId = msg.room;
     state.roomName = msg.payload.name;

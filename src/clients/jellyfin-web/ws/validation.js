@@ -77,6 +77,20 @@
     return count(message.payload.participant_count) ? null : 'participant_count is invalid';
   };
 
+  const validateParticipantList = (message) => {
+    if (!payloadObject(message)) return 'payload must be an object';
+    if (!onlyKeys(message.payload, ['participants'])) return 'participant_list has unknown fields';
+    const { participants } = message.payload;
+    if (!Array.isArray(participants) || participants.length > MAX_PARTICIPANTS) return 'participants is invalid';
+    for (const participant of participants) {
+      if (!object(participant)) return 'participant entries must be objects';
+      if (!onlyKeys(participant, ['name', 'is_host'])) return 'participant entry has unknown fields';
+      if (!string(participant.name, MAX_NAME_LENGTH, true)) return 'participant name is invalid';
+      if (typeof participant.is_host !== 'boolean') return 'participant is_host is invalid';
+    }
+    return null;
+  };
+
   const validateRoomClosed = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
     if (!onlyKeys(message.payload, ['reason'])) return 'room_closed has unknown fields';
@@ -127,6 +141,7 @@
     room_state: validateRoomState,
     participants_update: validateParticipantCount,
     client_left: validateParticipantCount,
+    participant_list: validateParticipantList,
     room_closed: validateRoomClosed,
     player_event: validatePlayerEvent,
     state_update: validateStateUpdate,
@@ -138,6 +153,7 @@
     'room_state',
     'participants_update',
     'client_left',
+    'participant_list',
     'room_closed',
     'player_event',
     'state_update',
