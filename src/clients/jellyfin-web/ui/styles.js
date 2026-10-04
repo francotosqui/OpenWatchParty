@@ -34,12 +34,15 @@
     .osdHeader .${HEADER_BTN_CLASS} { display: none !important; }
     /* In a room the panel is only the bar and its drop-down, each with its own
        background: a dark grey pill with outline icons and soft tinted states. */
+    /* The bar fits the room name between a minimum (room for the chat input)
+       and a maximum (longer names end in an ellipsis); it stays on the right. */
     #${PANEL_ID}.${ROOM_MODE_CLASS} {
-      width: 360px; padding: 0; gap: 6px; font-family: inherit; font-size: 12px; color: #ecebe6;
+      left: auto; width: auto; min-width: 300px; max-width: min(420px, calc(100vw - 40px));
+      padding: 0; gap: 6px; font-family: inherit; font-size: 12px; color: #ecebe6;
       background: none; border: none; box-shadow: none; backdrop-filter: none;
     }
     @media (max-width: 420px) {
-      #${PANEL_ID}.${ROOM_MODE_CLASS} { left: 8px; right: 8px; width: auto; }
+      #${PANEL_ID}.${ROOM_MODE_CLASS} { left: 8px; right: 8px; min-width: 0; max-width: none; }
     }
     .owp-room-bar, .owp-room-drop {
       background: rgba(38, 38, 36, 0.97); border: 1px solid rgba(255,255,255,0.14);
@@ -52,7 +55,11 @@
     .owp-room-bar .owp-sync-dot { width: 7px; height: 7px; flex-shrink: 0; }
     .owp-room-bar .owp-sync-dot.synced { background: #97c459; }
     .owp-room-bar .owp-sync-spinner { flex-shrink: 0; }
-    .owp-room-bar .owp-latency { font-size: 11px; color: #9a9993; white-space: nowrap; margin: 0 4px 0 2px; }
+    /* Fixed width, so the bar does not jump when the latency gains a digit */
+    .owp-room-bar .owp-latency {
+      min-width: 3.4em; font-size: 11px; font-variant-numeric: tabular-nums;
+      color: #9a9993; white-space: nowrap; margin: 0 4px 0 2px;
+    }
     .owp-room-name { flex: 1; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .owp-icon {
       width: 15px; height: 15px; flex-shrink: 0;
@@ -70,7 +77,11 @@
     .owp-bar-btn .owp-expand { width: 12px; height: 12px; transition: transform 0.15s; }
     .owp-bar-btn[aria-expanded="true"] .owp-expand { transform: rotate(180deg); }
     .owp-room-bar .owp-close-btn { margin-left: 0; padding: 0 6px; border-radius: 12px; }
-    .owp-room-drop { min-height: 0; overflow-y: auto; padding: 8px 10px; border-radius: 10px; }
+    /* As wide as the bar, without widening it: long chat lines wrap instead */
+    .owp-room-drop {
+      width: 0; min-width: 100%; box-sizing: border-box;
+      min-height: 0; overflow-y: auto; padding: 8px 10px; border-radius: 10px;
+    }
     .owp-room-drop[hidden], .owp-room-drop > [hidden] { display: none !important; }
     .owp-leave-confirm { display: flex; align-items: center; gap: 8px; }
     .owp-leave-question { flex: 1; }
