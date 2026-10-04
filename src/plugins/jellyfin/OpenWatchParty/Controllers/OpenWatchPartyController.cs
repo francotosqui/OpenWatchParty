@@ -3,6 +3,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
@@ -20,6 +21,9 @@ public class OpenWatchPartyController : ControllerBase
 {
     private readonly ILogger<OpenWatchPartyController> _logger;
     private const string JavaScriptContentType = "text/javascript; charset=utf-8";
+    private const string ClientAssetCacheControl = "public, max-age=3600";
+    private const string VersionedClientAssetCacheControl = "public, max-age=31536000, immutable";
+    private const string StaleClientAssetCacheControl = "no-store";
 
     internal static readonly IReadOnlySet<string> AllowedClientModules = new HashSet<string>(StringComparer.Ordinal)
     {
@@ -115,16 +119,15 @@ public class OpenWatchPartyController : ControllerBase
         // Get cached script (thread-safe via Lazy<T>)
         var (content, etag) = _scriptCache.Value;
 
+        // Set cache headers (also on 304, so the stored copy keeps the current policy)
+        Response.Headers["Cache-Control"] = GetClientAssetCacheControl(Request.Query, ClientAssetVersion.Value);
+        Response.Headers["ETag"] = etag;
+
         // Check If-None-Match header for cache validation
-        var requestETag = Request.Headers["If-None-Match"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(requestETag) && requestETag == etag)
+        if (RequestMatchesETag(etag))
         {
             return StatusCode(304); // Not Modified
         }
-
-        // Set cache headers
-        Response.Headers["Cache-Control"] = "public, max-age=3600";
-        Response.Headers["ETag"] = etag;
 
         return Content(content, "text/javascript");
     }
@@ -161,7 +164,7 @@ public class OpenWatchPartyController : ControllerBase
             return StatusCode(500);
         }
 
-        Response.Headers.CacheControl = "public, max-age=3600";
+        Response.Headers.CacheControl = GetClientAssetCacheControl(Request.Query, ClientAssetVersion.Value);
         Response.Headers.ETag = asset.ETag;
         Response.Headers.XContentTypeOptions = "nosniff";
 
@@ -203,6 +206,26 @@ public class OpenWatchPartyController : ControllerBase
         var hash = System.Security.Cryptography.SHA256.HashData(content);
         var etag = $"\"{Convert.ToBase64String(hash)}\"";
         return new EmbeddedAsset(content, etag);
+    }
+
+    /// <summary>
+    /// URLs carrying the current client hash cannot change content, so browsers may keep
+    /// them. A different <c>v</c> comes from a page loaded before an update (or a manual
+    /// cache-bust): the current files must not be stored under it. Requests without
+    /// <c>v</c> keep the short lifetime.
+    /// </summary>
+    internal static string GetClientAssetCacheControl(IQueryCollection query, string? currentVersion)
+    {
+        if (!query.TryGetValue("v", out var requested))
+        {
+            return ClientAssetCacheControl;
+        }
+
+        return currentVersion != null
+            && requested.Count == 1
+            && string.Equals(requested[0], currentVersion, StringComparison.Ordinal)
+            ? VersionedClientAssetCacheControl
+            : StaleClientAssetCacheControl;
     }
 
     private bool RequestMatchesETag(string etag)

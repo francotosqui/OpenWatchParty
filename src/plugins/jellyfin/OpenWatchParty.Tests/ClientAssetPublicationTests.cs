@@ -106,6 +106,86 @@ public sealed class ClientAssetPublicationTests
     }
 
     [Fact]
+    public void CurrentlyVersionedModuleIsCacheableLongTerm()
+    {
+        var controller = CreateController($"?v={ClientAssetVersion.Value}");
+
+        Assert.IsType<FileContentResult>(controller.GetClientModule("state.js"));
+
+        Assert.Equal("public, max-age=31536000, immutable", controller.Response.Headers.CacheControl);
+    }
+
+    [Theory]
+    [InlineData("?v=0000000000000000")]
+    [InlineData("?v=1700000000000")]
+    [InlineData("?v=")]
+    [InlineData("?v={version}&v={version}")]
+    public void StaleOrUnknownModuleVersionIsNotStored(string query)
+    {
+        var controller = CreateController(query.Replace("{version}", ClientAssetVersion.Value, StringComparison.Ordinal));
+
+        Assert.IsType<FileContentResult>(controller.GetClientModule("state.js"));
+
+        Assert.Equal("no-store", controller.Response.Headers.CacheControl);
+    }
+
+    [Fact]
+    public void UnavailableClientVersionNeverAllowsLongTermCache()
+    {
+        var withVersion = new QueryCollection(new Dictionary<string, Microsoft.Extensions.Primitives.StringValues> { ["v"] = "0123456789abcdef" });
+
+        Assert.Equal("public, max-age=3600", OpenWatchPartyController.GetClientAssetCacheControl(QueryCollection.Empty, null));
+        Assert.Equal("no-store", OpenWatchPartyController.GetClientAssetCacheControl(withVersion, null));
+        Assert.Equal("public, max-age=31536000, immutable", OpenWatchPartyController.GetClientAssetCacheControl(withVersion, "0123456789abcdef"));
+    }
+
+    [Fact]
+    public void CurrentlyVersionedNotModifiedResponseKeepsLongTermCache()
+    {
+        var initialController = CreateController();
+        Assert.IsType<FileContentResult>(initialController.GetClientModule("state.js"));
+        var controller = CreateController($"?v={ClientAssetVersion.Value}");
+        controller.Request.Headers.IfNoneMatch = initialController.Response.Headers.ETag.ToString();
+
+        var result = Assert.IsType<StatusCodeResult>(controller.GetClientModule("state.js"));
+
+        Assert.Equal(StatusCodes.Status304NotModified, result.StatusCode);
+        Assert.Equal("public, max-age=31536000, immutable", controller.Response.Headers.CacheControl);
+    }
+
+    [Theory]
+    [InlineData(null, "public, max-age=3600")]
+    [InlineData("?v=0000000000000000", "no-store")]
+    [InlineData("?v={version}", "public, max-age=31536000, immutable")]
+    public void LoaderCacheLifetimeFollowsRequestedVersion(string? query, string expected)
+    {
+        var controller = CreateController(query?.Replace("{version}", ClientAssetVersion.Value, StringComparison.Ordinal));
+
+        Assert.IsType<ContentResult>(controller.GetClientScript());
+
+        Assert.Equal(expected, controller.Response.Headers.CacheControl.ToString());
+    }
+
+    [Theory]
+    [InlineData("{etag}")]
+    [InlineData("W/{etag}")]
+    [InlineData("\"different\", {etag}")]
+    public void LoaderNotModifiedResponseKeepsCacheHeaders(string headerTemplate)
+    {
+        var initialController = CreateController();
+        Assert.IsType<ContentResult>(initialController.GetClientScript());
+        var etag = initialController.Response.Headers.ETag.ToString();
+        var controller = CreateController($"?v={ClientAssetVersion.Value}");
+        controller.Request.Headers.IfNoneMatch = headerTemplate.Replace("{etag}", etag, StringComparison.Ordinal);
+
+        var result = Assert.IsType<StatusCodeResult>(controller.GetClientScript());
+
+        Assert.Equal(StatusCodes.Status304NotModified, result.StatusCode);
+        Assert.Equal(etag, controller.Response.Headers.ETag.ToString());
+        Assert.Equal("public, max-age=31536000, immutable", controller.Response.Headers.CacheControl.ToString());
+    }
+
+    [Fact]
     public void PublishedAssemblyContainsEveryDeclaredModule()
     {
         var projectDirectory = LocatePluginProject();
@@ -160,13 +240,19 @@ public sealed class ClientAssetPublicationTests
         }
     }
 
-    private static OpenWatchPartyController CreateController()
+    private static OpenWatchPartyController CreateController(string? query = null)
     {
+        var httpContext = new DefaultHttpContext();
+        if (query != null)
+        {
+            httpContext.Request.QueryString = new QueryString(query);
+        }
+
         return new OpenWatchPartyController(NullLogger<OpenWatchPartyController>.Instance)
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = new DefaultHttpContext()
+                HttpContext = httpContext
             }
         };
     }
