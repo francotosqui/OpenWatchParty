@@ -204,11 +204,13 @@ path: select **Watch Party** in the player, find `<host>'s room` under
 **4** — Select **Join** for the correct host. You can leave and rejoin while
 the host keeps the movie and room open.
 
-Look for **Online: 2** in the room and **In sync** on the guest side. Initial
-catch-up may take a few seconds. Ask the host to resume playback, pause and
-seek once; the guest should follow. Chat is available in the panel. The
-host's **Close** button ends the room for everyone; the guest's **Leave**
-button exits only their participation.
+Select the people icon in the room bar: it shows **2** and lists both names,
+with a **host** badge on the host. On the guest side the dot at the left of the
+bar turns green when in sync (hover it to read **In sync**). Initial catch-up
+may take a few seconds. Ask the host to resume playback, pause and seek once;
+the guest should follow. Chat opens from the chat icon. The exit icon asks
+before leaving: for the host it closes the room for everyone, for the guest it
+only leaves.
 
 ![Real participant panel showing Online 2, In sync and Leave, with the sync indicator marked 5]({{ '/assets/images/tutorial-guest-sync.png' | relative_url }})
 

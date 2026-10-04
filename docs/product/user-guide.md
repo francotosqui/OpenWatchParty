@@ -118,10 +118,10 @@ In a room the panel becomes a single bar at the top right (below the header when
 - **Room name** - Current watch party name; hover it if it is cut short
 - **Participants** (groups icon and count) - Opens the list of who is watching, with a **Host** badge on the host (older session servers show only the number of people)
 - **Chat** (chat icon) - Opens the chat; a red badge counts unread messages
-- **Leave** (exit icon) - Leaves the room right away; for the host it asks **Close the room for everyone?** first
+- **Leave** (exit icon) - Asks **Leave the room?** before leaving; for the host it asks **Close the room for everyone?**
 - **Close (X)** - Only hides the bar: you stay in the room
 
-Participants, chat and the host's confirmation open one at a time below the bar; select the same icon again to close it.
+Participants, chat and the leave confirmation open one at a time below the bar; select the same icon again to close it.
 
 ## Using Chat
 

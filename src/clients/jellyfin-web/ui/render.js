@@ -212,12 +212,10 @@
     chatBtn.appendChild(badge);
     chatBtn.onclick = () => toggleRoomSection('chat');
 
-    // A guest leaves right away; the host confirms, since it ends the room for everyone.
-    const leaveBtn = state.isHost
-      ? createBarButton('owp-btn-leave', 'Close room', 'logout', 'owp-leave-confirm')
-      : createBarButton('owp-btn-leave', 'Leave room', 'logout');
+    // Leaving always asks first; for the host it ends the room for everyone.
+    const leaveBtn = createBarButton('owp-btn-leave', state.isHost ? 'Close room' : 'Leave room', 'logout', 'owp-leave-confirm');
     leaveBtn.classList.add('danger');
-    leaveBtn.onclick = state.isHost ? () => toggleRoomSection('leave') : leaveRoom;
+    leaveBtn.onclick = () => toggleRoomSection('leave');
 
     bar.append(ui.buildSyncStatusIndicator(), latency, roomName, peopleBtn, chatBtn, leaveBtn, createCloseButton());
 
@@ -251,25 +249,21 @@
     inputContainer.append(input, send);
     chatSection.append(messages, inputContainer);
 
-    drop.append(peopleSection, chatSection);
-    if (state.isHost) {
-      const confirm = createElement('div', 'owp-leave-confirm');
-      confirm.id = 'owp-leave-confirm';
-      const cancel = createElement('button', 'owp-pill-btn secondary', 'Cancel');
-      cancel.type = 'button';
-      cancel.onclick = () => {
-        toggleRoomSection('leave');
-        leaveBtn.focus();
-      };
-      const close = createElement('button', 'owp-pill-btn danger', 'Close room');
-      close.id = 'owp-btn-close-room';
-      close.type = 'button';
-      close.onclick = leaveRoom;
-      confirm.append(createElement('span', 'owp-leave-question', 'Close the room for everyone?'), cancel, close);
-      drop.appendChild(confirm);
-    } else if (state.roomBarSection === 'leave') {
-      state.roomBarSection = '';
-    }
+    const confirm = createElement('div', 'owp-leave-confirm');
+    confirm.id = 'owp-leave-confirm';
+    const cancel = createElement('button', 'owp-pill-btn secondary', 'Cancel');
+    cancel.type = 'button';
+    cancel.onclick = () => {
+      toggleRoomSection('leave');
+      leaveBtn.focus();
+    };
+    const confirmLeave = createElement('button', 'owp-pill-btn danger', state.isHost ? 'Close room' : 'Leave');
+    confirmLeave.id = 'owp-btn-confirm-leave';
+    confirmLeave.type = 'button';
+    confirmLeave.onclick = leaveRoom;
+    const question = state.isHost ? 'Close the room for everyone?' : 'Leave the room?';
+    confirm.append(createElement('span', 'owp-leave-question', question), cancel, confirmLeave);
+    drop.append(peopleSection, chatSection, confirm);
 
     panel.replaceChildren(bar, drop);
     applyRoomSection();

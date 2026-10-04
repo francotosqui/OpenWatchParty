@@ -369,7 +369,7 @@ Enables "Create Room" only while something is playing; otherwise shows a hint.
 Shows the participants' names (`state.participants`) in the room view, or the count when no names were received, for example from an older session server, and updates the count on the bar's participants button.
 
 #### Room bar
-In a room, `render()` draws a single bar (sync dot, latency, room name, then the participants, chat, leave and close buttons) and a drop-down below it. Participants, chat and the host's "Close the room for everyone?" confirmation open one at a time (`state.roomBarSection`); a guest's leave button leaves right away. The chat counts as read only while its drop-down is open (`chat.isChatVisible()`).
+In a room, `render()` draws a single bar (sync dot, latency, room name, then the participants, chat, leave and close buttons) and a drop-down below it. Participants, chat and the leave confirmation ("Leave the room?", or "Close the room for everyone?" for the host) open one at a time (`state.roomBarSection`). The chat counts as read only while its drop-down is open (`chat.isChatVisible()`).
 
 #### `applyNativeSyncPlayVisibility() -> void`
 Adds or removes the stylesheet that hides Jellyfin's SyncPlay button, following `state.hideNativeSyncPlayButton` (from `hide_native_syncplay_button` in the token response).

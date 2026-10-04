@@ -202,13 +202,25 @@ describe('room bar', () => {
     OWP.state.lastRttMs = null;
   });
 
-  it('lets a guest leave right away', () => {
+  it('asks a guest before leaving the room', () => {
     renderRoom();
     const leave = byId('owp-btn-leave');
     assert.equal(leave.getAttribute('aria-label'), 'Leave room');
-    assert.equal(leave.getAttribute('aria-controls'), null);
-    assert.equal(byId('owp-leave-confirm'), null);
+    assert.equal(leave.getAttribute('aria-controls'), 'owp-leave-confirm');
     leave.click();
+    assert.equal(left, 0);
+    assert.deepEqual(openSections(), ['owp-leave-confirm']);
+    assert.equal(panel().querySelector('.owp-leave-question').textContent, 'Leave the room?');
+    assert.equal(byId('owp-btn-confirm-leave').textContent, 'Leave');
+
+    focused = null;
+    panel().querySelector('.owp-leave-confirm .secondary').click();
+    assert.deepEqual(openSections(), []);
+    assert.equal(left, 0);
+    assert.equal(focused, leave);
+
+    leave.click();
+    byId('owp-btn-confirm-leave').click();
     assert.equal(left, 1);
   });
 
@@ -230,15 +242,18 @@ describe('room bar', () => {
     assert.equal(focused, leave);
 
     leave.click();
-    byId('owp-btn-close-room').click();
+    assert.equal(byId('owp-btn-confirm-leave').textContent, 'Close room');
+    byId('owp-btn-confirm-leave').click();
     assert.equal(left, 1);
   });
 
-  it('does not carry the host confirmation over to a guest view', () => {
+  it('words a reopened confirmation for the current role', () => {
     OWP.state.roomBarSection = 'leave';
-    renderRoom();
-    assert.equal(OWP.state.roomBarSection, '');
-    assert.equal(byId('owp-room-drop').hidden, true);
+    renderRoom({ isHost: true });
+    assert.equal(panel().querySelector('.owp-leave-question').textContent, 'Close the room for everyone?');
+    renderRoom({ isHost: false });
+    assert.deepEqual(openSections(), ['owp-leave-confirm']);
+    assert.equal(panel().querySelector('.owp-leave-question').textContent, 'Leave the room?');
   });
 
   it('updates the people count with the names and with count updates', () => {
