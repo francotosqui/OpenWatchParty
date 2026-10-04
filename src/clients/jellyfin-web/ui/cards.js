@@ -46,19 +46,20 @@
     });
   };
 
-  const buildCardContent = (room) => {
+  // Same markup and classes as Jellyfin's landscape home cards ("Continue
+  // Watching"), with no colours of its own, so the row matches its neighbours
+  // and follows the active theme.
+  const buildCardContent = (room, index) => {
     const box = createElement('div', 'cardBox cardBox-bottompadded');
     const scalable = createElement('div', 'cardScalable');
-    const padder = createElement('div', 'cardPadder cardPadder-overflowPortrait');
+    const padder = createElement('div', 'cardPadder cardPadder-overflowBackdrop');
     const cardIcon = createElement('span', 'cardImageIcon material-icons groups owp-card-icon');
     cardIcon.setAttribute('aria-hidden', 'true');
     padder.appendChild(cardIcon);
 
-    const image = createElement('div', 'cardImageContainer coveredImage cardContent owp-card-image-container');
-    image.style.backgroundColor = '#1a1a1a';
+    const image = createElement('div', `cardImageContainer coveredImage cardContent defaultCardBackground defaultCardBackground${(index % 5) + 1} owp-card-image-container`);
     const footer = createElement('div', 'innerCardFooter');
     const count = createElement('div', 'cardText');
-    count.style.cssText = 'color:#69f0ae;font-weight:600;';
     const countIcon = createElement('span', 'material-icons', 'groups');
     countIcon.style.cssText = 'font-size:14px;vertical-align:middle;';
     count.append(countIcon, document.createTextNode(` ${String(room.count)} watching`));
@@ -81,6 +82,24 @@
     return box;
   };
 
+  // Landscape art, as Jellyfin's "Continue Watching" picks it: an episode's own
+  // image is a 16:9 still; otherwise the thumb, then the backdrop (also from the
+  // series), and the poster last, cropped to fit.
+  const landscapeImage = (item, mediaId) => {
+    const tags = item.ImageTags || {};
+    if (item.Type === 'Episode' && tags.Primary) return { id: mediaId, type: 'Primary', tag: tags.Primary };
+    if (tags.Thumb) return { id: mediaId, type: 'Thumb', tag: tags.Thumb };
+    if (item.BackdropImageTags?.length) return { id: mediaId, type: 'Backdrop', tag: item.BackdropImageTags[0] };
+    if (item.ParentThumbItemId && item.ParentThumbImageTag) {
+      return { id: item.ParentThumbItemId, type: 'Thumb', tag: item.ParentThumbImageTag };
+    }
+    if (item.ParentBackdropItemId && item.ParentBackdropImageTags?.length) {
+      return { id: item.ParentBackdropItemId, type: 'Backdrop', tag: item.ParentBackdropImageTags[0] };
+    }
+    if (tags.Primary) return { id: mediaId, type: 'Primary', tag: tags.Primary };
+    return null;
+  };
+
   const attachMediaInfo = (card, mediaId) => {
     if (!mediaId || !window.ApiClient) return;
     const userId = window.ApiClient.getCurrentUserId?.() || window.ApiClient._currentUserId;
@@ -92,9 +111,11 @@
       }
       const containerEl = card.querySelector('.owp-card-image-container');
       const iconEl = card.querySelector('.owp-card-icon');
-      if (containerEl && item?.ImageTags?.Primary) {
+      const image = item ? landscapeImage(item, mediaId) : null;
+      if (containerEl && image) {
         const serverUrl = window.ApiClient._serverAddress || window.ApiClient.serverAddress?.() || '';
-        const imageUrl = `${serverUrl}/Items/${mediaId}/Images/Primary?fillHeight=237&fillWidth=158&quality=96&tag=${item.ImageTags.Primary}`;
+        const imageUrl = `${serverUrl}/Items/${encodeURIComponent(image.id)}/Images/${image.type}`
+          + `?fillWidth=480&fillHeight=270&quality=96&tag=${encodeURIComponent(image.tag)}`;
         containerEl.style.backgroundImage = `url("${imageUrl}")`;
         if (iconEl) iconEl.style.display = 'none';
       }
@@ -153,12 +174,12 @@
 
   const createRoomCard = (room, index) => {
     const card = document.createElement('div');
-    card.className = 'card overflowPortraitCard card-hoverable card-withuserdata owp-room-card';
+    card.className = 'card overflowBackdropCard card-hoverable card-withuserdata owp-room-card';
     card.dataset.index = String(index);
     card.dataset.roomId = String(room.id);
     card.dataset.mediaId = String(room.media_id || '');
     card.dataset.count = String(room.count);
-    card.replaceChildren(buildCardContent(room));
+    card.replaceChildren(buildCardContent(room, index));
     attachMediaInfo(card, room.media_id);
     attachCardHandlers(card, room);
     return card;
