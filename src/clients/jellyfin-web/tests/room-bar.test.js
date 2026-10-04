@@ -19,6 +19,7 @@ OWP.actions = { schedulePing: () => {} };
 require('../ws/handlers/clock.js');
 
 const { PANEL_ID, ROOM_MODE_CLASS } = OWP.constants;
+const updateRoomListUI = OWP.ui.updateRoomListUI;
 let focused = null;
 Object.getPrototypeOf(document.createElement('div')).focus = function focus() {
   focused = this;
@@ -262,6 +263,40 @@ describe('room bar', () => {
     OWP.state.pendingPlayUntil = 0;
     OWP.ui.updateSyncIndicator();
     assert.equal(byId('owp-sync-indicator').className, 'owp-sync-spinner');
+  });
+
+  it('draws the lobby in the same style as the bar', () => {
+    OWP.state.inRoom = false;
+    OWP.state.rooms = [
+      { id: 'room-1', name: "Ana's room", count: 1, media_id: 'media' },
+      { id: 'room-2', name: "FrancoTosky's room", count: 3, media_id: null }
+    ];
+    OWP.state.ws = { readyState: 1 };
+    OWP.ui.updateRoomListUI = updateRoomListUI;
+    OWP.ui.render(true);
+
+    const header = panel().querySelector('.owp-header');
+    assert.equal(header.querySelector('.owp-panel-title').textContent, 'OpenWatchParty');
+    assert.ok(header.querySelector('.owp-close-btn .owp-icon-x'));
+    assert.equal(byId('owp-ws-indicator').className, 'owp-ws-status online');
+    assert.equal(byId('owp-ws-indicator').textContent, 'Online');
+    assert.equal(panel().querySelector('.owp-label').textContent, 'Available rooms');
+    assert.ok(panel().querySelector('.owp-create-section #owp-btn-create'));
+
+    const rows = byId('owp-room-list').querySelectorAll('.owp-room-item');
+    assert.deepEqual(rows.map(row => row.querySelector('.owp-room-count').textContent), ['1 user', '3 users']);
+    assert.equal(rows[0].querySelector('.owp-room-title').textContent, "Ana's room");
+    assert.ok(rows[1].querySelector('.owp-room-note'));
+
+    OWP.state.ws = null;
+    OWP.ui.updateStatusIndicator();
+    assert.equal(byId('owp-ws-indicator').className, 'owp-ws-status offline');
+    assert.equal(byId('owp-ws-indicator').textContent, 'Offline');
+
+    OWP.state.rooms = [];
+    OWP.ui.updateRoomListUI();
+    assert.equal(byId('owp-room-list').querySelector('.owp-room-empty').textContent, 'No active rooms.');
+    OWP.ui.updateRoomListUI = () => {};
   });
 
   it('drops the room style back in the lobby', () => {

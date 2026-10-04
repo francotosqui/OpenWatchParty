@@ -37,20 +37,14 @@
     return svg;
   };
 
-  const createMaterialIcon = (name) => {
-    const icon = createElement('span', `material-icons ${name}`);
-    icon.setAttribute('aria-hidden', 'true');
-    return icon;
-  };
-
   // Hides the panel from inside it, so closing does not mean reaching for the
   // button that opened it; focus goes back to that button when it is shown.
-  const createCloseButton = (icon = createMaterialIcon('close')) => {
-    const button = createElement('button', 'owp-close-btn');
+  const createCloseButton = () => {
+    const button = createElement('button', 'owp-close-btn owp-bar-btn');
     button.type = 'button';
     button.title = 'Close panel';
     button.setAttribute('aria-label', 'Close panel');
-    button.appendChild(icon);
+    button.appendChild(createIcon('x'));
     button.onclick = () => {
       const panel = document.getElementById(PANEL_ID);
       if (!panel) return;
@@ -81,7 +75,7 @@
 
   const renderLobby = (panel) => {
     const header = createElement('div', 'owp-header');
-    header.append(createElement('span', '', 'OpenWatchParty'), document.createTextNode(' '));
+    header.append(createElement('span', 'owp-panel-title', 'OpenWatchParty'), document.createTextNode(' '));
     const status = createElement('span');
     status.id = 'owp-ws-indicator';
     const actions = createElement('span', 'owp-header-actions');
@@ -90,12 +84,11 @@
 
     const lobby = createElement('div', 'owp-lobby-container');
     const roomSection = createElement('div', 'owp-section');
-    roomSection.appendChild(createElement('div', 'owp-label', 'Available Rooms'));
+    roomSection.appendChild(createElement('div', 'owp-label', 'Available rooms'));
     const roomList = createElement('div');
     roomList.id = 'owp-room-list';
     roomSection.appendChild(roomList);
-    const createSection = createElement('div', 'owp-section');
-    createSection.style.cssText = 'border-top: 1px solid #333; padding-top: 15px;';
+    const createSection = createElement('div', 'owp-section owp-create-section');
     const btn = createElement('button', 'owp-btn', 'Create Room');
     btn.id = 'owp-btn-create';
     btn.style.width = '100%';
@@ -226,9 +219,7 @@
     leaveBtn.classList.add('danger');
     leaveBtn.onclick = state.isHost ? () => toggleRoomSection('leave') : leaveRoom;
 
-    const closeBtn = createCloseButton(createIcon('x'));
-    closeBtn.classList.add('owp-bar-btn');
-    bar.append(ui.buildSyncStatusIndicator(), latency, roomName, peopleBtn, chatBtn, leaveBtn, closeBtn);
+    bar.append(ui.buildSyncStatusIndicator(), latency, roomName, peopleBtn, chatBtn, leaveBtn, createCloseButton());
 
     const drop = createElement('div', 'owp-room-drop');
     drop.id = 'owp-room-drop';

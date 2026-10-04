@@ -17,12 +17,13 @@
     '.headerSyncButton, button[aria-controls="app-sync-play-menu"] { display: none !important; }';
 
   const CSS_STYLES = `
+    /* Same look as the room bar: dark grey, soft border, Jellyfin's font */
     #${PANEL_ID} {
       position: fixed; top: 72px; right: 20px; width: 300px; max-height: min(450px, calc(100vh - 88px));
-      padding: 14px; border-radius: 12px; background: rgba(10, 10, 10, 0.98);
-      backdrop-filter: blur(20px); color: #fff; font-family: sans-serif; z-index: 20000;
-      border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 12px 40px rgba(0,0,0,0.8);
-      display: flex; flex-direction: column;
+      padding: 10px 12px; border-radius: 12px; background: rgba(38, 38, 36, 0.97);
+      color: #ecebe6; font-family: inherit; font-size: 12px; z-index: 20000;
+      border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+      display: flex; flex-direction: column; box-sizing: border-box;
     }
     #${PANEL_ID}.hide { display: none; }
     /* Opened from the header: placed below it (top is set when it opens) */
@@ -39,7 +40,7 @@
     #${PANEL_ID}.${ROOM_MODE_CLASS} {
       left: auto; width: auto; min-width: 300px; max-width: min(420px, calc(100vw - 40px));
       padding: 0; gap: 6px; font-family: inherit; font-size: 12px; color: #ecebe6;
-      background: none; border: none; box-shadow: none; backdrop-filter: none;
+      background: none; border: none; box-shadow: none;
     }
     @media (max-width: 420px) {
       #${PANEL_ID}.${ROOM_MODE_CLASS} { left: 8px; right: 8px; min-width: 0; max-width: none; }
@@ -76,7 +77,6 @@
     .owp-bar-btn.danger[aria-expanded="true"] { background: #791f1f; color: #f09595; }
     .owp-bar-btn .owp-expand { width: 12px; height: 12px; transition: transform 0.15s; }
     .owp-bar-btn[aria-expanded="true"] .owp-expand { transform: rotate(180deg); }
-    .owp-room-bar .owp-close-btn { margin-left: 0; padding: 0 6px; border-radius: 12px; }
     /* As wide as the bar, without widening it: long chat lines wrap instead */
     .owp-room-drop {
       width: 0; min-width: 100%; box-sizing: border-box;
@@ -92,33 +92,38 @@
     .owp-pill-btn.danger { background: #791f1f; border: none; color: #f09595; }
     /* Same size as the MUI SVG icons next to it (MuiSvgIcon fontSizeMedium) */
     #${MODERN_HEADER_BTN_ID} .material-icons { font-size: 1.5rem; width: 1em; height: 1em; line-height: 1; }
-    .owp-header { font-weight: bold; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; }
-    .owp-header-actions { display: flex; align-items: center; gap: 8px; }
-    .owp-close-btn {
-      display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-      margin-left: 8px; padding: 4px; border: none; border-radius: 50%;
-      background: transparent; color: #aaa; cursor: pointer;
+    .owp-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);
     }
-    .owp-header-actions .owp-close-btn { margin-left: 0; }
-    .owp-close-btn:hover, .owp-close-btn:focus-visible { background: rgba(255,255,255,0.1); color: #fff; }
-    .owp-close-btn .material-icons { font-size: 20px; }
-    .owp-section { margin-bottom: 15px; overflow-y: auto; }
-    .owp-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
+    .owp-panel-title { font-size: 13px; font-weight: 500; }
+    .owp-header-actions { display: flex; align-items: center; gap: 6px; }
+    .owp-ws-status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #9a9993; }
+    .owp-ws-status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #97c459; }
+    .owp-ws-status.offline::before { background: #f09595; }
+    .owp-close-btn { margin-left: 0; padding: 0 6px; }
+    .owp-section { margin-bottom: 10px; overflow-y: auto; }
+    .owp-create-section { margin-bottom: 0; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); }
+    .owp-label { font-size: 11px; color: #9a9993; margin-bottom: 6px; }
     .owp-room-item {
-      background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 8px;
-      display: flex; justify-content: space-between; align-items: center; cursor: pointer;
-      border: 1px solid transparent; transition: all 0.2s;
+      display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer;
+      margin-bottom: 6px; padding: 8px 10px; border-radius: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid transparent;
+      transition: background 0.15s, border-color 0.15s;
     }
-    .owp-room-item:hover { background: rgba(255,255,255,0.1); border-color: #1565c0; }
+    .owp-room-item:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.14); }
+    .owp-room-title { font-weight: 500; }
+    .owp-room-count { font-size: 11px; color: #9a9993; }
+    .owp-room-empty { padding: 8px; text-align: center; color: #9a9993; }
     .owp-btn {
-      border: none; border-radius: 6px; padding: 8px 12px;
-      background: #388e3c; color: #fff; cursor: pointer; font-weight: bold; font-size: 13px;
+      height: 26px; padding: 0 12px; border: none; border-radius: 13px; cursor: pointer;
+      background: #0c447c; color: #85b7eb; font-family: inherit; font-size: 12px; font-weight: 500;
     }
-    .owp-btn.secondary { background: #1565c0; }
-    .owp-btn.danger { background: #d32f2f; }
-    .owp-btn:disabled { background: #333; color: #888; cursor: not-allowed; }
-    .owp-hint { font-size: 11px; color: #888; margin-top: 8px; text-align: center; }
-    .owp-room-note { font-size: 10px; color: #ffb74d; }
+    .owp-btn:hover { background: #185fa5; color: #e6f1fb; }
+    .owp-btn.danger { background: #791f1f; color: #f09595; }
+    .owp-btn:disabled { background: rgba(255,255,255,0.06); color: #85847e; cursor: not-allowed; }
+    .owp-hint { font-size: 11px; color: #9a9993; margin-top: 6px; text-align: center; }
+    .owp-room-note { font-size: 11px; color: #ef9f27; }
     .owp-participants { display: flex; flex-direction: column; }
     .owp-participant { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 0; }
     .owp-participant-avatar {
@@ -134,7 +139,7 @@
       width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444;
       background: #000; color: #fff; box-sizing: border-box; margin-bottom: 10px; font-size: 14px;
     }
-    .owp-footer { font-size: 10px; color: #555; text-align: center; margin-top: auto; padding-top: 10px; }
+    .owp-footer { font-size: 11px; color: #9a9993; text-align: center; margin-top: auto; padding-top: 8px; }
     .owp-select {
       width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #444;
       background: #000; color: #fff; box-sizing: border-box; font-size: 13px;
@@ -181,7 +186,7 @@
       display: inline-flex; align-items: center; height: 24px; padding: 0 8px;
       border: none; border-radius: 12px; background: #0c447c; color: #85b7eb; cursor: pointer;
     }
-    #owp-chat-send:hover { background: #185fa5; }
+    #owp-chat-send:hover { background: #185fa5; color: #e6f1fb; }
     .owp-chat-badge { display: none; padding: 0 5px; border-radius: 8px; background: #791f1f; color: #f09595; font-size: 11px; line-height: 1.45; }
     /* Toast styles */
     /* Bottom right, so chat toasts do not cover the room bar at the top */

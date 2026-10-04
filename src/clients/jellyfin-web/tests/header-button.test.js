@@ -401,7 +401,7 @@ describe('header Watch Party button', () => {
     button.click();
     const lobbyClose = panel().querySelector('.owp-close-btn');
     assert.equal(lobbyClose.getAttribute('aria-label'), 'Close panel');
-    assert.ok(lobbyClose.querySelector('.material-icons.close'));
+    assert.ok(lobbyClose.querySelector('.owp-icon-x'));
     focused = null;
     lobbyClose.click();
     assert.ok(panel().classList.contains('hide'));

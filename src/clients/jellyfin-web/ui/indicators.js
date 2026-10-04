@@ -7,7 +7,7 @@
     const el = document.getElementById('owp-ws-indicator');
     if (!el) return;
     const connected = state.ws && state.ws.readyState === 1;
-    el.style.color = connected ? '#69f0ae' : '#ff5252';
+    el.className = `owp-ws-status ${connected ? 'online' : 'offline'}`;
     el.textContent = connected ? 'Online' : 'Offline';
   };
 

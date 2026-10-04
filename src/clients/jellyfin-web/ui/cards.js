@@ -16,8 +16,7 @@
     const roomList = document.getElementById('owp-room-list');
     if (!roomList) return;
     if (state.rooms.length === 0) {
-      const empty = createElement('div', '', 'No active rooms.');
-      empty.style.cssText = 'font-size:12px; color:#555; padding: 10px; text-align:center;';
+      const empty = createElement('div', 'owp-room-empty', 'No active rooms.');
       roomList.replaceChildren(empty);
       return;
     }
@@ -25,10 +24,8 @@
     state.rooms.forEach(room => {
       const item = createElement('div', 'owp-room-item');
       const details = createElement('div');
-      const name = createElement('div', '', room.name);
-      name.style.fontWeight = 'bold';
-      const count = createElement('div', '', `${String(room.count)} users`);
-      count.style.cssText = 'font-size:10px; color:#888';
+      const name = createElement('div', 'owp-room-title', room.name);
+      const count = createElement('div', 'owp-room-count', `${String(room.count)} ${room.count === 1 ? 'user' : 'users'}`);
       details.append(name, count);
       if (!room.media_id) {
         const noMedia = createElement('div', 'owp-room-note', 'No media');
