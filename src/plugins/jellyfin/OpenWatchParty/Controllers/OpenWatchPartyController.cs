@@ -21,7 +21,7 @@ public class OpenWatchPartyController : ControllerBase
     private readonly ILogger<OpenWatchPartyController> _logger;
     private const string JavaScriptContentType = "text/javascript; charset=utf-8";
 
-    private static readonly HashSet<string> AllowedClientModules = new(StringComparer.Ordinal)
+    internal static readonly IReadOnlySet<string> AllowedClientModules = new HashSet<string>(StringComparer.Ordinal)
     {
         "state.js",
         "utils/time.js",

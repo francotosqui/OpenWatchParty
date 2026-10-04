@@ -17,7 +17,7 @@ public class FileTransformationIntegration : IScheduledTask
     private const string IndexPattern = "index.html";
     private const string HomeChunkPattern = @"home-html\..*\.chunk\.js";
     private const string HomeChunkInjectionGuard = "__owpClientScriptInjected";
-    private const string HomeChunkInjectionSnippet = "\n;(function(){if(window.__owpClientScriptInjected||(window.OpenWatchParty&&window.OpenWatchParty.__loaded))return;window.__owpClientScriptInjected=true;var s=document.createElement('script');s.src='../OpenWatchParty/ClientScript';s.defer=true;document.head.appendChild(s);}());\n";
+    private static string HomeChunkInjectionSnippet => "\n;(function(){if(window.__owpClientScriptInjected||(window.OpenWatchParty&&window.OpenWatchParty.__loaded))return;window.__owpClientScriptInjected=true;var s=document.createElement('script');s.src='" + ClientScriptInjection.ScriptUrl + "';s.defer=true;document.head.appendChild(s);}());\n";
 
     private readonly ILogger<FileTransformationIntegration> _logger;
     private static ILogger<FileTransformationIntegration>? s_logger;

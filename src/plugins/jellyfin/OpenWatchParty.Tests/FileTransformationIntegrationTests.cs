@@ -4,7 +4,7 @@ namespace OpenWatchParty.Plugin.Tests;
 
 public class FileTransformationIntegrationTests
 {
-    private const string ScriptTag = "<script src=\"../OpenWatchParty/ClientScript\" defer></script>";
+    private static readonly string ScriptTag = ClientScriptInjection.ScriptTag;
     private const string FallbackLoaderGuard = "__owpClientScriptInjected";
 
     private class FakePayload
@@ -22,6 +22,7 @@ public class FileTransformationIntegrationTests
         var result = FileTransformationIntegration.TransformIndexHtml(MakePayload(html));
 
         Assert.Contains(ScriptTag, result);
+        Assert.Contains($"../OpenWatchParty/ClientScript?v={ClientAssetVersion.Value}", result);
         Assert.Contains("</body>", result);
         Assert.True(result.IndexOf(ScriptTag) < result.LastIndexOf("</body>"));
     }
@@ -50,7 +51,7 @@ public class FileTransformationIntegrationTests
         var result = FileTransformationIntegration.TransformHomeChunkScript(MakePayload(js, "home-html.a1b2.chunk.js"));
 
         Assert.Contains(FallbackLoaderGuard, result);
-        Assert.Contains("../OpenWatchParty/ClientScript", result);
+        Assert.Contains($"s.src='{ClientScriptInjection.ScriptUrl}'", result);
         Assert.Contains("window.OpenWatchParty&&window.OpenWatchParty.__loaded", result);
         Assert.StartsWith(js, result, StringComparison.Ordinal);
     }
@@ -60,9 +61,11 @@ public class FileTransformationIntegrationTests
     {
         var relative = $"<html><body>{ScriptTag}</body></html>";
         var absolute = "<html><body><script src=\"/OpenWatchParty/ClientScript\"></script></body></html>";
+        var unversioned = "<html><body><script src=\"../OpenWatchParty/ClientScript\" defer></script></body></html>";
 
         Assert.Equal(relative, FileTransformationIntegration.TransformIndexHtml(MakePayload(relative)));
         Assert.Equal(absolute, FileTransformationIntegration.TransformIndexHtml(MakePayload(absolute)));
+        Assert.Equal(unversioned, FileTransformationIntegration.TransformIndexHtml(MakePayload(unversioned)));
     }
 
     [Fact]
