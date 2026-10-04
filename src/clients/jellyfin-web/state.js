@@ -170,6 +170,7 @@
     successfulPings: 0,
     serverOffsetMs: 0,
     timeSyncSamples: [],         // Circular buffer of { rtt, offset, ts } for hybrid time sync
+    lastRttMs: null,             // Latest ping round trip, shown in the room bar; null until the first pong
     lastSeekSentAt: 0,
     lastStateSentAt: 0,
     lastSentPosition: 0,

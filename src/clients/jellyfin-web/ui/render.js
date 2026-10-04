@@ -177,7 +177,8 @@
   const renderRoom = (panel) => {
     const bar = createElement('div', 'owp-room-bar');
     const clientId = String(state.clientId).split('-')[1] || '...';
-    const latency = createElement('span', 'owp-latency', '-');
+    // The last measured value, so a redraw does not blank it until the next pong.
+    const latency = createElement('span', 'owp-latency', state.lastRttMs === null ? '-' : `${state.lastRttMs} ms`);
     latency.title = `Latency to the watch party server (client ${clientId})`;
     const roomName = createElement('span', 'owp-room-name', state.roomName);
     roomName.title = state.roomName;

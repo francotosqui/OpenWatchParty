@@ -112,6 +112,7 @@
     state.connectionPhase = 'disconnected';
     state.successfulPings = 0;
     state.timeSyncSamples = [];
+    state.lastRttMs = null;
     state.clientId = '';
     clearRoomRejoinTimer();
     if (state.inRoom) {
@@ -307,6 +308,7 @@
     state.clientId = '';
     state.successfulPings = 0;
     state.timeSyncSamples = [];
+    state.lastRttMs = null;
     if (actions.resetRoomState) actions.resetRoomState();
     if (state.intervals.ping) {
       OWP.timers.clear(state.intervals.ping);

@@ -136,10 +136,12 @@ describe('room reconnection lifecycle', () => {
       roomId: 'room-a',
       isHost: false,
       participants: [{ name: 'Old', isHost: true }],
+      lastRttMs: 12,
       currentVideoElement: video
     });
 
     first.serverClose();
+    assert.equal(OWP.state.lastRttMs, null);
     assert.equal(video.playbackRate, 1);
     assert.equal(OWP.state.inRoom, false);
     assert.deepEqual(OWP.state.participants, []);

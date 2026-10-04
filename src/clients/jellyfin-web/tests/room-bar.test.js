@@ -15,6 +15,8 @@ require('../chat/input.js');
 require('../ui/toasts.js');
 require('../ui/home.js');
 require('../ui/render.js');
+OWP.actions = { schedulePing: () => {} };
+require('../ws/handlers/clock.js');
 
 const { PANEL_ID, ROOM_MODE_CLASS } = OWP.constants;
 let focused = null;
@@ -174,6 +176,21 @@ describe('room bar', () => {
     assert.equal(byId('owp-btn-chat').getAttribute('aria-label'), 'Chat, 1 unread');
     byId('owp-btn-chat').click();
     assert.equal(byId('owp-btn-chat').getAttribute('aria-label'), 'Chat');
+  });
+
+  it('keeps the last measured latency when the bar is drawn again', () => {
+    OWP.state.lastRttMs = null;
+    renderRoom();
+    assert.equal(panel().querySelector('.owp-latency').textContent, '-');
+
+    OWP._wsHandlers.handlePong({ payload: { client_ts: OWP.utils.nowMs() - 12 } });
+    assert.equal(OWP.state.lastRttMs >= 12, true);
+    const shown = panel().querySelector('.owp-latency').textContent;
+    assert.equal(shown, `${OWP.state.lastRttMs} ms`);
+
+    OWP.ui.render(true);
+    assert.equal(panel().querySelector('.owp-latency').textContent, shown);
+    OWP.state.lastRttMs = null;
   });
 
   it('lets a guest leave right away', () => {
