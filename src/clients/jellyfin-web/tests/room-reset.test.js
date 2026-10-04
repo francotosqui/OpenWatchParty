@@ -22,6 +22,7 @@ const makeDirtyRoomState = () => {
     roomName: 'Room A',
     participantCount: 4,
     participants: [{ name: 'Alice', isHost: true }],
+    roomBarSection: 'chat',
     lastParticipantCount: 4,
     isHost: true,
     readyRoomId: 'room-a',
@@ -59,6 +60,7 @@ const assertRoomStateReset = (video) => {
   assert.equal(OWP.state.roomName, '');
   assert.equal(OWP.state.participantCount, 0);
   assert.deepEqual(OWP.state.participants, []);
+  assert.equal(OWP.state.roomBarSection, '');
   assert.equal(OWP.state.lastParticipantCount, 0);
   assert.equal(OWP.state.isHost, false);
   assert.equal(OWP.state.readyRoomId, '');

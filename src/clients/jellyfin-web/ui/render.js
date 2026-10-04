@@ -2,7 +2,7 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
   const state = OWP.state;
-  const { PANEL_ID, BTN_ID, DEFAULT_WS_URL } = OWP.constants;
+  const { PANEL_ID, BTN_ID, DEFAULT_WS_URL, ROOM_MODE_CLASS } = OWP.constants;
 
   const createElement = (tag, className, text) => {
     const element = document.createElement(tag);
@@ -93,47 +93,131 @@
       return;
     }
     list.replaceChildren(...state.participants.map((participant) => {
-      const item = createElement('span', 'owp-participant');
-      item.appendChild(createElement('span', 'owp-participant-name', participant.name || 'Guest'));
+      const name = participant.name || 'Guest';
+      const item = createElement('div', 'owp-participant');
+      const avatar = createElement('span', 'owp-participant-avatar', Array.from(name)[0].toUpperCase());
+      avatar.setAttribute('aria-hidden', 'true');
+      item.append(avatar, createElement('span', 'owp-participant-name', name));
       if (participant.isHost) item.appendChild(createElement('span', 'owp-host-badge', 'Host'));
       return item;
     }));
   };
 
+  const participantTotal = () => state.participants.length || state.participantCount || 1;
+
+  // Icon-only buttons: the count goes in the accessible name too.
+  const peopleLabel = () => `Participants, ${String(participantTotal())}`;
+
   const updateParticipantList = () => {
     const list = document.getElementById('owp-participants-list');
     if (list) fillParticipantList(list);
+    const count = document.getElementById('owp-people-count');
+    if (count) count.textContent = String(participantTotal());
+    const button = document.getElementById('owp-btn-people');
+    if (button) button.setAttribute('aria-label', peopleLabel());
   };
 
-  const renderRoom = (panel) => {
-    const syncIndicator = ui.buildSyncStatusIndicator();
-    const header = createElement('div', 'owp-header');
-    const online = createElement('span', '', '\u25CF');
-    online.style.color = '#69f0ae';
-    const roomName = createElement('span', '', state.roomName);
-    roomName.style.cssText = 'flex-grow:1; margin-left:8px;';
-    const leaveBtn = createElement('button', 'owp-btn danger', state.isHost ? 'Close room' : 'Leave');
-    leaveBtn.id = 'owp-btn-leave';
-    leaveBtn.onclick = () => OWP.actions && OWP.actions.leaveRoom && OWP.actions.leaveRoom();
-    header.append(online, roomName, leaveBtn, createCloseButton());
+  const createIcon = (name) => {
+    const icon = createElement('span', `material-icons ${name}`);
+    icon.setAttribute('aria-hidden', 'true');
+    return icon;
+  };
 
-    const participantSection = createElement('div', 'owp-section');
-    participantSection.style.flexShrink = '0';
-    participantSection.appendChild(createElement('div', 'owp-label', 'Participants'));
+  const createBarButton = (id, label, iconName, sectionId) => {
+    const button = createElement('button', 'owp-bar-btn');
+    button.id = id;
+    button.type = 'button';
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    if (sectionId) {
+      button.setAttribute('aria-controls', sectionId);
+      button.setAttribute('aria-expanded', 'false');
+    }
+    button.appendChild(createIcon(iconName));
+    return button;
+  };
+
+  // The room view is a single bar; people, chat and the host's "close the
+  // room" confirmation open one at a time in a drop-down below it.
+  const ROOM_SECTIONS = [
+    { name: 'people', sectionId: 'owp-people-section', buttonId: 'owp-btn-people' },
+    { name: 'chat', sectionId: 'owp-chat-section', buttonId: 'owp-btn-chat' },
+    { name: 'leave', sectionId: 'owp-leave-confirm', buttonId: 'owp-btn-leave' }
+  ];
+
+  const applyRoomSection = () => {
+    const open = state.roomBarSection;
+    const drop = document.getElementById('owp-room-drop');
+    if (drop) drop.hidden = !open;
+    ROOM_SECTIONS.forEach(({ name, sectionId, buttonId }) => {
+      const section = document.getElementById(sectionId);
+      if (section) section.hidden = name !== open;
+      const button = document.getElementById(buttonId);
+      if (button && button.getAttribute('aria-controls') === sectionId) button.setAttribute('aria-expanded', String(name === open));
+    });
+    const people = document.getElementById('owp-btn-people');
+    const arrow = people && people.querySelector('.owp-expand');
+    if (arrow) arrow.className = `material-icons owp-expand ${open === 'people' ? 'expand_less' : 'expand_more'}`;
+    // Read only when it is on screen: a redraw while the panel is hidden must
+    // not mark messages that nobody saw.
+    if (open === 'chat' && OWP.chat && OWP.chat.isChatVisible()) {
+      OWP.chat.markRead();
+      const messages = document.getElementById('owp-chat-messages');
+      if (messages) messages.scrollTop = messages.scrollHeight;
+    }
+  };
+
+  const toggleRoomSection = (name) => {
+    state.roomBarSection = state.roomBarSection === name ? '' : name;
+    applyRoomSection();
+  };
+
+  const leaveRoom = () => OWP.actions && OWP.actions.leaveRoom && OWP.actions.leaveRoom();
+
+  const renderRoom = (panel) => {
+    const bar = createElement('div', 'owp-room-bar');
+    const clientId = String(state.clientId).split('-')[1] || '...';
+    const latency = createElement('span', 'owp-latency', '-');
+    latency.title = `Latency to the watch party server (client ${clientId})`;
+    const roomName = createElement('span', 'owp-room-name', state.roomName);
+    roomName.title = state.roomName;
+
+    const peopleBtn = createBarButton('owp-btn-people', 'Participants', 'groups', 'owp-people-section');
+    peopleBtn.setAttribute('aria-label', peopleLabel());
+    const peopleCount = createElement('span', 'owp-people-count', String(participantTotal()));
+    peopleCount.id = 'owp-people-count';
+    const arrow = createIcon('expand_more');
+    arrow.classList.add('owp-expand');
+    peopleBtn.append(peopleCount, arrow);
+    peopleBtn.onclick = () => toggleRoomSection('people');
+
+    const chatBtn = createBarButton('owp-btn-chat', 'Chat', 'chat', 'owp-chat-section');
+    const badge = createElement('span', 'owp-chat-badge');
+    badge.id = 'owp-chat-badge';
+    chatBtn.appendChild(badge);
+    chatBtn.onclick = () => toggleRoomSection('chat');
+
+    // A guest leaves right away; the host confirms, since it ends the room for everyone.
+    const leaveBtn = state.isHost
+      ? createBarButton('owp-btn-leave', 'Close room', 'logout', 'owp-leave-confirm')
+      : createBarButton('owp-btn-leave', 'Leave room', 'logout');
+    leaveBtn.classList.add('danger');
+    leaveBtn.onclick = state.isHost ? () => toggleRoomSection('leave') : leaveRoom;
+
+    bar.append(ui.buildSyncStatusIndicator(), latency, roomName, peopleBtn, chatBtn, leaveBtn, createCloseButton());
+
+    const drop = createElement('div', 'owp-room-drop');
+    drop.id = 'owp-room-drop';
+
+    const peopleSection = createElement('div');
+    peopleSection.id = 'owp-people-section';
     const participantList = createElement('div', 'owp-participants');
     participantList.id = 'owp-participants-list';
-    participantList.style.fontSize = '13px';
     fillParticipantList(participantList);
-    participantSection.appendChild(participantList);
-    if (syncIndicator) participantSection.appendChild(syncIndicator);
+    peopleSection.appendChild(participantList);
 
     const chatSection = createElement('div');
     chatSection.id = 'owp-chat-section';
-    const chatLabel = createElement('div', 'owp-label');
-    chatLabel.appendChild(document.createTextNode('Chat '));
-    const badge = createElement('span', 'owp-chat-badge');
-    badge.id = 'owp-chat-badge';
-    chatLabel.appendChild(badge);
     const messages = createElement('div');
     messages.id = 'owp-chat-messages';
     const inputContainer = createElement('div');
@@ -143,19 +227,37 @@
     input.type = 'text';
     input.placeholder = 'Type a message...';
     input.maxLength = 500;
-    const send = createElement('button', '', 'Send');
+    const send = createElement('button');
     send.id = 'owp-chat-send';
+    send.type = 'button';
+    send.title = 'Send message';
+    send.setAttribute('aria-label', 'Send message');
+    send.appendChild(createIcon('send'));
     inputContainer.append(input, send);
-    chatSection.append(chatLabel, messages, inputContainer);
+    chatSection.append(messages, inputContainer);
 
-    const meta = createElement('div', 'owp-meta');
-    meta.style.cssText = 'font-size:10px; color:#666; display:flex; justify-content:space-between; flex-shrink:0; padding-top:8px;';
-    const latencyContainer = createElement('span');
-    latencyContainer.appendChild(document.createTextNode('RTT: '));
-    latencyContainer.appendChild(createElement('span', 'owp-latency', '-'));
-    const clientId = String(state.clientId).split('-')[1] || '...';
-    meta.append(latencyContainer, createElement('span', '', `ID: ${clientId}`));
-    panel.replaceChildren(header, participantSection, chatSection, meta);
+    drop.append(peopleSection, chatSection);
+    if (state.isHost) {
+      const confirm = createElement('div', 'owp-leave-confirm');
+      confirm.id = 'owp-leave-confirm';
+      const cancel = createElement('button', 'owp-btn secondary', 'Cancel');
+      cancel.type = 'button';
+      cancel.onclick = () => {
+        toggleRoomSection('leave');
+        leaveBtn.focus();
+      };
+      const close = createElement('button', 'owp-btn danger', 'Close room');
+      close.id = 'owp-btn-close-room';
+      close.type = 'button';
+      close.onclick = leaveRoom;
+      confirm.append(createElement('span', 'owp-leave-question', 'Close the room for everyone?'), cancel, close);
+      drop.appendChild(confirm);
+    } else if (state.roomBarSection === 'leave') {
+      state.roomBarSection = '';
+    }
+
+    panel.replaceChildren(bar, drop);
+    applyRoomSection();
   };
 
   const setupChatInput = (panel) => {
@@ -177,8 +279,9 @@
       }
     });
     if (OWP.chat) {
-      OWP.chat.markRead();
       OWP.chat.renderAllMessages();
+      if (OWP.chat.isChatVisible()) OWP.chat.markRead();
+      else OWP.chat.updateBadge();
     }
   };
 
@@ -194,6 +297,8 @@
       return;
     }
     panel.dataset.inRoom = String(state.inRoom);
+    if (state.inRoom) panel.classList.add(ROOM_MODE_CLASS);
+    else panel.classList.remove(ROOM_MODE_CLASS);
     if (!state.inRoom) {
       renderLobby(panel);
     } else {

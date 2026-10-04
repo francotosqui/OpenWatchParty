@@ -29,10 +29,11 @@
     return true;
   };
 
+  // The chat is a drop-down of the room bar: it is read only while it is open.
   const isChatVisible = () => {
     const chatSection = document.getElementById('owp-chat-section');
     const panel = document.getElementById(OWP.constants.PANEL_ID);
-    return chatSection && panel && !panel.classList.contains('hide');
+    return Boolean(chatSection && !chatSection.hidden && panel && !panel.classList.contains('hide'));
   };
 
   const markRead = () => {
@@ -42,14 +43,18 @@
 
   const updateBadge = () => {
     const badge = document.getElementById('owp-chat-badge');
+    const count = chat.unreadCount > 99 ? '99+' : chat.unreadCount;
     if (badge) {
       if (chat.unreadCount > 0) {
-        badge.textContent = chat.unreadCount > 99 ? '99+' : chat.unreadCount;
+        badge.textContent = count;
         badge.style.display = 'inline-block';
       } else {
         badge.style.display = 'none';
       }
     }
+    // The chat button shows only an icon and the badge: name the unread count.
+    const button = document.getElementById('owp-btn-chat');
+    if (button) button.setAttribute('aria-label', chat.unreadCount > 0 ? `Chat, ${count} unread` : 'Chat');
   };
 
   Object.assign(chat, { send, isChatVisible, markRead, updateBadge });

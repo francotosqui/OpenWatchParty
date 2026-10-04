@@ -173,7 +173,8 @@ control bar.
 Party button to the header, just before SyncPlay; it opens the same panel.
 
 Check that the panel says **Online**, then select **Create Room**. It will
-show `Room de <your username>` and **Online: 1**. Keep the movie open.
+turn into a bar at the top right showing `<your username>'s room`; select its
+people icon to see your name with a **Host** badge. Keep the movie open.
 
 ![OpenWatchParty lobby in the player showing Online and the Create Room button marked 2]({{ '/assets/images/tutorial-lobby.png' | relative_url }})
 
@@ -195,7 +196,7 @@ still in the room.
 Open the card, then start **the same movie** in the player. The card opens
 the movie details; it does not join by itself. The play overlay may start
 playback and attempt an automatic join, but you can always use the manual
-path: select **Watch Party** in the player, find `Room de <host>` under
+path: select **Watch Party** in the player, find `<host>'s room` under
 **Available Rooms**, and select **Join**.
 
 ![Guest's OpenWatchParty panel showing the host's room and its Join button marked 4]({{ '/assets/images/tutorial-guest-join.png' | relative_url }})

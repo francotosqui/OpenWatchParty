@@ -7,7 +7,8 @@
     SYNCPLAY_HIDE_STYLE_ID,
     HEADER_BTN_CLASS,
     MODERN_HEADER_BTN_ID,
-    PANEL_HEADER_CLASS
+    PANEL_HEADER_CLASS,
+    ROOM_MODE_CLASS
   } = OWP.constants;
 
   // Jellyfin's built-in SyncPlay button: `.headerSyncButton` in the legacy
@@ -17,8 +18,8 @@
 
   const CSS_STYLES = `
     #${PANEL_ID} {
-      position: fixed; bottom: 100px; right: 20px; width: 300px; max-height: 450px;
-      padding: 16px; border-radius: 12px; background: rgba(10, 10, 10, 0.98);
+      position: fixed; top: 72px; right: 20px; width: 300px; max-height: min(450px, calc(100vh - 88px));
+      padding: 14px; border-radius: 12px; background: rgba(10, 10, 10, 0.98);
       backdrop-filter: blur(20px); color: #fff; font-family: sans-serif; z-index: 20000;
       border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 12px 40px rgba(0,0,0,0.8);
       display: flex; flex-direction: column;
@@ -31,6 +32,42 @@
     }
     /* The player has its own Watch Party button */
     .osdHeader .${HEADER_BTN_CLASS} { display: none !important; }
+    /* In a room the panel is only the bar and its drop-down, each with its own background */
+    #${PANEL_ID}.${ROOM_MODE_CLASS} {
+      width: 360px; padding: 0; gap: 6px;
+      background: none; border: none; box-shadow: none; backdrop-filter: none;
+    }
+    @media (max-width: 420px) {
+      #${PANEL_ID}.${ROOM_MODE_CLASS} { left: 8px; right: 8px; width: auto; }
+    }
+    .owp-room-bar, .owp-room-drop {
+      background: rgba(10, 10, 10, 0.95); border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.6);
+    }
+    .owp-room-bar {
+      display: flex; align-items: center; gap: 2px; flex-shrink: 0;
+      padding: 4px 4px 4px 12px; border-radius: 22px; font-size: 13px;
+    }
+    .owp-room-bar .owp-sync-dot, .owp-room-bar .owp-sync-spinner { flex-shrink: 0; }
+    .owp-room-bar .owp-latency { font-size: 11px; color: #888; white-space: nowrap; margin: 0 6px 0 6px; }
+    .owp-room-name { flex: 1; min-width: 0; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .owp-bar-btn {
+      display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; height: 30px; padding: 0 7px;
+      border: none; border-radius: 15px; background: transparent; color: #bbb; cursor: pointer; font-size: 12px;
+    }
+    .owp-bar-btn:hover, .owp-bar-btn:focus-visible { background: rgba(255,255,255,0.1); color: #fff; }
+    .owp-bar-btn[aria-expanded="true"] { background: rgba(21,101,192,0.4); color: #fff; }
+    .owp-bar-btn.danger { color: #ff8a80; }
+    .owp-bar-btn.danger[aria-expanded="true"] { background: rgba(211,47,47,0.35); color: #fff; }
+    .owp-bar-btn .material-icons { font-size: 18px; }
+    .owp-bar-btn .owp-expand { font-size: 16px; margin-left: -2px; }
+    .owp-room-bar .owp-close-btn { margin-left: 0; }
+    .owp-room-drop { min-height: 0; overflow-y: auto; padding: 10px 12px; border-radius: 12px; }
+    .owp-room-drop[hidden], .owp-room-drop > [hidden] { display: none !important; }
+    .owp-leave-confirm { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .owp-leave-question { flex: 1; }
+    .owp-leave-confirm .owp-btn { padding: 6px 10px; font-size: 12px; }
+    .owp-leave-confirm .owp-btn.secondary { background: #333; }
     /* Same size as the MUI SVG icons next to it (MuiSvgIcon fontSizeMedium) */
     #${MODERN_HEADER_BTN_ID} .material-icons { font-size: 1.5rem; width: 1em; height: 1em; line-height: 1; }
     .owp-header { font-weight: bold; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; }
@@ -52,7 +89,7 @@
     }
     .owp-room-item:hover { background: rgba(255,255,255,0.1); border-color: #1565c0; }
     .owp-btn {
-      border: none; border-radius: 6px; padding: 10px 15px;
+      border: none; border-radius: 6px; padding: 8px 12px;
       background: #388e3c; color: #fff; cursor: pointer; font-weight: bold; font-size: 13px;
     }
     .owp-btn.secondary { background: #1565c0; }
@@ -60,12 +97,14 @@
     .owp-btn:disabled { background: #333; color: #888; cursor: not-allowed; }
     .owp-hint { font-size: 11px; color: #888; margin-top: 8px; text-align: center; }
     .owp-room-note { font-size: 10px; color: #ffb74d; }
-    .owp-participants { display: flex; flex-wrap: wrap; gap: 4px; }
-    .owp-participant {
-      display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
-      padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.08); box-sizing: border-box;
+    .owp-participants { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+    .owp-participant { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 3px 0; }
+    .owp-participant-avatar {
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: rgba(100,181,246,0.2); color: #90caf9; font-size: 11px; font-weight: bold;
     }
-    .owp-participant-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .owp-participant-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .owp-host-badge {
       flex-shrink: 0; padding: 0 4px; border-radius: 6px;
       background: #69f0ae; color: #000; font-size: 9px; font-weight: bold; text-transform: uppercase;
@@ -88,7 +127,6 @@
     }
     .owp-checkbox-row input { accent-color: #388e3c; }
     /* UX-P3: Sync status indicator styles */
-    .owp-sync-status { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 8px; padding: 6px 8px; border-radius: 4px; background: rgba(255,255,255,0.05); }
     .owp-sync-dot { width: 8px; height: 8px; border-radius: 50%; }
     .owp-sync-dot.synced { background: #69f0ae; }
     .owp-sync-dot.syncing { background: #ffd740; animation: owp-pulse 1s infinite; }
@@ -97,23 +135,27 @@
     .owp-sync-spinner { width: 12px; height: 12px; border: 2px solid #444; border-top-color: #ff9800; border-radius: 50%; animation: owp-spin 0.8s linear infinite; }
     @keyframes owp-spin { to { transform: rotate(360deg); } }
     /* Chat styles */
-    #owp-chat-section { display: flex; flex-direction: column; height: 180px; border-top: 1px solid #333; margin-top: 10px; padding-top: 10px; }
-    #owp-chat-messages { flex: 1; overflow-y: auto; padding: 4px 0; font-size: 12px; }
+    #owp-chat-section { display: flex; flex-direction: column; }
+    #owp-chat-messages { max-height: 160px; overflow-y: auto; font-size: 12px; }
+    #owp-chat-messages:empty { display: none; }
     .owp-chat-message { margin-bottom: 8px; padding: 4px 0; }
     .owp-chat-message.owp-chat-own .owp-chat-username { color: #69f0ae; }
     .owp-chat-meta { display: flex; gap: 8px; align-items: baseline; margin-bottom: 2px; }
     .owp-chat-username { font-weight: bold; color: #64b5f6; font-size: 11px; }
     .owp-chat-time { font-size: 10px; color: #666; }
     .owp-chat-text { color: #ddd; word-wrap: break-word; line-height: 1.4; }
-    #owp-chat-input-container { display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid #333; }
+    #owp-chat-input-container { display: flex; gap: 6px; }
+    #owp-chat-messages:not(:empty) + #owp-chat-input-container { margin-top: 6px; padding-top: 8px; border-top: 1px solid #333; }
     #owp-chat-input { flex: 1; padding: 8px 10px; border-radius: 6px; border: 1px solid #444; background: #111; color: #fff; font-size: 12px; }
     #owp-chat-input:focus { border-color: #1565c0; outline: none; }
-    #owp-chat-send { padding: 8px 12px; border-radius: 6px; border: none; background: #1565c0; color: #fff; cursor: pointer; font-size: 12px; }
+    #owp-chat-send { display: inline-flex; align-items: center; padding: 0 10px; border-radius: 6px; border: none; background: #1565c0; color: #fff; cursor: pointer; }
+    #owp-chat-send .material-icons { font-size: 16px; }
     #owp-chat-send:hover { background: #1976d2; }
-    .owp-chat-badge { display: none; background: #d32f2f; color: #fff; font-size: 10px; padding: 2px 5px; border-radius: 10px; margin-left: 4px; }
+    .owp-chat-badge { display: none; background: #d32f2f; color: #fff; font-size: 10px; line-height: 1.4; padding: 0 5px; border-radius: 10px; margin-left: 2px; }
     /* Toast styles */
+    /* Bottom right, so chat toasts do not cover the room bar at the top */
     .owp-toast-container {
-      position: fixed; top: 70px; right: 20px; z-index: 30000;
+      position: fixed; bottom: 100px; right: 20px; z-index: 30000;
       display: flex; flex-direction: column; gap: 8px; pointer-events: none;
     }
     .owp-toast {
