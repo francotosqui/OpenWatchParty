@@ -147,6 +147,15 @@ describe('room bar', () => {
     assert.match(String(byId('owp-chat-messages').children[0].title), /\d/);
   });
 
+  it('does not count your own messages as unread', () => {
+    renderRoom();
+    OWP.chat.receive({ client: 'client-a5be', payload: { username: 'FrancoTosky', text: 'sent' }, server_ts: 1 });
+    assert.equal(OWP.chat.unreadCount, 0);
+    assert.equal(byId('owp-chat-badge').style.display, 'none');
+    assert.deepEqual(chatToasts, []);
+    assert.equal(byId('owp-chat-messages').children.length, 1);
+  });
+
   it('keeps unread messages unread when the panel is drawn with the chat closed', () => {
     renderRoom();
     OWP.chat.receive({ client: 'client-other', payload: { username: 'Ana', text: 'pause' }, server_ts: 1 });

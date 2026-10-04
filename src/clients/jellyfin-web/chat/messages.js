@@ -52,10 +52,12 @@
     if (chat.messages.length > MAX_MESSAGES) {
       chat.messages.shift();
     }
-    if (!chat.isChatVisible()) {
+    // Your own messages are never unread, even if the chat closed before the
+    // server echoed them back.
+    if (!chat.isChatVisible() && !message.isOwn) {
       chat.unreadCount++;
       chat.updateBadge();
-      if (!message.isOwn && OWP.ui && OWP.ui.showChatToast) {
+      if (OWP.ui && OWP.ui.showChatToast) {
         OWP.ui.showChatToast(message.username, message.text);
       }
     }
