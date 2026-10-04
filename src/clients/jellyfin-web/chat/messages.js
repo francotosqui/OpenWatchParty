@@ -13,6 +13,8 @@
     if (!container) return;
     const msgEl = document.createElement('div');
     msgEl.className = 'owp-chat-message' + (message.isOwn ? ' owp-chat-own' : '');
+    // One line per message in the room bar: the time is in the tooltip.
+    msgEl.title = formatTime(message.timestamp);
     const meta = document.createElement('div');
     meta.className = 'owp-chat-meta';
     const username = document.createElement('span');

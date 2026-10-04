@@ -69,7 +69,7 @@ describe('room bar', () => {
   it('shows the sync dot, latency, room name and buttons in that order', () => {
     renderRoom();
     const bar = panel().querySelector('.owp-room-bar');
-    const ids = bar.children.map(child => child.id || child.className);
+    const ids = bar.children.map(child => child.id || child.className.split(' ')[0]);
     assert.deepEqual(ids, [
       'owp-sync-indicator',
       'owp-latency',
@@ -83,6 +83,14 @@ describe('room bar', () => {
     assert.equal(bar.querySelector('.owp-room-name').title, "FrancoTosky's room");
     assert.equal(byId('owp-people-count').textContent, '2');
     assert.ok(panel().classList.contains(ROOM_MODE_CLASS));
+    // Outline SVG icons, not Jellyfin's filled Material icons.
+    assert.ok(byId('owp-btn-people').querySelector('.owp-icon-users'));
+    assert.ok(byId('owp-btn-people').querySelector('.owp-expand'));
+    assert.ok(byId('owp-btn-chat').querySelector('.owp-icon-chat'));
+    assert.ok(byId('owp-btn-leave').querySelector('.owp-icon-logout'));
+    assert.ok(bar.querySelector('.owp-close-btn .owp-icon-x'));
+    assert.ok(byId('owp-chat-send').querySelector('.owp-icon-send'));
+    assert.equal(bar.querySelector('.material-icons'), null);
   });
 
   it('starts with every drop-down closed', () => {
@@ -99,13 +107,11 @@ describe('room bar', () => {
     assert.equal(byId('owp-room-drop').hidden, false);
     assert.deepEqual(openSections(), ['owp-people-section']);
     assert.equal(expanded('owp-btn-people'), 'true');
-    assert.ok(byId('owp-btn-people').querySelector('.expand_less'));
 
     byId('owp-btn-chat').click();
     assert.deepEqual(openSections(), ['owp-chat-section']);
     assert.equal(expanded('owp-btn-people'), 'false');
     assert.equal(expanded('owp-btn-chat'), 'true');
-    assert.ok(byId('owp-btn-people').querySelector('.expand_more'));
 
     byId('owp-btn-chat').click();
     assert.equal(byId('owp-room-drop').hidden, true);
@@ -136,6 +142,8 @@ describe('room bar', () => {
     assert.equal(OWP.chat.unreadCount, 0);
     assert.equal(chatToasts.length, 1);
     assert.equal(byId('owp-chat-messages').children.length, 2);
+    // One line per message: the time moves to the tooltip.
+    assert.match(String(byId('owp-chat-messages').children[0].title), /\d/);
   });
 
   it('keeps unread messages unread when the panel is drawn with the chat closed', () => {

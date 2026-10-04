@@ -11,15 +11,45 @@
     return element;
   };
 
+  // Outline icons for the room bar, from Tabler Icons (MIT, https://tabler.io/icons):
+  // Jellyfin only ships the filled Material icons.
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const ICON_PATHS = {
+    users: ['M5 7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0', 'M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2', 'M16 3.13a4 4 0 0 1 0 7.75', 'M21 21v-2a4 4 0 0 0 -3 -3.85'],
+    chat: ['M3 20l1.3 -3.9c-2.324 -3.437 -1.426 -7.872 2.1 -10.374c3.526 -2.501 8.59 -2.296 11.845 .48c3.255 2.777 3.695 7.266 1.029 10.501c-2.666 3.235 -7.615 4.215 -11.574 2.293l-4.7 1'],
+    logout: ['M14 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2', 'M9 12h12l-3 -3', 'M18 15l3 -3'],
+    x: ['M18 6l-12 12', 'M6 6l12 12'],
+    chevron: ['M6 9l6 6l6 -6'],
+    send: ['M10 14l11 -11', 'M21 3l-6.5 18a.55 .55 0 0 1 -1 0l-3.5 -7l-7 -3.5a.55 .55 0 0 1 0 -1l18 -6.5']
+  };
+
+  const createIcon = (name) => {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('class', `owp-icon owp-icon-${name}`);
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    ICON_PATHS[name].forEach((d) => {
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('d', d);
+      svg.appendChild(path);
+    });
+    return svg;
+  };
+
+  const createMaterialIcon = (name) => {
+    const icon = createElement('span', `material-icons ${name}`);
+    icon.setAttribute('aria-hidden', 'true');
+    return icon;
+  };
+
   // Hides the panel from inside it, so closing does not mean reaching for the
   // button that opened it; focus goes back to that button when it is shown.
-  const createCloseButton = () => {
+  const createCloseButton = (icon = createMaterialIcon('close')) => {
     const button = createElement('button', 'owp-close-btn');
     button.type = 'button';
     button.title = 'Close panel';
     button.setAttribute('aria-label', 'Close panel');
-    const icon = createElement('span', 'material-icons close');
-    icon.setAttribute('aria-hidden', 'true');
     button.appendChild(icon);
     button.onclick = () => {
       const panel = document.getElementById(PANEL_ID);
@@ -117,12 +147,6 @@
     if (button) button.setAttribute('aria-label', peopleLabel());
   };
 
-  const createIcon = (name) => {
-    const icon = createElement('span', `material-icons ${name}`);
-    icon.setAttribute('aria-hidden', 'true');
-    return icon;
-  };
-
   const createBarButton = (id, label, iconName, sectionId) => {
     const button = createElement('button', 'owp-bar-btn');
     button.id = id;
@@ -155,9 +179,6 @@
       const button = document.getElementById(buttonId);
       if (button && button.getAttribute('aria-controls') === sectionId) button.setAttribute('aria-expanded', String(name === open));
     });
-    const people = document.getElementById('owp-btn-people');
-    const arrow = people && people.querySelector('.owp-expand');
-    if (arrow) arrow.className = `material-icons owp-expand ${open === 'people' ? 'expand_less' : 'expand_more'}`;
     // Read only when it is on screen: a redraw while the panel is hidden must
     // not mark messages that nobody saw.
     if (open === 'chat' && OWP.chat && OWP.chat.isChatVisible()) {
@@ -183,12 +204,12 @@
     const roomName = createElement('span', 'owp-room-name', state.roomName);
     roomName.title = state.roomName;
 
-    const peopleBtn = createBarButton('owp-btn-people', 'Participants', 'groups', 'owp-people-section');
+    const peopleBtn = createBarButton('owp-btn-people', 'Participants', 'users', 'owp-people-section');
     peopleBtn.setAttribute('aria-label', peopleLabel());
     const peopleCount = createElement('span', 'owp-people-count', String(participantTotal()));
     peopleCount.id = 'owp-people-count';
-    const arrow = createIcon('expand_more');
-    arrow.classList.add('owp-expand');
+    const arrow = createIcon('chevron');
+    arrow.setAttribute('class', 'owp-icon owp-icon-chevron owp-expand');
     peopleBtn.append(peopleCount, arrow);
     peopleBtn.onclick = () => toggleRoomSection('people');
 
@@ -205,7 +226,9 @@
     leaveBtn.classList.add('danger');
     leaveBtn.onclick = state.isHost ? () => toggleRoomSection('leave') : leaveRoom;
 
-    bar.append(ui.buildSyncStatusIndicator(), latency, roomName, peopleBtn, chatBtn, leaveBtn, createCloseButton());
+    const closeBtn = createCloseButton(createIcon('x'));
+    closeBtn.classList.add('owp-bar-btn');
+    bar.append(ui.buildSyncStatusIndicator(), latency, roomName, peopleBtn, chatBtn, leaveBtn, closeBtn);
 
     const drop = createElement('div', 'owp-room-drop');
     drop.id = 'owp-room-drop';
@@ -241,13 +264,13 @@
     if (state.isHost) {
       const confirm = createElement('div', 'owp-leave-confirm');
       confirm.id = 'owp-leave-confirm';
-      const cancel = createElement('button', 'owp-btn secondary', 'Cancel');
+      const cancel = createElement('button', 'owp-pill-btn secondary', 'Cancel');
       cancel.type = 'button';
       cancel.onclick = () => {
         toggleRoomSection('leave');
         leaveBtn.focus();
       };
-      const close = createElement('button', 'owp-btn danger', 'Close room');
+      const close = createElement('button', 'owp-pill-btn danger', 'Close room');
       close.id = 'owp-btn-close-room';
       close.type = 'button';
       close.onclick = leaveRoom;
