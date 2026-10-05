@@ -357,7 +357,7 @@ Main panel render:
 Injects "Watch Party" button into video player OSD controls.
 
 #### `injectHeaderButtons() -> void`
-Puts a "Watch Party" button first in each Jellyfin 12 header: the legacy `.skinHeader .headerRight` and the MUI app bar box holding SyncPlay, Cast and Search. A `MutationObserver` coalesced per animation frame puts it back when Jellyfin rebuilds a header and keeps a panel opened from the header placed below it (falling back to the default placement while no header button is shown, as in the player).
+Puts a "Watch Party" button first in each Jellyfin 12 header: the legacy `.skinHeader .headerRight` and the MUI app bar box holding SyncPlay, Cast and Search. A `MutationObserver` coalesced per animation frame puts it back when Jellyfin rebuilds a header and keeps a panel opened from the header placed below it (falling back to the default placement while no header button is shown, as in the player). Unless such a panel is open, only changes inside a header or a newly added header trigger the lookup, so busy pages (the player, chat, library grids) don't; the periodic UI check catches anything else.
 
 #### `removeHeaderButtons() -> void`
 Removes the header buttons and stops their observers and listeners.
