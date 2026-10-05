@@ -1,4 +1,5 @@
-use super::super::dispatch::{send_error, ErrorCode};
+use super::super::constants::PROTOCOL_VERSION;
+use super::super::dispatch::{close_with_policy, send_error, ErrorCode};
 use super::super::validation::sanitize_name;
 use crate::auth::JwtConfig;
 use crate::messaging::{send_message, send_room_list};
@@ -7,11 +8,35 @@ use crate::utils::now_ms;
 use log::{info, warn};
 use std::sync::Arc;
 
+/// Reads the protocol version declared in the auth payload.
+///
+/// `Ok(None)` means the field was absent: the client is treated as version 1 so
+/// pre-negotiation clients keep working. `Ok(Some(version))` is a declared
+/// version and `Err(())` a present but malformed value.
+fn declared_protocol_version(payload: Option<&serde_json::Value>) -> Result<Option<u64>, ()> {
+    match payload.and_then(|value| value.get("protocol_version")) {
+        None => Ok(None),
+        Some(version) => version.as_u64().map(Some).ok_or(()),
+    }
+}
+
+async fn reject_unsupported_protocol_version(client_id: &str, state: &SharedState, message: &str) {
+    send_error(
+        client_id,
+        state,
+        ErrorCode::ProtocolVersionUnsupported,
+        message,
+    )
+    .await;
+    close_with_policy(client_id, state, "Unsupported protocol version").await;
+}
+
 async fn handle_jwt_auth(
     client_id: &str,
     token: &str,
     state: &SharedState,
     jwt_config: &Arc<JwtConfig>,
+    protocol_version: Option<u64>,
 ) -> bool {
     match jwt_config.validate_token(token) {
         Ok(claims) => {
@@ -32,13 +57,19 @@ async fn handle_jwt_auth(
                 }
                 sender
             };
+            // The version is echoed only when the client declared one, so
+            // pre-negotiation clients keep receiving the previous payload.
+            let mut payload = serde_json::json!({ "user_name": user_name });
+            if let Some(protocol_version) = protocol_version {
+                payload["protocol_version"] = serde_json::json!(protocol_version);
+            }
             send_message(
                 sender,
                 &WsMessage {
                     msg_type: "auth_success".to_string(),
                     room: None,
                     client: Some(client_id.to_string()),
-                    payload: Some(serde_json::json!({ "user_name": user_name })),
+                    payload: Some(payload),
                     ts: now_ms(),
                     server_ts: Some(now_ms()),
                 },
@@ -78,9 +109,39 @@ pub(in crate::ws) async fn handle_auth(
     state: &SharedState,
     jwt_config: &Arc<JwtConfig>,
 ) {
+    let declared_version = match declared_protocol_version(parsed.payload.as_ref()) {
+        Ok(version) => version,
+        Err(()) => {
+            warn!("Client {client_id} sent a malformed protocol_version");
+            reject_unsupported_protocol_version(
+                client_id,
+                state,
+                &format!(
+                    "Invalid protocol_version field (server protocol version {PROTOCOL_VERSION})"
+                ),
+            )
+            .await;
+            return;
+        }
+    };
+    if let Some(version) = declared_version {
+        if version != PROTOCOL_VERSION {
+            warn!("Client {client_id} requested unsupported protocol version {version}");
+            reject_unsupported_protocol_version(
+                client_id,
+                state,
+                &format!(
+                    "Protocol version {version} is not supported (server protocol version {PROTOCOL_VERSION})"
+                ),
+            )
+            .await;
+            return;
+        }
+    }
+
     if let Some(payload) = &parsed.payload {
         if let Some(token) = payload.get("token").and_then(|v| v.as_str()) {
-            if handle_jwt_auth(client_id, token, state, jwt_config).await {
+            if handle_jwt_auth(client_id, token, state, jwt_config, declared_version).await {
                 return;
             }
             send_error(
@@ -253,6 +314,7 @@ mod tests {
                 &token_for(format!("  Alice\0{}  ", "界".repeat(120))),
                 &state,
                 &jwt_config,
+                None,
             )
             .await
         );
@@ -270,6 +332,7 @@ mod tests {
                 &token_for("\0\n\r".to_string()),
                 &state,
                 &jwt_config,
+                None,
             )
             .await
         );
@@ -314,5 +377,185 @@ mod tests {
             test_helpers::recv_msg(&mut rx).unwrap(),
             "AUTHENTICATION_REQUIRED",
         );
+    }
+
+    fn insecure_jwt_config() -> Arc<JwtConfig> {
+        Arc::new(JwtConfig {
+            secret: String::new(),
+            audience: "OpenWatchParty".to_string(),
+            issuer: "Jellyfin".to_string(),
+            enabled: false,
+        })
+    }
+
+    fn auth_message(payload: serde_json::Value) -> IncomingMessage {
+        IncomingMessage {
+            msg_type: crate::types::ClientMessageType::Auth,
+            room: None,
+            client: None,
+            payload: Some(payload),
+            ts: crate::utils::now_ms(),
+            server_ts: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn missing_protocol_version_defaults_to_v1() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("user", "", false);
+        state
+            .write()
+            .await
+            .clients
+            .insert("client".to_string(), client);
+
+        handle_auth(
+            "client",
+            &auth_message(serde_json::json!({ "user_name": "Bob" })),
+            &state,
+            &insecure_jwt_config(),
+        )
+        .await;
+
+        assert_eq!(state.read().await.clients["client"].user_name, "Bob");
+        assert!(test_helpers::recv_msg(&mut rx).is_none());
+    }
+
+    #[tokio::test]
+    async fn current_protocol_version_is_accepted() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("user", "", false);
+        state
+            .write()
+            .await
+            .clients
+            .insert("client".to_string(), client);
+
+        handle_auth(
+            "client",
+            &auth_message(
+                serde_json::json!({ "user_name": "Bob", "protocol_version": PROTOCOL_VERSION }),
+            ),
+            &state,
+            &insecure_jwt_config(),
+        )
+        .await;
+
+        assert_eq!(state.read().await.clients["client"].user_name, "Bob");
+        assert!(test_helpers::recv_msg(&mut rx).is_none());
+    }
+
+    #[tokio::test]
+    async fn unsupported_protocol_versions_are_rejected_and_closed() {
+        for version in [0, PROTOCOL_VERSION + 1, u64::MAX] {
+            let state = test_helpers::create_state();
+            let (client, mut rx) = test_helpers::create_client_with_rx("user", "Alice", true);
+            state
+                .write()
+                .await
+                .clients
+                .insert("client".to_string(), client);
+
+            handle_auth(
+                "client",
+                &auth_message(serde_json::json!({ "protocol_version": version })),
+                &state,
+                &insecure_jwt_config(),
+            )
+            .await;
+
+            let error = test_helpers::recv_msg(&mut rx).unwrap();
+            assert_eq!(error.msg_type, "error");
+            let payload = error.payload.unwrap();
+            assert_eq!(payload["code"], "PROTOCOL_VERSION_UNSUPPORTED");
+            assert!(
+                payload["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains(&version.to_string()),
+                "message must name the requested version: {payload:?}"
+            );
+
+            let close = rx.recv().await.unwrap().unwrap();
+            assert_eq!(
+                close.close_frame(),
+                Some((
+                    super::super::super::constants::POLICY_VIOLATION_CLOSE_CODE,
+                    "Unsupported protocol version"
+                ))
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn malformed_protocol_version_is_rejected() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("user", "Alice", true);
+        state
+            .write()
+            .await
+            .clients
+            .insert("client".to_string(), client);
+
+        handle_auth(
+            "client",
+            &auth_message(serde_json::json!({ "protocol_version": "1" })),
+            &state,
+            &insecure_jwt_config(),
+        )
+        .await;
+
+        let payload = test_helpers::recv_msg(&mut rx).unwrap().payload.unwrap();
+        assert_eq!(payload["code"], "PROTOCOL_VERSION_UNSUPPORTED");
+        assert!(payload["message"]
+            .as_str()
+            .unwrap()
+            .contains("Invalid protocol_version"));
+    }
+
+    #[tokio::test]
+    async fn auth_success_echoes_only_a_declared_protocol_version() {
+        for declared in [None, Some(PROTOCOL_VERSION)] {
+            let state = test_helpers::create_state();
+            let (client, mut rx) = test_helpers::create_client_with_rx("user", "", false);
+            state
+                .write()
+                .await
+                .clients
+                .insert("client".to_string(), client);
+            let jwt_config = Arc::new(JwtConfig {
+                secret: "test-secret-with-at-least-32-characters".to_string(),
+                audience: "OpenWatchParty".to_string(),
+                issuer: "Jellyfin".to_string(),
+                enabled: true,
+            });
+            let now = (crate::utils::now_ms() / 1000) as usize;
+            let token = encode(
+                &Header::default(),
+                &Claims {
+                    sub: "user".to_string(),
+                    name: "Alice".to_string(),
+                    aud: jwt_config.audience.clone(),
+                    iss: jwt_config.issuer.clone(),
+                    exp: now + 3600,
+                    iat: now,
+                },
+                &EncodingKey::from_secret(jwt_config.secret.as_bytes()),
+            )
+            .unwrap();
+            let mut payload = serde_json::json!({ "token": token });
+            if let Some(version) = declared {
+                payload["protocol_version"] = serde_json::json!(version);
+            }
+
+            handle_auth("client", &auth_message(payload), &state, &jwt_config).await;
+
+            let success = test_helpers::recv_msg(&mut rx).unwrap();
+            assert_eq!(success.msg_type, "auth_success");
+            assert_eq!(
+                success.payload.unwrap()["protocol_version"].as_u64(),
+                declared
+            );
+        }
     }
 }

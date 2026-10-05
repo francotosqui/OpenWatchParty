@@ -20,6 +20,13 @@ namespace OpenWatchParty.Plugin.Controllers;
 public class OpenWatchPartyController : ControllerBase
 {
     private readonly ILogger<OpenWatchPartyController> _logger;
+
+    /// <summary>
+    /// WebSocket protocol version the issued token authorizes. Kept in sync with
+    /// the session server and the JavaScript client; see docs/technical/protocol.md.
+    /// </summary>
+    internal const int ProtocolVersion = 1;
+
     private const string JavaScriptContentType = "text/javascript; charset=utf-8";
     private const string ClientAssetCacheControl = "public, max-age=3600";
     private const string VersionedClientAssetCacheControl = "public, max-age=31536000, immutable";
@@ -367,7 +374,8 @@ public class OpenWatchPartyController : ControllerBase
                 user_id = userId,
                 user_name = userName,
                 session_server_url = sessionServerUrl,
-                hide_native_syncplay_button = config.HideNativeSyncPlayButton
+                hide_native_syncplay_button = config.HideNativeSyncPlayButton,
+                protocol_version = ProtocolVersion
             });
         }
 
@@ -388,7 +396,8 @@ public class OpenWatchPartyController : ControllerBase
             user_id = userId,
             user_name = userName,
             session_server_url = sessionServerUrl,
-            hide_native_syncplay_button = config.HideNativeSyncPlayButton
+            hide_native_syncplay_button = config.HideNativeSyncPlayButton,
+            protocol_version = ProtocolVersion
         });
     }
 

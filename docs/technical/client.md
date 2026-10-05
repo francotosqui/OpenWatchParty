@@ -54,6 +54,7 @@ Defines global shared state and configuration constants.
 | `STYLE_ID` | string | `'owp-style'` | Style tag ID |
 | `SYNCPLAY_HIDE_STYLE_ID` | string | `'owp-hide-native-syncplay'` | Style tag that hides the native SyncPlay button |
 | `HOME_SECTION_ID` | string | `'owp-home-section'` | Home section ID |
+| `PROTOCOL_VERSION` | number | `1` | WebSocket protocol version declared in the `auth` message |
 | `DEFAULT_WS_URL` | string | `ws(s)://host:3000/ws` | WebSocket server URL |
 | `SUPPRESS_MS` | number | `2000` | Event suppression duration (ms) |
 | `SEEK_THRESHOLD` | number | `1.0` | Difference threshold for seek (seconds) |

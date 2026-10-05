@@ -103,6 +103,7 @@
     STYLE_ID: 'owp-style',
     SYNCPLAY_HIDE_STYLE_ID: 'owp-hide-native-syncplay',
     HOME_SECTION_ID: 'owp-home-section',
+    PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,

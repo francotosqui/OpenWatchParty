@@ -494,6 +494,45 @@ describe('authentication configuration', () => {
     }
   });
 
+  it('declares the protocol version when re-authenticating after a token refresh', async () => {
+    const originalSetTimeout = OWP.timers.setTimeout;
+    const originalClear = OWP.timers.clear;
+    let refresh;
+    const sent = [];
+    const socket = { readyState: 1, send: data => sent.push(JSON.parse(data)) };
+    OWP.timers.setTimeout = (callback, delay, scope) => {
+      if (scope === 'auth' && delay < 10000) refresh = callback;
+      return {};
+    };
+    OWP.timers.clear = () => true;
+    globalThis.fetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        auth_enabled: true,
+        token: 'refreshed-token',
+        expires_in: 1,
+        user_id: 'user-1',
+        user_name: 'Alice',
+        session_server_url: 'wss://session.example/ws'
+      })
+    });
+    OWP.state.ws = socket;
+
+    try {
+      await fetchAuthToken();
+      await refresh();
+
+      const auth = sent.find(message => message.type === 'auth');
+      assert.equal(auth.payload.protocol_version, OWP.constants.PROTOCOL_VERSION);
+      assert.equal(auth.payload.token, 'refreshed-token');
+    } finally {
+      OWP.state.ws = null;
+      OWP.timers.setTimeout = originalSetTimeout;
+      OWP.timers.clear = originalClear;
+    }
+  });
+
   it('ignores a token response invalidated by disconnect or a newer request', async () => {
     let resolveFetch;
     globalThis.fetch = () => new Promise(resolve => { resolveFetch = resolve; });

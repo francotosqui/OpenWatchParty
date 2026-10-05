@@ -1,3 +1,7 @@
+// Current protocol version carried in the auth exchange. Clients that omit the
+// field are treated as version 1; a different declared version is rejected.
+pub(crate) const PROTOCOL_VERSION: u64 = 1;
+
 // Channel buffer size for client message queues (prevents OOM from slow clients)
 pub(super) const CLIENT_CHANNEL_BUFFER: usize = 100;
 pub(super) const CLOSE_ENQUEUE_TIMEOUT_MS: u64 = 250;
