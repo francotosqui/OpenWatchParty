@@ -27,7 +27,7 @@ This uses the current user's configuration and Docker access. For a system-wide 
 
 ### Version Selection
 
-- **OpenWatchParty `0.4.0`** targets Jellyfin ABI `12.0.0.0`
+- **OpenWatchParty `0.5.0`** targets Jellyfin ABI `12.0.0.0`
 - **Validated environment**: Jellyfin packages `12.0.0` and image `12.1`
 
 ## Choose Your Installation Path
@@ -65,7 +65,7 @@ docker run -d \
   -p 127.0.0.1:3000:3000 \
   -e ALLOWED_ORIGINS="https://jellyfin.example.com" \
   -e JWT_SECRET="$JWT_SECRET" \
-  ghcr.io/mhbxyz/owp-session-server:0.4.0
+  ghcr.io/mhbxyz/owp-session-server:0.5.0
 ```
 
 Keep the generated value temporarily. It must be entered in the plugin configuration in the next step.
@@ -131,7 +131,7 @@ docker run -d \
   -p 3000:3000 \
   -e ALLOWED_ORIGINS="http://localhost:8096" \
   -e JWT_SECRET="$JWT_SECRET" \
-  ghcr.io/mhbxyz/owp-session-server:v0.4.0
+  ghcr.io/mhbxyz/owp-session-server:v0.5.0
 
 # Or use the beta (latest from main branch)
 docker run -d \
@@ -197,7 +197,7 @@ This method provides automatic update notifications when new versions are releas
    Download the canonical plugin archive from the [releases page](https://github.com/mhbxyz/OpenWatchParty/releases):
 
    ```bash
-   curl -fLO https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.4.0/OpenWatchParty-v0.4.0.zip
+   curl -fLO https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.5.0/OpenWatchParty-v0.5.0.zip
    ```
 
    The archive contains the canonical `OpenWatchPartyPlugin.dll` assembly, its dependencies, and `meta.json`.
@@ -208,11 +208,11 @@ This method provides automatic update notifications when new versions are releas
 
    ```bash
    # Linux (Docker)
-   unzip OpenWatchParty-v0.4.0.zip -d /tmp/owp
+   unzip OpenWatchParty-v0.5.0.zip -d /tmp/owp
    docker cp /tmp/owp/. jellyfin:/config/plugins/OpenWatchParty/
 
    # Linux (native)
-   sudo unzip OpenWatchParty-v0.4.0.zip -d /var/lib/jellyfin/plugins/OpenWatchParty/
+   sudo unzip OpenWatchParty-v0.5.0.zip -d /var/lib/jellyfin/plugins/OpenWatchParty/
 
    # Windows
    # Extract to: C:\ProgramData\Jellyfin\Server\plugins\OpenWatchParty\
