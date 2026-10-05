@@ -14,6 +14,12 @@ __pycache__/
 # Node.js
 node_modules/
 
+# Playwright (end-to-end)
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/
+e2e/.playwright/
+
 # .NET build artifacts
 bin/
 obj/

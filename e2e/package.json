@@ -1,0 +1,13 @@
+{
+  "name": "openwatchparty-e2e",
+  "private": true,
+  "version": "0.0.0",
+  "description": "End-to-end tests for OpenWatchParty against the development stack",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
+  }
+}

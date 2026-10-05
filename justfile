@@ -109,6 +109,13 @@ watch:
         echo -e "{{GREEN}}✓ Restarted{{RESET}}"
     done
 
+[doc('Run the end-to-end suite against the dev stack (starts it first)')]
+e2e: up
+    @echo -e "{{GREEN}}▶ Running end-to-end tests...{{RESET}}"
+    @npm ci --prefix e2e
+    @npm test --prefix e2e
+    @echo -e "{{GREEN}}✓ End-to-end tests passed{{RESET}}"
+
 [doc('Restart all services')]
 restart:
     @echo -e "{{YELLOW}}▶ Restarting services...{{RESET}}"
