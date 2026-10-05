@@ -1,4 +1,4 @@
-const { describe, it, beforeEach } = require('node:test');
+const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const OWP = require('./setup.js');
 const { FakeDocument } = require('./fake-dom.js');
@@ -7,6 +7,7 @@ globalThis.document = new FakeDocument();
 OWP.ui = {};
 require('../ui/toasts.js');
 require('../ui/cards.js');
+require('../playback/play.js');
 
 const MEDIA_ID = '0123456789abcdef0123456789abcdef';
 const room = { id: 'room-1', name: "Ana's room", count: 2, media_id: MEDIA_ID };
@@ -70,5 +71,85 @@ describe('home Watch Parties card', () => {
     assert.match(imageOf(card), /\/Items\/series\/Images\/Backdrop\?.*tag=b1/);
     card = await cardFor({ Name: 'Video', Type: 'Video', ImageTags: { Primary: 'p2' } });
     assert.match(imageOf(card), new RegExp(`/Items/${MEDIA_ID}/Images/Primary\\?.*tag=p2`));
+  });
+});
+
+describe('joining from the home Watch Parties card', () => {
+  const OTHER = 'fedcba9876543210fedcba9876543210';
+  const realTimers = { setInterval: OWP.timers.setInterval, clear: OWP.timers.clear };
+  let tick;
+  let cleared;
+  let clicked;
+
+  // A Jellyfin details page: its button row carries the item id. Pages shown
+  // before stay in the DOM, hidden as `.page.hide`.
+  const detailsPage = (itemId, { hidden = false } = {}) => {
+    const page = document.createElement('div');
+    page.className = `page libraryPage itemDetailPage${hidden ? ' hide' : ''}`;
+    const row = document.createElement('div');
+    row.className = 'mainDetailButtons focuscontainer-x';
+    const play = document.createElement('button');
+    play.className = 'button-flat btnPlay detailButton emby-button';
+    play.click = () => clicked.push(itemId);
+    const rating = document.createElement('button');
+    rating.className = 'button-flat btnUserRating detailButton emby-button';
+    rating.setAttribute('data-id', itemId);
+    row.append(play, rating);
+    page.appendChild(row);
+    document.body.appendChild(page);
+  };
+
+  const joinFromCard = async () => {
+    const card = await cardFor({ Name: 'Sprite Fright', Type: 'Movie' });
+    card.querySelector('.owp-join-btn').click();
+  };
+
+  beforeEach(() => {
+    globalThis.document = new FakeDocument();
+    OWP.timers.setTimeout = () => 1;
+    OWP.timers.setInterval = fn => { tick = fn; return 7; };
+    OWP.timers.clear = id => cleared.push(id);
+    tick = null;
+    cleared = [];
+    clicked = [];
+    OWP.state.pendingJoinRoomId = '';
+    window.location.hash = '';
+  });
+
+  afterEach(() => {
+    Object.assign(OWP.timers, realTimers);
+  });
+
+  it('plays the room media from its own details page, not a hidden earlier one', async () => {
+    detailsPage(OTHER, { hidden: true });
+    detailsPage(MEDIA_ID);
+
+    await joinFromCard();
+    tick();
+
+    assert.match(window.location.hash, new RegExp(`details\\?id=${MEDIA_ID}`));
+    assert.equal(OWP.state.pendingJoinRoomId, room.id);
+    assert.deepEqual(clicked, [MEDIA_ID]);
+    assert.deepEqual(cleared, [7]);
+  });
+
+  it('waits while the details page of another item is still shown', async () => {
+    detailsPage(OTHER);
+
+    await joinFromCard();
+    tick();
+    assert.deepEqual(clicked, []);
+
+    detailsPage(MEDIA_ID);
+    tick();
+    assert.deepEqual(clicked, [MEDIA_ID]);
+  });
+
+  it('gives up when the details page never shows up', async () => {
+    await joinFromCard();
+    for (let i = 0; i < 50; i++) tick();
+
+    assert.deepEqual(clicked, []);
+    assert.deepEqual(cleared, [7]);
   });
 });
