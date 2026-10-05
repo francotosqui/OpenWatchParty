@@ -17,7 +17,7 @@
 
   const notifyReady = (roomId, mediaId) => {
     if (!state.inRoom || state.roomId !== roomId || state.readyRoomId === roomId) return;
-    if (mediaId && utils.getCurrentItemId() !== mediaId) return;
+    if (mediaId && utils.getPlayingItemId() !== mediaId) return;
     const actions = OWP.actions;
     if (!actions || !actions.send) return;
     state.readyRoomId = roomId;
@@ -28,10 +28,11 @@
     if (state.mediaReadyCleanup) state.mediaReadyCleanup();
     const attempt = ++state.mediaSyncAttempt;
     let deadline = Date.now() + MEDIA_READY_TIMEOUT_MS;
-    const initialMediaId = utils.getCurrentItemId();
+    // A new video is needed only when another item was playing.
+    const initialMediaId = utils.getPlayingItemId();
     const initialVideo = utils.getVideo();
     const initialSource = initialVideo?.currentSrc || initialVideo?.src || '';
-    const requiresVideoTransition = Boolean(mediaId && initialMediaId !== mediaId);
+    const requiresVideoTransition = Boolean(mediaId && initialMediaId && initialMediaId !== mediaId);
     let timeoutReported = false;
     let watchedVideo = null;
     let timer = null;
@@ -66,7 +67,10 @@
         cleanup();
         return;
       }
-      if (mediaId && utils.getCurrentItemId() !== mediaId) {
+      // The item actually playing. getCurrentItemId can still name the
+      // previous item from the hidden page Jellyfin keeps for it, or the item
+      // of a details page while nothing plays.
+      if (mediaId && utils.getPlayingItemId() !== mediaId) {
         scheduleCheck();
         return;
       }
