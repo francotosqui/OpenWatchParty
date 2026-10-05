@@ -186,6 +186,7 @@
 
   Object.assign(playback, {
     tryPlayMethods,
+    findDetailsPlayButton,
     launchViaDetailsPage,
     playItem,
     safePlay,

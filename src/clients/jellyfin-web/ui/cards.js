@@ -151,9 +151,10 @@
             return;
           }
           attempts++;
-          const itemName = document.querySelector('.itemName bdi');
-          const playBtn = document.querySelector('.mainDetailButtons .btnPlay, .mainDetailButtons button[data-action="resume"], .mainDetailButtons button[data-action="play"]');
-          if (playBtn && itemName && itemName.textContent.trim()) {
+          // The play button of this item's own details page: a hidden page of
+          // an earlier item can come first in the document.
+          const playBtn = OWP.playback?.findDetailsPlayButton?.(room.media_id);
+          if (playBtn) {
             console.log('[OpenWatchParty] Play button found and page ready, clicking it');
             OWP.timers.clear(checkInterval);
             playBtn.click();
