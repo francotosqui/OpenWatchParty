@@ -130,28 +130,69 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             }
             crate::output::print(&serde_json::json!({ "paired": true, "kid": kid }), cli.json)
         }
-        Command::Status(arguments) | Command::Doctor(arguments) => {
-            let config: Option<DesiredConfig> = paths
-                .config_file
-                .exists()
-                .then(|| crate::storage::read_toml(&paths.config_file))
-                .transpose()?;
-            let state: Option<InstallationState> = paths
-                .state_file
-                .exists()
-                .then(|| crate::storage::read_json(&paths.state_file))
-                .transpose()?;
-            let report = crate::diagnostics::run(
-                config.as_ref(),
-                state.as_ref(),
-                arguments.api_token_file.as_deref(),
-            );
+        Command::Status(arguments) => {
+            let (report, ..) = diagnostics(&paths, &arguments)?;
             if !arguments.quiet {
                 crate::output::print_diagnostics(&report, cli.json)?;
             }
             Ok(())
         }
+        Command::Doctor(arguments) => {
+            let (report, config, state) = diagnostics(&paths, &arguments)?;
+            if !arguments.quiet {
+                crate::output::print_diagnostics(&report, cli.json)?;
+            }
+            if let Some(path) = &arguments.bundle {
+                let bundle = crate::diagnostics::bundle(&report, config.as_ref(), state.as_ref());
+                crate::storage::write_json(path, &bundle)?;
+                if !arguments.quiet {
+                    println!("Support bundle written to {}", path.display());
+                }
+            }
+            Ok(())
+        }
+        Command::Logs(arguments) => {
+            if !paths.config_file.exists() {
+                bail!("run `owpctl setup` first");
+            }
+            if !(1..=10_000).contains(&arguments.tail) {
+                bail!("--tail must be between 1 and 10000");
+            }
+            let tail = arguments.tail.to_string();
+            let mut logs_arguments = vec!["logs", "--tail", tail.as_str()];
+            if !arguments.no_follow {
+                logs_arguments.push("--follow");
+            }
+            logs_arguments.push("session-server");
+            crate::installer::compose(&paths, &logs_arguments)
+        }
     }
+}
+
+fn diagnostics(
+    paths: &Paths,
+    arguments: &crate::cli::DiagnosticArgs,
+) -> anyhow::Result<(
+    crate::diagnostics::DiagnosticReport,
+    Option<DesiredConfig>,
+    Option<InstallationState>,
+)> {
+    let config: Option<DesiredConfig> = paths
+        .config_file
+        .exists()
+        .then(|| crate::storage::read_toml(&paths.config_file))
+        .transpose()?;
+    let state: Option<InstallationState> = paths
+        .state_file
+        .exists()
+        .then(|| crate::storage::read_json(&paths.state_file))
+        .transpose()?;
+    let report = crate::diagnostics::run(
+        config.as_ref(),
+        state.as_ref(),
+        arguments.api_token_file.as_deref(),
+    );
+    Ok((report, config, state))
 }
 
 fn setup(paths: &Paths, arguments: crate::cli::SetupArgs, json: bool) -> anyhow::Result<()> {

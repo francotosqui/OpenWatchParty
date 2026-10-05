@@ -10,7 +10,16 @@ nav_order: 1
 
 ## Download
 
+| Platform | Asset |
+|----------|-------|
+| Linux x86_64 | `owpctl-linux-x86_64` |
+| Linux arm64 | `owpctl-linux-aarch64` |
+| macOS (Apple silicon) | `owpctl-macos-aarch64` |
+| macOS (Intel) | `owpctl-macos-x86_64` |
+| Windows x86_64 | `owpctl-windows-x86_64.exe` |
+
 ```bash
+# Linux x86_64 example
 curl -fLO https://github.com/mhbxyz/OpenWatchParty/releases/latest/download/owpctl-linux-x86_64
 curl -fLO https://github.com/mhbxyz/OpenWatchParty/releases/latest/download/owpctl-linux-x86_64.sha256
 sha256sum -c owpctl-linux-x86_64.sha256
@@ -18,7 +27,7 @@ chmod +x owpctl-linux-x86_64
 sudo install -m 0755 owpctl-linux-x86_64 /usr/local/bin/owpctl
 ```
 
-Release assets also contain Sigstore and provenance bundles for independent verification.
+On macOS, verify with `shasum -a 256 -c`. Release assets also contain Sigstore and provenance bundles for independent verification.
 
 ## Graphical Setup
 
@@ -72,9 +81,10 @@ Every `owpctl` command prints a human-readable summary by default. Passing `--js
 owpctl status
 owpctl doctor --api-token-file /run/owp-jellyfin-token
 owpctl doctor --json --api-token-file /run/owp-jellyfin-token
+owpctl doctor --bundle /tmp/owp-support.json --api-token-file /run/owp-jellyfin-token
 ```
 
-`doctor` verifies Docker, Jellyfin, plugin metadata, session health, JWT issuance and an authenticated WebSocket ping/pong. It never prints the token or JWT.
+`doctor` verifies Docker, Jellyfin, plugin metadata, session health, JWT issuance and an authenticated WebSocket ping/pong. It never prints the token or JWT. `--bundle` writes a redacted support file (the report, the desired configuration and the installation state, with the secret fingerprint removed) that can be shared when asking for help.
 
 ## Maintenance
 
@@ -82,6 +92,8 @@ owpctl doctor --json --api-token-file /run/owp-jellyfin-token
 owpctl upgrade --dry-run --api-token-file /run/owp-jellyfin-token
 owpctl upgrade --yes --api-token-file /run/owp-jellyfin-token
 owpctl backup
+owpctl logs                  # follow the session server logs
+owpctl logs --tail 200 --no-follow
 owpctl configure --set session.log-level=debug
 owpctl configure --rotate-jwt-secret --yes --api-token-file /run/owp-jellyfin-token
 owpctl uninstall --yes --keep-config

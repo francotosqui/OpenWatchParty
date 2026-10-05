@@ -259,6 +259,27 @@ fn phase_check(state: &InstallationState) -> Option<DiagnosticCheck> {
     ))
 }
 
+/// Builds the redacted support bundle: what was checked, the desired
+/// configuration and the installation state, without any secret material.
+pub fn bundle(
+    report: &DiagnosticReport,
+    config: Option<&DesiredConfig>,
+    state: Option<&InstallationState>,
+) -> serde_json::Value {
+    let redacted_state = state.map(|state| {
+        let mut redacted = state.clone();
+        redacted.secret_fingerprint = "<redacted>".to_string();
+        redacted
+    });
+    serde_json::json!({
+        "tool": "owpctl",
+        "version": crate::VERSION,
+        "report": report,
+        "config": config,
+        "state": redacted_state,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,5 +310,22 @@ mod tests {
         let mut state = InstallationState::new("0.3.3");
         state.phase = "ready".to_string();
         assert!(phase_check(&state).is_none());
+    }
+
+    #[test]
+    fn support_bundle_redacts_the_secret_fingerprint() {
+        let report = DiagnosticReport {
+            overall: CheckStatus::Pass,
+            installed_version: Some("0.5.0".to_string()),
+            checks: Vec::new(),
+        };
+        let mut state = InstallationState::new("0.5.0");
+        state.secret_fingerprint = "deadbeefcafe".to_string();
+
+        let bundle = bundle(&report, None, Some(&state));
+
+        assert_eq!(bundle["state"]["secret_fingerprint"], "<redacted>");
+        assert!(!bundle.to_string().contains("deadbeefcafe"));
+        assert_eq!(bundle["report"]["overall"], "pass");
     }
 }
