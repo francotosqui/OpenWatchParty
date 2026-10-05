@@ -25,10 +25,7 @@
 
   h.handleParticipantsUpdate = (msg) => {
     state.participantCount = msg.payload.participant_count;
-    if (state.inRoom) {
-      const el = document.getElementById('owp-participants-list');
-      if (el) el.textContent = `Online: ${state.participantCount}`;
-    }
+    if (state.inRoom) ui.updateParticipantList();
     if (state.lastParticipantCount && state.participantCount > state.lastParticipantCount) {
       ui.showToast('A participant joined the room');
     }
@@ -39,12 +36,20 @@
     if (msg.payload?.participant_count !== undefined) {
       state.participantCount = msg.payload.participant_count;
       if (state.inRoom) {
-        const el = document.getElementById('owp-participants-list');
-        if (el) el.textContent = `Online: ${state.participantCount}`;
+        ui.updateParticipantList();
         ui.showToast('A participant left the room');
       }
       state.lastParticipantCount = state.participantCount;
     }
+  };
+
+  h.handleParticipantList = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId) return;
+    state.participants = msg.payload.participants.map(participant => ({
+      name: participant.name,
+      isHost: participant.is_host
+    }));
+    ui.updateParticipantList();
   };
 
   h.handleRoomClosed = (msg) => {

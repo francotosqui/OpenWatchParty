@@ -31,6 +31,7 @@ describe('WebSocket message schema validation', () => {
     }, { room: 'room-1', client: 'client-2' }),
     envelope('participants_update', { participant_count: 3 }, { room: 'room-1' }),
     envelope('client_left', { participant_count: 2 }, { room: 'room-1', client: 'client-3' }),
+    envelope('participant_list', { participants: [{ name: 'Alice', is_host: true }] }, { room: 'room-1' }),
     envelope('room_closed', { reason: 'Host left the room' }, { room: 'room-1' }),
     envelope('player_event', {
       action: 'seek', position: 42.5, play_state: 'playing', target_server_ts: 1_700_000_001_000
@@ -96,11 +97,11 @@ describe('WebSocket message schema validation', () => {
     invalid(envelope('error', { code: 'X'.repeat(65), message: 'Failure' }));
   });
 
-  it('counts Unicode names by code point and permits prefixed room names', () => {
+  it('counts Unicode names by code point and permits room names built from a full-length user name', () => {
     valid(envelope('auth_success', { user_name: '😀'.repeat(51) }, { client: 'client-1' }));
     valid(envelope('room_list', [{
       id: 'room-1',
-      name: `Room de ${'a'.repeat(100)}`,
+      name: `${'a'.repeat(100)}'s room`,
       count: 1,
       media_id: null
     }]));

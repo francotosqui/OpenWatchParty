@@ -13,6 +13,7 @@ OWP.chat = { messages: [], unreadCount: 0 };
 require('../ui/indicators.js');
 require('../ui/cards.js');
 require('../chat/messages.js');
+require('../chat/input.js');
 require('../ui/toasts.js');
 require('../ui/home.js');
 OWP.constants.DEFAULT_WS_URL = `ws://${SCRIPT}/ws`;
@@ -100,9 +101,11 @@ describe('dynamic DOM rendering', () => {
     OWP.state.participantCount = SCRIPT;
     OWP.state.clientId = `client-${IMG}`;
     OWP.ui.render(true);
-    assert.equal(panel.querySelector('.owp-header').children[1].textContent, IMG);
+    assert.equal(panel.querySelector('.owp-room-name').textContent, IMG);
+    assert.equal(panel.querySelector('.owp-room-name').title, IMG);
     assert.equal(document.getElementById('owp-participants-list').textContent, `Online: ${SCRIPT}`);
-    assert.equal(panel.querySelector('.owp-meta').children[1].textContent, `ID: ${IMG}`);
+    assert.equal(document.getElementById('owp-people-count').textContent, SCRIPT);
+    assert.equal(panel.querySelector('.owp-latency').title, `Latency to the watch party server (client ${IMG})`);
     assertNoExecutableNodes();
 
     OWP.state.inRoom = false;

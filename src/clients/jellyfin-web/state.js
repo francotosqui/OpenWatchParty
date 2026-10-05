@@ -99,6 +99,7 @@
     LEGACY_HEADER_BTN_ID: 'owp-header-btn-legacy',
     MODERN_HEADER_BTN_ID: 'owp-header-btn-modern',
     PANEL_HEADER_CLASS: 'owp-panel-header',
+    ROOM_MODE_CLASS: 'owp-room-mode',
     STYLE_ID: 'owp-style',
     SYNCPLAY_HIDE_STYLE_ID: 'owp-hide-native-syncplay',
     HOME_SECTION_ID: 'owp-home-section',
@@ -169,6 +170,7 @@
     successfulPings: 0,
     serverOffsetMs: 0,
     timeSyncSamples: [],         // Circular buffer of { rtt, offset, ts } for hybrid time sync
+    lastRttMs: null,             // Latest ping round trip, shown in the room bar; null until the first pong
     lastSeekSentAt: 0,
     lastStateSentAt: 0,
     lastSentPosition: 0,
@@ -189,6 +191,8 @@
     pendingJoinRoomId: '',  // Room to join after navigating to video player
     roomName: '',
     participantCount: 0,
+    participants: [],      // [{ name, isHost }] from participant_list; empty until the server sends one
+    roomBarSection: '',    // Drop-down open under the room bar: 'people', 'chat', 'leave' or ''
     lastSyncServerTs: 0,
     lastSyncPosition: 0,
     lastSyncPlayState: '',

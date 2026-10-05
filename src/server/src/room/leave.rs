@@ -1,12 +1,15 @@
 use crate::messaging::{broadcast_room_list, collect_room_senders, send_to_senders, ClientSender};
-use crate::room::close_room_parts;
+use crate::room::{close_room_parts, participant_list_message};
 use crate::types::{Client, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
 use std::collections::HashMap;
 
+/// Senders of the remaining room members, and the messages to send them in order.
+pub type LeaveNotification = (Vec<ClientSender>, Vec<WsMessage>);
+
 enum LeaveOutcome {
-    Left(Vec<ClientSender>, WsMessage),
+    Left(LeaveNotification),
     Close(String),
 }
 
@@ -36,8 +39,9 @@ fn detach_client_from_room(
             ts: now_ms(),
             server_ts: Some(now_ms()),
         };
+        let participant_list = participant_list_message(room, clients);
         let senders = collect_room_senders(room, clients, None);
-        Some(LeaveOutcome::Left(senders, msg))
+        Some(LeaveOutcome::Left((senders, vec![msg, participant_list])))
     }
 }
 
@@ -62,11 +66,21 @@ pub fn handle_leave(
     client_id: &str,
     clients: &mut HashMap<String, Client>,
     rooms: &mut HashMap<String, Room>,
-) -> Option<(Vec<ClientSender>, WsMessage)> {
+) -> Option<LeaveNotification> {
     match detach_client_from_room(client_id, clients, rooms) {
-        Some(LeaveOutcome::Left(senders, msg)) => Some((senders, msg)),
-        Some(LeaveOutcome::Close(room_id)) => Some(close_and_notify(&room_id, clients, rooms)),
+        Some(LeaveOutcome::Left(notification)) => Some(notification),
+        Some(LeaveOutcome::Close(room_id)) => {
+            let (senders, msg) = close_and_notify(&room_id, clients, rooms);
+            Some((senders, vec![msg]))
+        }
         None => None,
+    }
+}
+
+pub fn send_leave_notification(notification: &LeaveNotification, context: &str) {
+    let (senders, messages) = notification;
+    for msg in messages {
+        send_to_senders(senders, msg, context);
     }
 }
 
@@ -75,8 +89,8 @@ pub async fn handle_disconnect(client_id: &str, state: &SharedState) {
     {
         let mut state = state.write().await;
         let crate::types::ServerState { clients, rooms } = &mut *state;
-        if let Some((senders, msg)) = handle_leave(client_id, clients, rooms) {
-            send_to_senders(&senders, &msg, "leave notification");
+        if let Some(notification) = handle_leave(client_id, clients, rooms) {
+            send_leave_notification(&notification, "leave notification");
         }
         clients.remove(client_id);
     }
@@ -171,6 +185,36 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn guest_disconnect_sends_the_updated_participant_list() {
+        let state = test_helpers::create_state();
+        let (mut host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
+        let (mut guest, _guest_rx) = test_helpers::create_client_with_rx("u2", "Ana", true);
+        host.room_id = Some("room".to_string());
+        guest.room_id = Some("room".to_string());
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("guest".to_string(), guest);
+            let mut room = test_helpers::create_room("room", "host");
+            room.clients.push("guest".to_string());
+            locked.rooms.insert("room".to_string(), room);
+        }
+
+        handle_disconnect("guest", &state).await;
+
+        assert_eq!(
+            test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
+            "client_left"
+        );
+        let list = test_helpers::recv_msg(&mut host_rx).unwrap();
+        assert_eq!(list.msg_type, "participant_list");
+        assert_eq!(
+            list.payload.unwrap()["participants"],
+            serde_json::json!([{ "name": "Franco", "is_host": true }])
+        );
+    }
+
     #[test]
     fn host_leave_clears_guest_room_membership() {
         let mut clients = HashMap::new();
@@ -187,7 +231,9 @@ mod tests {
 
         let notification = handle_leave("host", &mut clients, &mut rooms);
 
-        assert!(notification.is_some());
+        let (_, messages) = notification.expect("host leave closes the room");
+        let types: Vec<_> = messages.iter().map(|msg| msg.msg_type.as_str()).collect();
+        assert_eq!(types, ["room_closed"]);
         assert!(!rooms.contains_key("room"));
         assert!(clients["host"].room_id.is_none());
         assert!(clients["guest"].room_id.is_none());

@@ -2,7 +2,7 @@ use super::super::constants::MAX_CLIENTS_PER_ROOM;
 use super::super::dispatch::{error_message, is_authenticated, send_error, ErrorCode};
 use super::super::validation::sanitize_name;
 use crate::messaging::{collect_room_senders, send_message, send_to_senders, ClientSender};
-use crate::room::handle_leave;
+use crate::room::{handle_leave, participant_list_message, send_leave_notification};
 use crate::types::{Client, IncomingMessage, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
@@ -119,7 +119,7 @@ pub(in crate::ws) async fn handle_join_room(
 
     {
         let mut state = state.write().await;
-        let (notifications, previous_leave) = if !state.rooms.contains_key(room_id) {
+        let (notifications, previous_leave, participants) = if !state.rooms.contains_key(room_id) {
             let sender = state.clients.get(client_id).map(|c| c.sender.clone());
             let error = error_message(
                 client_id,
@@ -127,7 +127,7 @@ pub(in crate::ws) async fn handle_join_room(
                 ErrorCode::RoomNotFound,
                 "Room not found",
             );
-            ((sender, error, None), None)
+            ((sender, error, None), None, None)
         } else {
             let room = state.rooms.get(room_id).expect("room existence checked");
             let full = !room.clients.iter().any(|id| id == client_id)
@@ -146,6 +146,7 @@ pub(in crate::ws) async fn handle_join_room(
                         None,
                     ),
                     None,
+                    None,
                 )
             } else {
                 info!("Client {client_id} joining room {room_id}");
@@ -163,13 +164,20 @@ pub(in crate::ws) async fn handle_join_room(
                 let room = rooms.get_mut(room_id).expect("room existence checked");
                 add_client_to_room(client_id, room, clients, &payload_name);
                 let notifications = prepare_join_notifications(client_id, room, clients);
-                (notifications, previous_leave)
+                let participants = (
+                    collect_room_senders(room, clients, None),
+                    participant_list_message(room, clients),
+                );
+                (notifications, previous_leave, Some(participants))
             }
         };
-        if let Some((senders, msg)) = previous_leave {
-            send_to_senders(&senders, &msg, "previous room leave");
+        if let Some(notification) = previous_leave {
+            send_leave_notification(&notification, "previous room leave");
         }
         enqueue_join_notifications(client_id, notifications);
+        if let Some((senders, msg)) = participants {
+            send_to_senders(&senders, &msg, "participant list");
+        }
     }
 }
 
@@ -385,6 +393,46 @@ mod tests {
         );
         assert_eq!(locked.clients["guest"].room_id.as_deref(), Some("room"));
         assert!(!locked.rooms["room"].ready_clients.contains("guest"));
+    }
+
+    #[tokio::test]
+    async fn join_sends_the_participant_list_to_everyone_in_the_room() {
+        let state = test_helpers::create_state();
+        let (mut host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
+        let (guest, mut guest_rx) = test_helpers::create_client_with_rx("u2", "Ana", true);
+        host.room_id = Some("room".to_string());
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("guest".to_string(), guest);
+            locked.rooms.insert(
+                "room".to_string(),
+                test_helpers::create_room("room", "host"),
+            );
+        }
+
+        handle_join_room("guest", &join_message("room"), &state).await;
+
+        let expected = serde_json::json!({
+            "participants": [
+                { "name": "Franco", "is_host": true },
+                { "name": "Ana", "is_host": false }
+            ]
+        });
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+            "room_state"
+        );
+        let guest_list = test_helpers::recv_msg(&mut guest_rx).unwrap();
+        assert_eq!(guest_list.msg_type, "participant_list");
+        assert_eq!(guest_list.payload.unwrap(), expected);
+        assert_eq!(
+            test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
+            "participants_update"
+        );
+        let host_list = test_helpers::recv_msg(&mut host_rx).unwrap();
+        assert_eq!(host_list.msg_type, "participant_list");
+        assert_eq!(host_list.payload.unwrap(), expected);
     }
 
     #[tokio::test]

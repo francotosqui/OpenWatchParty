@@ -9,6 +9,7 @@ OWP.chat = { messages: [], unreadCount: 0 };
 require('../ui/indicators.js');
 require('../ui/cards.js');
 require('../chat/messages.js');
+require('../chat/input.js');
 require('../ui/toasts.js');
 require('../ui/home.js');
 require('../ui/render.js');
@@ -400,7 +401,7 @@ describe('header Watch Party button', () => {
     button.click();
     const lobbyClose = panel().querySelector('.owp-close-btn');
     assert.equal(lobbyClose.getAttribute('aria-label'), 'Close panel');
-    assert.ok(lobbyClose.querySelector('.material-icons.close'));
+    assert.ok(lobbyClose.querySelector('.owp-icon-x'));
     focused = null;
     lobbyClose.click();
     assert.ok(panel().classList.contains('hide'));
@@ -412,7 +413,7 @@ describe('header Watch Party button', () => {
     try {
       button.click();
       // The host's button ends the room for everyone; the X only hides the panel.
-      assert.equal(panel().querySelector('#owp-btn-leave').textContent, 'Close room');
+      assert.equal(panel().querySelector('#owp-btn-leave').getAttribute('aria-label'), 'Close room');
       panel().querySelector('.owp-close-btn').click();
 
       assert.ok(panel().classList.contains('hide'));

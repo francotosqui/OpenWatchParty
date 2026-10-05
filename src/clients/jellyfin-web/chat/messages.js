@@ -13,6 +13,8 @@
     if (!container) return;
     const msgEl = document.createElement('div');
     msgEl.className = 'owp-chat-message' + (message.isOwn ? ' owp-chat-own' : '');
+    // One line per message in the room bar: the time is in the tooltip.
+    msgEl.title = formatTime(message.timestamp);
     const meta = document.createElement('div');
     meta.className = 'owp-chat-meta';
     const username = document.createElement('span');
@@ -50,10 +52,12 @@
     if (chat.messages.length > MAX_MESSAGES) {
       chat.messages.shift();
     }
-    if (!chat.isChatVisible()) {
+    // Your own messages are never unread, even if the chat closed before the
+    // server echoed them back.
+    if (!chat.isChatVisible() && !message.isOwn) {
       chat.unreadCount++;
       chat.updateBadge();
-      if (!message.isOwn && OWP.ui && OWP.ui.showChatToast) {
+      if (OWP.ui && OWP.ui.showChatToast) {
         OWP.ui.showChatToast(message.username, message.text);
       }
     }

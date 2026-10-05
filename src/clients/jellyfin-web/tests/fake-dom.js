@@ -207,6 +207,12 @@ class FakeDocument {
     this.body = new FakeElement('body');
   }
 
+  createElementNS(namespace, tagName) {
+    const element = this.createElement(tagName);
+    element.namespaceURI = namespace;
+    return element;
+  }
+
   createElement(tagName, creationOptions) {
     return new FakeElement(tagName, creationOptions);
   }

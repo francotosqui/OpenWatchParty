@@ -50,6 +50,7 @@ Defines global shared state and configuration constants.
 | `LEGACY_HEADER_BTN_ID` | string | `'owp-header-btn-legacy'` | Header button ID (legacy `.headerRight`) |
 | `MODERN_HEADER_BTN_ID` | string | `'owp-header-btn-modern'` | Header button ID (MUI app bar) |
 | `PANEL_HEADER_CLASS` | string | `'owp-panel-header'` | Panel class while placed below the header |
+| `ROOM_MODE_CLASS` | string | `'owp-room-mode'` | Panel class while in a room (room bar layout) |
 | `STYLE_ID` | string | `'owp-style'` | Style tag ID |
 | `SYNCPLAY_HIDE_STYLE_ID` | string | `'owp-hide-native-syncplay'` | Style tag that hides the native SyncPlay button |
 | `HOME_SECTION_ID` | string | `'owp-home-section'` | Home section ID |
@@ -94,6 +95,8 @@ Defines global shared state and configuration constants.
 | `joiningItemId` | string | Media ID being loaded |
 | `roomName` | string | Current room name |
 | `participantCount` | number | Room participant count |
+| `participants` | array | `{ name, isHost }` entries from `participant_list`; empty until the server sends one |
+| `roomBarSection` | string | Drop-down open under the room bar: `'people'`, `'chat'`, `'leave'` or `''` |
 | `lastSyncServerTs` | number | Server timestamp of last sync |
 | `lastSyncPosition` | number | Position of last sync (seconds) |
 | `lastSyncPlayState` | string | Play state of last sync |
@@ -292,6 +295,9 @@ Response to `create_room` or `join_room`:
 #### `participants_update`
 Updates participant counter and shows toast for new participant.
 
+#### `participant_list`
+Stores the participants' names for the current room and shows them instead of the count, one row per name with a separate **Host** badge. Lists for another room are ignored, and joining another room clears the previous names.
+
 #### `room_closed`
 Resets state when room is closed (host disconnected).
 
@@ -358,6 +364,12 @@ Restores the default panel placement used by the player button.
 
 #### `updateCreateRoomButton() -> void`
 Enables "Create Room" only while something is playing; otherwise shows a hint.
+
+#### `updateParticipantList() -> void`
+Shows the participants' names (`state.participants`) in the room view, or the count when no names were received, for example from an older session server, and updates the count on the bar's participants button.
+
+#### Room bar
+In a room, `render()` draws a single bar (sync dot, latency, room name, then the participants, chat, leave and close buttons) and a drop-down below it. Participants, chat and the leave confirmation ("Leave the room?", or "Close the room for everyone?" for the host) open one at a time (`state.roomBarSection`). The chat counts as read only while its drop-down is open (`chat.isChatVisible()`).
 
 #### `applyNativeSyncPlayVisibility() -> void`
 Adds or removes the stylesheet that hides Jellyfin's SyncPlay button, following `state.hideNativeSyncPlayButton` (from `hide_native_syncplay_button` in the token response).

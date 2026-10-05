@@ -173,7 +173,8 @@ control bar.
 Party button to the header, just before SyncPlay; it opens the same panel.
 
 Check that the panel says **Online**, then select **Create Room**. It will
-show `Room de <your username>` and **Online: 1**. Keep the movie open.
+turn into a bar at the top right showing `<your username>'s room`; select its
+people icon to see your name with a **Host** badge. Keep the movie open.
 
 ![OpenWatchParty lobby in the player showing Online and the Create Room button marked 2]({{ '/assets/images/tutorial-lobby.png' | relative_url }})
 
@@ -195,19 +196,21 @@ still in the room.
 Open the card, then start **the same movie** in the player. The card opens
 the movie details; it does not join by itself. The play overlay may start
 playback and attempt an automatic join, but you can always use the manual
-path: select **Watch Party** in the player, find `Room de <host>` under
-**Available Rooms**, and select **Join**.
+path: select **Watch Party** in the player, find `<host>'s room` under
+**Available rooms**, and select **Join**.
 
 ![Guest's OpenWatchParty panel showing the host's room and its Join button marked 4]({{ '/assets/images/tutorial-guest-join.png' | relative_url }})
 
 **4** — Select **Join** for the correct host. You can leave and rejoin while
 the host keeps the movie and room open.
 
-Look for **Online: 2** in the room and **In sync** on the guest side. Initial
-catch-up may take a few seconds. Ask the host to resume playback, pause and
-seek once; the guest should follow. Chat is available in the panel. The
-host's **Close** button ends the room for everyone; the guest's **Leave**
-button exits only their participation.
+Select the people icon in the room bar: it shows **2** and lists both names,
+with a **host** badge on the host. On the guest side the dot at the left of the
+bar turns green when in sync (hover it to read **In sync**). Initial catch-up
+may take a few seconds. Ask the host to resume playback, pause and seek once;
+the guest should follow. Chat opens from the chat icon. The exit icon asks
+before leaving: for the host it closes the room for everyone, for the guest it
+only leaves.
 
 ![Real participant panel showing Online 2, In sync and Leave, with the sync indicator marked 5]({{ '/assets/images/tutorial-guest-sync.png' | relative_url }})
 

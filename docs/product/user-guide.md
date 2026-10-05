@@ -21,8 +21,8 @@ Before using OpenWatchParty, ensure your Jellyfin administrator has:
 1. **Start playing a video** - Open any movie or TV episode in Jellyfin
 2. **Find the Watch Party button** - Open the player controls and select the **Watch Party** (groups) icon
 3. **Click to open the panel** - A slide-out panel appears
-4. **Click "Create Room"** - The room is created and named after you (`Room de <you>`)
-5. **Wait for participants** - The room appears in everyone's "Available Rooms" list and on the Jellyfin home page
+4. **Click "Create Room"** - The room is created and named after you (`<you>'s room`)
+5. **Wait for participants** - The room appears in everyone's "Available rooms" list and on the Jellyfin home page
 
 The Watch Party button in the Jellyfin header opens the same panel, but **Create Room** stays disabled, with a hint, until something is playing: a room always starts from the video you are watching.
 
@@ -110,13 +110,18 @@ As a participant:
 - **Close (X)** - Hides the panel; open it again from the header or the player button
 
 ### In-Room View
-- **Room name** - Current watch party name
-- **Participants** - Number of people watching
-- **Sync indicator** - Shows sync status (participants only)
-- **Chat** - Text messaging with other participants
-- **RTT** - Round-trip time to server (latency indicator)
-- **Leave button** - Exit the watch party; for the host it reads **Close room** and closes the room for everyone
-- **Close (X)** - Only hides the panel: you stay in the room
+
+In a room the panel becomes a single bar at the top right (below the header when opened from it). From left to right:
+
+- **Sync dot** - Your sync status; hover it for the details (the host's is always green)
+- **Latency** - Round-trip time from you to the session server, in milliseconds
+- **Room name** - Current watch party name; hover it if it is cut short
+- **Participants** (groups icon and count) - Opens the list of who is watching, with a **Host** badge on the host (older session servers show only the number of people)
+- **Chat** (chat icon) - Opens the chat; a red badge counts unread messages
+- **Leave** (exit icon) - Asks **Leave the room?** before leaving; for the host it asks **Close the room for everyone?**
+- **Close (X)** - Only hides the bar: you stay in the room
+
+Participants, chat and the leave confirmation open one at a time below the bar; select the same icon again to close it.
 
 ## Using Chat
 
@@ -124,13 +129,13 @@ The chat feature allows you to communicate with other watch party participants i
 
 ### Sending Messages
 1. Type your message in the chat input field
-2. Press **Enter** or click **Send**
+2. Press **Enter** or click the send icon
 3. Your message appears for all participants
 
 ### Chat Features
 - **Username display** - Messages show the sender's Jellyfin username
-- **Timestamps** - Each message shows when it was sent
-- **Unread badge** - A red badge appears when new messages arrive while the panel is closed
+- **Timestamps** - Hover a message to see when it was sent
+- **Unread badge** - A red badge on the chat icon counts messages that arrived while the chat was closed
 - **Message limit** - Messages are limited to 500 characters
 
 ### Notes
@@ -139,7 +144,7 @@ The chat feature allows you to communicate with other watch party participants i
 
 ## Sync Indicator
 
-Participants see a sync status indicator that shows how well their playback is aligned with the host.
+Participants see a sync status dot in the room bar that shows how well their playback is aligned with the host. Hover it for the status name.
 
 | Status | Indicator | Meaning |
 |--------|-----------|---------|
@@ -164,9 +169,9 @@ These appear briefly in the center of the screen:
 - **"A participant left the room"** - Someone left
 - **"Room closed"** - The room was closed (host left)
 
-### Chat Notifications (Top-Right)
+### Chat Notifications (Bottom-Right)
 
-When the chat panel is closed, incoming messages appear as toasts in the top-right corner:
+When the chat is closed, incoming messages appear as toasts in the bottom-right corner, so they do not cover the room bar:
 - Shows the sender's username and message
 - Stacks up to 5 messages
 - Click to dismiss, or they fade after 5 seconds

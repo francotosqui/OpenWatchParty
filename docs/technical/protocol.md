@@ -91,6 +91,7 @@ Create a new watch party room.
 
 **Effects:**
 - Client becomes host
+- Host receives `participant_list` with its own name, after `room_state`
 - Broadcast `room_list` to all clients
 
 ### `join_room`
@@ -111,6 +112,7 @@ Join an existing room.
 - Client added to `room.clients`
 - Client removed from `room.ready_clients`
 - Broadcast `participants_update` to other participants
+- Broadcast `participant_list` to everyone in the room, including the new client (after its `room_state`)
 
 ### `leave_room`
 
@@ -126,7 +128,7 @@ Leave the current room.
 
 **Effects:**
 - If host leaves: room closes, broadcast `room_closed`
-- Otherwise: broadcast `participants_update`
+- Otherwise: broadcast `client_left`, then `participant_list`
 - Broadcast `room_list` to all
 
 ### `ready`
@@ -333,6 +335,32 @@ Participant count update.
 }
 ```
 
+### `participant_list`
+
+Display names of the room's participants, in join order. Sent to the host when the room is created, and to everyone in the room after a client joins or leaves.
+
+```json
+{
+  "type": "participant_list",
+  "room": "uuid-room-id",
+  "payload": {
+    "participants": [
+      { "name": "Alice", "is_host": true },
+      { "name": "Bob", "is_host": false }
+    ]
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `participants[].name` | string | Display name of the participant |
+| `participants[].is_host` | boolean | Whether the participant is the room host |
+
+It is a separate message so that `room_state`, `participants_update` and `client_left` keep their payloads: clients validate those strictly. A client that does not know `participant_list` ignores it, and the web client keeps showing the participant count until it receives one.
+
 ### `player_event`
 
 Playback command relayed from host.
@@ -521,6 +549,7 @@ Client A                    Server                    Client B
     │                          │                          │
     │                          │◄── join_room ────────────┤
     │◄─ participants_update ───┤─── room_state ──────────►│
+    │◄─ participant_list ──────┼─── participant_list ────►│
     │                          │                          │
     │                          │◄── ready ────────────────┤
     │                          │                          │

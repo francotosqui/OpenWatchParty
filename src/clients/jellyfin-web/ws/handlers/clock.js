@@ -40,6 +40,7 @@
     if (!msg.payload || !msg.payload.client_ts) return;
     const now = utils.nowMs();
     const rtt = now - msg.payload.client_ts;
+    state.lastRttMs = rtt;
     const latEl = document.querySelector('.owp-latency');
     if (latEl) latEl.textContent = `${rtt} ms`;
     if (typeof msg.server_ts === 'number' && rtt > 0) {

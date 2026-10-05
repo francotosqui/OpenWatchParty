@@ -112,6 +112,7 @@
     state.connectionPhase = 'disconnected';
     state.successfulPings = 0;
     state.timeSyncSamples = [];
+    state.lastRttMs = null;
     state.clientId = '';
     clearRoomRejoinTimer();
     if (state.inRoom) {
@@ -127,6 +128,8 @@
         state.inRoom = false;
         state.roomId = '';
         state.readyRoomId = '';
+        state.participants = [];
+        state.roomBarSection = '';
       }
     }
     ui.render();
@@ -158,6 +161,7 @@
       case 'room_state': h.handleRoomState(msg, video); break;
       case 'participants_update': h.handleParticipantsUpdate(msg); break;
       case 'client_left': h.handleClientLeft(msg); break;
+      case 'participant_list': h.handleParticipantList(msg); break;
       case 'room_closed': h.handleRoomClosed(msg); break;
       case 'player_event': h.handlePlayerEvent(msg, video); break;
       case 'state_update': h.handleStateUpdate(msg, video); break;
@@ -305,6 +309,7 @@
     state.clientId = '';
     state.successfulPings = 0;
     state.timeSyncSamples = [];
+    state.lastRttMs = null;
     if (actions.resetRoomState) actions.resetRoomState();
     if (state.intervals.ping) {
       OWP.timers.clear(state.intervals.ping);
