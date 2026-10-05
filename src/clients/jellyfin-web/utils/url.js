@@ -44,5 +44,44 @@
     };
   };
 
-  Object.assign(utils, { normalizeSessionServerUrl });
+  const INVITE_PARAM = 'owp_invite';
+
+  // Invite links land on the Jellyfin Web root: the directory of the current
+  // document, so a deployment under a sub-path keeps working.
+  const webRootPath = (pathname) => {
+    const path = String(pathname || '/');
+    const separator = path.lastIndexOf('/');
+    return separator <= 0 ? '/' : path.slice(0, separator + 1);
+  };
+
+  const locationOrigin = (pageLocation) => {
+    if (pageLocation?.origin) return pageLocation.origin;
+    const protocol = pageLocation?.protocol || 'http:';
+    const host = pageLocation?.hostname || 'localhost';
+    const port = pageLocation?.port ? `:${pageLocation.port}` : '';
+    return `${protocol}//${host}${port}`;
+  };
+
+  const buildInviteUrl = (ticket, pageLocation = window.location) => {
+    if (typeof ticket !== 'string' || !ticket) return '';
+    try {
+      const url = new URL(webRootPath(pageLocation?.pathname), locationOrigin(pageLocation));
+      url.searchParams.set(INVITE_PARAM, ticket);
+      return url.href;
+    } catch (err) {
+      return '';
+    }
+  };
+
+  const parseInviteTicket = (href) => {
+    if (typeof href !== 'string' || !href) return '';
+    try {
+      const url = new URL(href, 'http://localhost/');
+      return url.searchParams.get(INVITE_PARAM) || '';
+    } catch (err) {
+      return '';
+    }
+  };
+
+  Object.assign(utils, { normalizeSessionServerUrl, buildInviteUrl, parseInviteTicket, INVITE_PARAM });
 })();

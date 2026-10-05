@@ -75,6 +75,20 @@ The Jellyfin homepage displays active watch parties in a dedicated "Watch Partie
 - If a room closes while you're viewing the homepage, the card disappears
 - You must be logged into Jellyfin to see and join watch parties
 
+## Inviting People with a Link
+
+As the host, the room bar has an **Invite** button (share icon) next to Chat. Selecting it asks the session server for a short-lived ticket, builds a link to your Jellyfin server, and copies it to the clipboard with an "Invite link copied to the clipboard" toast.
+
+1. **Click Invite** - The link is ready on your clipboard
+2. **Send it** to a friend (chat, email, anything)
+3. **They open it** - Jellyfin Web loads, joins your room automatically once they are signed in, and syncs to your position
+
+The link looks like `https://your-jellyfin/web/?owp_invite=<ticket>`. The ticket is scoped to that one room, expires after the configured **Invite TTL** (1 hour by default, 60 seconds to 24 hours), and stops working when the room closes. It never contains your Jellyfin password, API token, or session token.
+
+Guests do not see the Invite button. If an invite is invalid or expired, the client shows a toast and leaves you on the normal room list.
+
+> Invite links require JWT authentication (a configured plugin secret). In insecure development mode the button reports that invites are unavailable.
+
 ## Host Controls
 
 As the host, your actions control everyone:
@@ -84,6 +98,7 @@ As the host, your actions control everyone:
 | Play | All clients start playing |
 | Pause | All clients pause |
 | Seek | All clients jump to that position |
+| Invite | Copies a short-lived room invite link |
 | Close panel | Room stays active |
 | Leave room | Room closes, all participants disconnected |
 
@@ -118,6 +133,7 @@ In a room the panel becomes a single bar at the top right (below the header when
 - **Room name** - Current watch party name; hover it if it is cut short
 - **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge on the host (older session servers show only the number of people)
 - **Chat** (chat icon) - Opens the chat; a red badge counts unread messages
+- **Invite** (share icon, host only) - Copies a short-lived invite link that joins people to this room automatically
 - **Leave** (exit icon) - Asks **Leave the room?** before leaving; for the host it asks **Close the room for everyone?**
 - **Close (X)** - Only hides the bar: you stay in the room
 
@@ -168,6 +184,7 @@ These appear briefly in the center of the screen:
 - **"A participant joined the room"** - Someone joined
 - **"A participant left the room"** - Someone left
 - **"Room closed"** - The room was closed (host left)
+- **"Invite link copied to the clipboard"** - The host's invite link is ready to share
 
 ### Chat Notifications (Bottom-Right)
 
@@ -214,5 +231,10 @@ When the chat is closed, incoming messages appear as toasts in the bottom-right 
 - The host left or disconnected
 - Server may have restarted
 - Create a new room to continue
+
+### "Invite link expired or invalid"
+- Invite links only live for the configured **Invite TTL** and stop working when the room closes
+- Ask the host for a fresh link; opening an expired link leaves you on the normal room list with a toast
+- The Invite button is unavailable in insecure development mode
 
 For more troubleshooting, see [Troubleshooting Guide]({{ '/operations/troubleshooting/' | relative_url }}).

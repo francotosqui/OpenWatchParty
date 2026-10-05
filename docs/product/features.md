@@ -14,6 +14,7 @@ nav_order: 2
 - **Leave rooms** - Exit cleanly with proper cleanup
 - **Room list** - See all active rooms on the server
 - **Participant count** - Track how many people are watching
+- **Invite links** - Hosts copy a short-lived link (`?owp_invite=<ticket>`); opening it joins the room automatically. The ticket is room-scoped, expires, and stops working when the room closes
 
 ### Playback Synchronization
 - **Play/Pause sync** - Host controls playback state for all clients
@@ -51,6 +52,7 @@ nav_order: 2
 - **Configurable secret** - Admin-controlled JWT signing key
 - **CORS protection** - Origin validation (configurable)
 - **Message size limits** - 64KB max message size
+- **Expiring invite tickets** - Invite links never carry the Jellyfin API token or session JWT; tickets are host-only, room-scoped, rate limited and rejected after the room closes
 
 ## Compatibility
 
@@ -120,6 +122,7 @@ Mobile browsers have reduced functionality due to platform restrictions:
 3. **Ephemeral rooms** - Rooms are closed when the host leaves or server restarts (by design)
 4. **Web only** - Only works in web browsers (no native mobile/TV apps planned)
 5. **No message history** - Chat messages are not persisted; late joiners won't see previous messages
+6. **Invite links need authentication** - With insecure development mode (`ALLOW_INSECURE_NO_AUTH`), there is no shared secret to sign tickets, so the Invite button reports an error
 
 ## Roadmap
 

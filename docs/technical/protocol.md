@@ -572,3 +572,81 @@ Client A                    Server                    Client B
     │◄─── room_list ───────────┼─── room_list ───────────►│
     │                          │                          │
 ```
+
+## Invite Links
+
+A host can share a short-lived invite link instead of asking guests to pick the room from the room list. The link carries a room-scoped **invite ticket**; it never contains the Jellyfin API token or the session JWT.
+
+### Minting a ticket
+
+The session server exposes an HTTP endpoint beside `/health`:
+
+```http
+POST /invite
+Authorization: Bearer <session JWT>
+Content-Type: application/json
+
+{ "room_id": "uuid-room-id", "ttl_seconds": 3600 }
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `room_id` | string | Room the ticket is scoped to; the caller must be its host |
+| `ttl_seconds` | number | Requested lifetime; optional. Clamped to 60-86400 seconds, default 3600 |
+
+The endpoint is rate limited per authenticated user. Responses:
+
+| Status | Body | Description |
+|--------|------|-------------|
+| 200 | `{ "ticket": "...", "expires_at": 1678903600 }` | Ticket minted; `expires_at` is Unix seconds |
+| 401 | `{ "error": "Authentication required" }` | Missing or invalid session JWT |
+| 403 | `{ "error": "Only the room host can create invite links" }` | The caller is not the room host |
+| 404 | `{ "error": "Room not found" }` | The room does not exist (or has closed) |
+| 429 | `{ "error": "Rate limit exceeded" }` | Too many ticket requests |
+| 503 | `{ "error": "..." }` | Invite links require a shared JWT secret |
+
+The ticket is an HS256 JWT signed with the session server's shared secret:
+
+| Claim | Description |
+|-------|-------------|
+| `room` | Room the ticket is scoped to |
+| `typ` | Token marker: `invite` (a session token is rejected as an invite and vice versa) |
+| `nonce` | Unique ticket identifier |
+| `aud`, `iss`, `iat`, `exp` | Standard claims; the ticket expires at `exp` and cannot be extended |
+
+### Joining with a ticket
+
+`join_room` accepts an optional `invite_ticket` payload field:
+
+```json
+{
+  "type": "join_room",
+  "room": "uuid-room-id",
+  "payload": {
+    "user_name": "Ana",
+    "invite_ticket": "eyJhbGciOiJIUzI1NiIs..."
+  },
+  "ts": 1678900000000
+}
+```
+
+The session server validates the signature, the expiry **and** the room before joining. Failures use the existing error codes and leave the client's membership untouched:
+
+| Condition | Error code | Message |
+|-----------|------------|---------|
+| Malformed, tampered or unverifiable ticket | `AUTHENTICATION_FAILED` | `Invalid invite ticket` |
+| Ticket minted for a different room | `AUTHENTICATION_FAILED` | `Invite ticket does not match this room` |
+| Expired ticket | `AUTHENTICATION_EXPIRED` | `Invite ticket has expired` |
+| Room closed after minting | `ROOM_NOT_FOUND` | `Room not found` (normal join path) |
+
+A valid ticket does not bypass the normal join rules: a full room still answers `ROOM_FULL`, and a closed room is still rejected by the room lookup.
+
+### Client link format
+
+The web client opens the Jellyfin Web root with the ticket in a query parameter:
+
+```
+https://jellyfin.example/web/?owp_invite=<ticket>
+```
+
+The client reads `owp_invite` on load, waits for the WebSocket authentication to finish, then sends `join_room` for the room named in the ticket and removes the parameter from the URL. Invalid or expired tickets show a toast and leave the client on the normal room list.

@@ -252,7 +252,9 @@ pub(super) async fn client_msg(
         ClientMessageType::Auth => handle_auth(client_id, &parsed, state, jwt_config).await,
         ClientMessageType::ListRooms => handle_list_rooms(client_id, state).await,
         ClientMessageType::CreateRoom => handle_create_room(client_id, &parsed, state).await,
-        ClientMessageType::JoinRoom => handle_join_room(client_id, &parsed, state).await,
+        ClientMessageType::JoinRoom => {
+            handle_join_room(client_id, &parsed, state, jwt_config).await
+        }
         ClientMessageType::Ready => handle_ready(client_id, &parsed, state).await,
         ClientMessageType::LeaveRoom => handle_leave_room(client_id, state).await,
         ClientMessageType::PlayerEvent | ClientMessageType::StateUpdate => {

@@ -211,6 +211,25 @@ describe('room bar', () => {
     OWP.state.lastRttMs = null;
   });
 
+  it('offers the host an invite button that requests a link', () => {
+    let invites = 0;
+    OWP.actions.copyInviteLink = () => { invites++; };
+
+    renderRoom({ isHost: true, clientId: 'client-host' });
+
+    const invite = byId('owp-btn-invite');
+    assert.equal(invite.getAttribute('aria-label'), 'Invite');
+    assert.ok(invite.querySelector('.owp-icon-share'));
+    invite.click();
+    assert.equal(invites, 1);
+  });
+
+  it('does not offer an invite button to guests', () => {
+    renderRoom({ isHost: false });
+
+    assert.equal(byId('owp-btn-invite'), null);
+  });
+
   it('asks a guest before leaving the room', () => {
     renderRoom();
     const leave = byId('owp-btn-leave');

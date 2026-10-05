@@ -126,6 +126,13 @@
     if (OWP.ui?.applyNativeSyncPlayVisibility) OWP.ui.applyNativeSyncPlayVisibility();
   };
 
+  // The plugin tells the client how long host invite links should live. The
+  // session server clamps it again, so a bad value only falls back to an hour.
+  const applyInviteTtl = (data) => {
+    const ttl = Number(data?.invite_ttl_seconds);
+    state.inviteTtlSeconds = Number.isFinite(ttl) && ttl > 0 ? ttl : 3600;
+  };
+
   const authError = (code, message, isCurrentRequest) => {
     if (isCurrentRequest()) {
       state.authToken = null;
@@ -232,6 +239,7 @@
         state.authEnabled = true;
         state.authToken = data.token;
         setNativeSyncPlayHidden(data.hide_native_syncplay_button === true);
+        applyInviteTtl(data);
         const expiresIn = data.expires_in || 3600;
         state.tokenExpiresAt = Date.now() + (expiresIn * 1000);
         scheduleTokenRefresh(expiresIn);
@@ -248,6 +256,7 @@
         state.authToken = null;
         state.tokenExpiresAt = 0;
         setNativeSyncPlayHidden(data.hide_native_syncplay_button === true);
+        applyInviteTtl(data);
         console.log('[OpenWatchParty] Explicit insecure mode enabled, connecting without token');
         return { mode: 'insecure', token: null };
       }

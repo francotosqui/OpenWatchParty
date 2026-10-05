@@ -224,6 +224,10 @@
     tokenRefreshTimer: null,     // Timer for token refresh
     // Web client settings delivered with the token response
     hideNativeSyncPlayButton: false,
+    // Room invite links
+    inviteTtlSeconds: 3600,      // Lifetime requested for new invite tickets
+    pendingInviteTicket: '',     // Ticket parsed from the page URL, consumed after authentication
+    inviteJoinPending: false,    // True while joining a room through an invite link
     // Interval tracking (P4 - memory leak prevention)
     intervals: {
       ui: null,

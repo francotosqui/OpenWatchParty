@@ -99,6 +99,7 @@
     if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) return;
     if (!state.rejoinPending && state.rejectedRejoinRoomIds.includes(msg.room)) return;
     applyRoomState(msg);
+    state.inviteJoinPending = false;
     if (OWP.actions?.completeRoomRejoin) OWP.actions.completeRoomRejoin(msg.room);
     ui.render();
     if (!state.isHost && msg.payload?.media_id) {
