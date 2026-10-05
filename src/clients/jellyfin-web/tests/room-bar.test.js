@@ -342,6 +342,29 @@ describe('room bar', () => {
     OWP.ui.updateRoomListUI = () => {};
   });
 
+  it('draws the Watch Party icon in the player button, on the 24 grid of the native icons', () => {
+    const osd = document.createElement('div');
+    osd.className = 'videoOsdBottom';
+    const buttons = document.createElement('div');
+    buttons.className = 'buttons';
+    osd.appendChild(buttons);
+    document.body.appendChild(osd);
+
+    OWP.ui.injectOsdButton();
+
+    const icon = byId(OWP.constants.BTN_ID).querySelector('.material-icons.owp-watch-party-icon');
+    assert.ok(icon);
+    assert.equal(icon.getAttribute('aria-hidden'), 'true');
+    const svg = icon.querySelector('svg');
+    assert.equal(svg.getAttribute('viewBox'), '0 0 24 24');
+    assert.equal(svg.getAttribute('fill'), 'currentColor');
+    assert.deepEqual(svg.children.map(shape => shape.tagName.toLowerCase()), ['path', 'path', 'circle', 'circle', 'path']);
+    // The screen is a 2-unit line, like Jellyfin's Cast icon; the rest is filled.
+    assert.equal(svg.children[0].getAttribute('fill'), 'none');
+    assert.equal(svg.children[0].getAttribute('stroke-width'), '2');
+    assert.equal(byId(OWP.constants.BTN_ID).querySelector('.theaters'), null);
+  });
+
   it('drops the room style back in the lobby', () => {
     renderRoom();
     OWP.state.inRoom = false;

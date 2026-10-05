@@ -112,10 +112,7 @@
     button.title = 'Watch Party';
     button.setAttribute('aria-label', 'Watch Party');
     button.setAttribute('aria-controls', PANEL_ID);
-    const icon = document.createElement('span');
-    icon.className = 'material-icons theaters';
-    icon.setAttribute('aria-hidden', 'true');
-    button.appendChild(icon);
+    button.appendChild(ui.createWatchPartyIcon());
     button.addEventListener('click', togglePanelFromHeader);
     return button;
   };
