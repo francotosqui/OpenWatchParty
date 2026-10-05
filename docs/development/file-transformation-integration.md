@@ -16,8 +16,10 @@ The development environment pins File Transformation `3.0.1.0` with archive ABI 
 
 When Jellyfin loads OpenWatchParty, the plugin detects whether the [file-transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) plugin is installed. If found, it registers transformations that inject the client script automatically:
 
-- `index.html` callback inserts `<script src="/OpenWatchParty/ClientScript" defer></script>` before `</body>`
-- `home-html\..*\.chunk\.js` callback appends a guarded fallback loader for Jellyfin home chunk builds
+- `index.html` callback inserts `<script src="../OpenWatchParty/ClientScript?v=<hash>" defer></script>` before `</body>`
+- `home-html\..*\.chunk\.js` callback appends a guarded fallback loader for Jellyfin home chunk builds, with the same URL
+
+`<hash>` is a content hash of the embedded client files. The loader forwards it to every module URL, so browsers reuse their cached client files until the client code changes. A script tag added by hand without `v` keeps the previous behaviour: the loader is cached for an hour and the modules are requested again on every page load.
 
 If file-transformation is not installed, the admin can still inject the script manually via Dashboard > General > Custom HTML.
 

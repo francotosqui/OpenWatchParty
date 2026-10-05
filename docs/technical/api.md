@@ -22,7 +22,7 @@ Serves the client JavaScript bundle.
 
 **Response:**
 - Content-Type: `text/javascript`
-- Cache-Control: `public, max-age=3600`
+- Cache-Control: `public, max-age=31536000, immutable` when the `v` query value matches the current client hash (the URL the plugin injects into Jellyfin), `no-store` when `v` is any other value, and `public, max-age=3600` without `v`. Module responses under `/OpenWatchParty/Client/` follow the same rule.
 - ETag: Hash-based cache validation
 
 **Headers:**
