@@ -189,7 +189,7 @@
     btn.id = BTN_ID;
     btn.className = 'paper-icon-button-light btnWatchParty autoSize';
     btn.title = 'Watch Party';
-    btn.innerHTML = '<span class="material-icons groups" aria-hidden="true"></span>';
+    btn.innerHTML = '<span class="material-icons theaters" aria-hidden="true"></span>';
     btn.onclick = (e) => {
       e.stopPropagation(); e.preventDefault();
       const panel = document.getElementById(PANEL_ID);

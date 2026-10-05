@@ -142,7 +142,7 @@ describe('header Watch Party button', () => {
     assert.ok(buttons[0].classList.contains('paper-icon-button-light'));
     assert.equal(buttons[0].getAttribute('aria-label'), 'Watch Party');
     assert.equal(buttons[0].getAttribute('aria-controls'), PANEL_ID);
-    assert.ok(buttons[0].querySelector('.material-icons.groups'));
+    assert.ok(buttons[0].querySelector('.material-icons.theaters'));
   });
 
   it('adds one button to the MUI app bar with the native icon button classes', () => {
