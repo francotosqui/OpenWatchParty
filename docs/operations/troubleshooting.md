@@ -118,7 +118,7 @@ nav_order: 5
 
 3. **Check network quality**
    - High latency causes sync issues
-   - Check RTT in the Watch Party panel
+   - Check the latency value in the room bar
    - Ideal RTT: < 100ms
 
 4. **HLS/transcoding issues**
@@ -186,12 +186,12 @@ nav_order: 5
 
 Jellyfin 12 disables legacy authorization. The `DisableLegacyAuthorization` migration turns off `EnableLegacyAuthorization`, so the legacy `X-Emby-Token` header no longer resolves and only `Authorization: MediaBrowser Token="..."` is accepted.
 
-OpenWatchParty `0.4.0` (Jellyfin 12) and `0.3.4` (Jellyfin 10.11) send the modern `Authorization` header. `0.3.3` and earlier do not, so they cannot authenticate against Jellyfin 12.
+OpenWatchParty `0.5.0` and `0.4.0` (Jellyfin 12) and `0.3.4` (Jellyfin 10.11) send the modern `Authorization` header. `0.3.3` and earlier do not, so they cannot authenticate against Jellyfin 12.
 
 **Solutions:**
 
 1. **Upgrade OpenWatchParty**
-   - This is the supported fix. Install `0.4.0` on Jellyfin 12, or `0.3.4` on Jellyfin 10.11, from the plugin repository or manually.
+   - This is the supported fix. Install `0.5.0` on Jellyfin 12, or `0.3.4` on Jellyfin 10.11, from the plugin repository or manually.
    - Verify the installed version in **Dashboard** > **Plugins** > **OpenWatchParty**.
 
 2. **Temporary stopgap only**

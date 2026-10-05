@@ -19,7 +19,7 @@ Before using OpenWatchParty, ensure your Jellyfin administrator has:
 ## Creating a Watch Party
 
 1. **Start playing a video** - Open any movie or TV episode in Jellyfin
-2. **Find the Watch Party button** - Open the player controls and select the **Watch Party** (groups) icon
+2. **Find the Watch Party button** - Open the player controls and select the **Watch Party** (film) icon
 3. **Click to open the panel** - A slide-out panel appears
 4. **Click "Create Room"** - The room is created and named after you (`<you>'s room`)
 5. **Wait for participants** - The room appears in everyone's "Available rooms" list and on the Jellyfin home page
@@ -28,7 +28,7 @@ The Watch Party button in the Jellyfin header opens the same panel, but **Create
 
 As the host, you control playback for everyone. When you play, pause, or seek, all participants follow.
 
-![The Watch Party panel during an active session]({{ '/assets/images/watch-party-panel.png' | relative_url }})
+![The room bar during an active session]({{ '/assets/images/watch-party-panel.png' | relative_url }})
 
 ## Joining a Watch Party
 
@@ -101,7 +101,7 @@ As a participant:
 
 ## The Panel Interface
 
-![Close-up of an active room: participants, chat, latency and room ID]({{ '/assets/images/watch-party-panel-closeup.png' | relative_url }})
+![Close-up of the room bar with the chat open: sync dot, latency, room name, participants, chat and leave]({{ '/assets/images/watch-party-panel-closeup.png' | relative_url }})
 
 ### Lobby View (Not in a room)
 - **Room list** - Active watch parties with names and participant counts; rooms without media are marked "No media"
@@ -116,7 +116,7 @@ In a room the panel becomes a single bar at the top right (below the header when
 - **Sync dot** - Your sync status; hover it for the details (the host's is always green)
 - **Latency** - Round-trip time from you to the session server, in milliseconds
 - **Room name** - Current watch party name; hover it if it is cut short
-- **Participants** (groups icon and count) - Opens the list of who is watching, with a **Host** badge on the host (older session servers show only the number of people)
+- **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge on the host (older session servers show only the number of people)
 - **Chat** (chat icon) - Opens the chat; a red badge counts unread messages
 - **Leave** (exit icon) - Asks **Leave the room?** before leaving; for the host it asks **Close the room for everyone?**
 - **Close (X)** - Only hides the bar: you stay in the room
@@ -154,7 +154,7 @@ Participants see a sync status dot in the room bar that shows how well their pla
 
 The "Out of sync" state is normal for a few seconds after joining or after the host seeks. The system automatically adjusts your playback speed to catch up.
 
-![The participant view showing the In sync badge]({{ '/assets/images/watch-party-sync.png' | relative_url }})
+![The participant room bar with the green In sync dot]({{ '/assets/images/watch-party-sync.png' | relative_url }})
 
 ## Notifications
 

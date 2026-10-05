@@ -350,7 +350,7 @@ Displays watch parties on Jellyfin homepage.
 #### `render() -> void`
 Main panel render:
 - **Lobby**: Room list + creation form
-- **In-room**: Room name, participants, RTT, leave button
+- **In-room**: Compact bar with the sync dot, latency, room name, participants, chat and leave buttons, plus their drop-downs
 
 #### `injectOsdButton() -> void`
 Injects "Watch Party" button into video player OSD controls.
