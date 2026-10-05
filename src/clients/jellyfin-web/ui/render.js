@@ -11,8 +11,8 @@
     return element;
   };
 
-  // Outline icons for the room bar, from Tabler Icons (MIT, https://tabler.io/icons):
-  // Jellyfin only ships the filled Material icons.
+  // Outline icons for the room bar, from Tabler Icons (MIT, https://tabler.io/icons;
+  // see THIRD_PARTY_NOTICES.md). Jellyfin only ships the filled Material icons.
   const SVG_NS = 'http://www.w3.org/2000/svg';
   const ICON_PATHS = {
     users: ['M5 7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0', 'M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2', 'M16 3.13a4 4 0 0 1 0 7.75', 'M21 21v-2a4 4 0 0 0 -3 -3.85'],
