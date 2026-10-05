@@ -26,6 +26,8 @@ obj/
 src/plugins/jellyfin/OpenWatchParty/dist/
 src/plugins/jellyfin/OpenWatchParty/refs/
 src/plugins/jellyfin/OpenWatchParty/Web/*
+# Docker bind-mount target created by the plugin-builder compose service
+src/plugins/jellyfin/global.json
 !src/plugins/jellyfin/OpenWatchParty/Web/configPage.html
 
 # Rust build artifacts
