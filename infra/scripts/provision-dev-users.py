@@ -68,6 +68,9 @@ def main():
         time.sleep(2)
 
     if not info["StartupWizardCompleted"]:
+        # Jellyfin creates the default first user when the wizard user step is
+        # read; POST then renames it and sets the password (same as the web wizard).
+        retry_request("/Startup/User")
         retry_request("/Startup/User", {"Name": USERS[0], "Password": PASSWORD})
         retry_request("/Startup/Complete", {})
         print("Initialized Jellyfin dev admin: testhost")
