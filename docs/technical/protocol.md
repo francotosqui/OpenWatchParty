@@ -12,6 +12,26 @@ OpenWatchParty uses a JSON-over-WebSocket protocol for real-time communication b
 
 **Endpoint:** `ws(s)://<host>:3000/ws`
 
+## Protocol Version
+
+The WebSocket protocol has its own version, independent of the product release. The current version is `1`.
+
+| Version | Status | Notes |
+|---------|--------|-------|
+| `1` | Current | Initial negotiated version. |
+
+**Negotiation:** clients declare their version in the `protocol_version` field of the `auth` message. A missing field is treated as `1`, so clients that predate negotiation keep working. The server echoes `protocol_version` in `auth_success` only when the client declared one, which keeps the previous `auth_success` payload for older clients. The version is also reported by `GET /health` (`protocol_version`) and by the plugin's `/OpenWatchParty/Token` response.
+
+**Mismatch policy:** the server only speaks version `1`. A declared version other than `1` — or a malformed `protocol_version` — is rejected with an `error` whose code is `PROTOCOL_VERSION_UNSUPPORTED`; the WebSocket is then closed with close code `1008`.
+
+**Compatibility rules:**
+
+- New message types are additive. Receivers must ignore messages whose `type` they do not know instead of failing the session.
+- Existing payload fields are frozen: fields are never removed, renamed, or repurposed. New fields are optional, and receivers ignore fields they do not know.
+- The version changes only for an incompatible change (a removed or retyped field, or changed semantics); additive changes keep the current version.
+
+The minimum supported client protocol version is `1`.
+
 ## Message Format
 
 All messages follow this structure:
@@ -40,17 +60,25 @@ All messages follow this structure:
 
 ### `auth`
 
-Authenticate with a JWT token (if authentication is enabled).
+Authenticate with a JWT token (if authentication is enabled) and declare the client protocol version.
 
 ```json
 {
   "type": "auth",
   "payload": {
-    "token": "eyJhbGciOiJIUzI1NiIs..."
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "protocol_version": 1
   },
   "ts": 1678900000000
 }
 ```
+
+| Payload Field | Type | Required | Description |
+|---------------|------|----------|-------------|
+| `token` | string | No | JWT issued by the `/OpenWatchParty/Token` endpoint |
+| `protocol_version` | number | No | Client protocol version; defaults to `1` when omitted |
+
+On a protocol version mismatch the server answers with `error` (`PROTOCOL_VERSION_UNSUPPORTED`) and closes the connection.
 
 ### `list_rooms`
 
@@ -274,6 +302,25 @@ Sent immediately after WebSocket connection.
   "server_ts": 1678900000000
 }
 ```
+
+### `auth_success`
+
+Sent after a successful `auth` with a JWT.
+
+```json
+{
+  "type": "auth_success",
+  "client": "uuid-client-id",
+  "payload": {
+    "user_name": "Alice",
+    "protocol_version": 1
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
+`protocol_version` is present only when the client declared it in `auth`; the server echoes the negotiated version.
 
 ### `room_list`
 
@@ -513,6 +560,7 @@ Error response.
 | `AUTHENTICATION_FAILED` | Token validation failed |
 | `AUTHENTICATION_EXPIRED` | The authenticated session expired; the WebSocket is then closed |
 | `AUTHENTICATION_TIMEOUT` | Authentication was not completed in time; the WebSocket is then closed |
+| `PROTOCOL_VERSION_UNSUPPORTED` | The declared `protocol_version` is unsupported or malformed; the WebSocket is then closed |
 | `RATE_LIMITED` | The message rate limit was exceeded; the WebSocket is then closed |
 | `MESSAGE_TOO_LARGE` | The WebSocket message exceeds the protocol size limit |
 | `UNSUPPORTED_MESSAGE_FORMAT` | The client sent a non-text message, including a binary message |

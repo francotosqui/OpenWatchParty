@@ -20,6 +20,7 @@ describe('WebSocket message schema validation', () => {
     envelope('room_list', [{ id: 'room-1', name: 'Movie night', count: 2, media_id: null }]),
     envelope('client_hello', { client_id: 'client-1' }, { client: 'client-1' }),
     envelope('auth_success', { user_name: 'Alice' }, { client: 'client-1' }),
+    envelope('auth_success', { user_name: 'Alice', protocol_version: 1 }, { client: 'client-1' }),
     envelope('room_state', {
       name: 'Movie night',
       host_id: 'client-1',
@@ -125,6 +126,14 @@ describe('WebSocket message schema validation', () => {
     }
   });
 
+  it('rejects invalid auth protocol versions but keeps the field optional', () => {
+    valid(envelope('auth_success', { user_name: 'Alice' }, { client: 'client-1' }));
+    valid(envelope('auth_success', { user_name: 'Alice', protocol_version: 1 }, { client: 'client-1' }));
+    for (const version of [0, -1, 1.5, '1', null, Number.MAX_SAFE_INTEGER + 1]) {
+      invalid(envelope('auth_success', { user_name: 'Alice', protocol_version: version }, { client: 'client-1' }));
+    }
+  });
+
   it('rejects unknown envelope and payload fields', () => {
     invalid(envelope('pong', { client_ts: 1 }, { injected: true }));
     invalid(envelope('state_update', {
@@ -135,5 +144,6 @@ describe('WebSocket message schema validation', () => {
     invalid(envelope('room_list', [{
       id: 'room-1', name: 'Room', count: 1, admin: true
     }]));
+    invalid(envelope('auth_success', { user_name: 'Alice', injected: true }, { client: 'client-1' }));
   });
 });

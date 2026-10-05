@@ -369,7 +369,7 @@ pub fn build_health_route(
                 "status": "ok",
                 "auth_enabled": jwt_config.enabled,
                 "version": env!("CARGO_PKG_VERSION"),
-                "protocol_version": 1
+                "protocol_version": crate::ws::constants::PROTOCOL_VERSION
             }))
         })
         .with(cors)

@@ -42,6 +42,7 @@ pub(super) enum ErrorCode {
     AuthenticationFailed,
     AuthenticationExpired,
     AuthenticationTimeout,
+    ProtocolVersionUnsupported,
     RateLimited,
     MessageTooLarge,
     UnsupportedMessageFormat,
@@ -315,6 +316,10 @@ mod tests {
             (ErrorCode::AuthenticationFailed, "AUTHENTICATION_FAILED"),
             (ErrorCode::AuthenticationExpired, "AUTHENTICATION_EXPIRED"),
             (ErrorCode::AuthenticationTimeout, "AUTHENTICATION_TIMEOUT"),
+            (
+                ErrorCode::ProtocolVersionUnsupported,
+                "PROTOCOL_VERSION_UNSUPPORTED",
+            ),
             (ErrorCode::RateLimited, "RATE_LIMITED"),
             (ErrorCode::MessageTooLarge, "MESSAGE_TOO_LARGE"),
             (
