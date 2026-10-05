@@ -182,6 +182,18 @@
     video.playbackRate = rate;
   };
 
+  // Only the host controls playback. While the room is paused the server sends
+  // no further updates (it drops unchanged state updates), so nothing else
+  // would pause a guest who presses play.
+  const holdRoomPause = (video) => {
+    if (!state.lastSyncServerTs || state.lastSyncPlayState !== 'paused') return;
+    if (video.paused || state.isSyncing) return;
+    if (state.pendingPlayUntil && utils.getServerNow() < state.pendingPlayUntil) return;
+    utils.log('SYNC', { type: 'hold_room_pause', pos: video.currentTime });
+    video.pause();
+    if (OWP.ui && OWP.ui.showToast) OWP.ui.showToast('Only the host can control playback');
+  };
+
   const syncLoop = () => {
     const video = state.currentVideoElement || utils.getVideo();
     if (!video) return;
@@ -195,6 +207,7 @@
     }
     if (!state.lastSyncServerTs || state.lastSyncPlayState !== 'playing') {
       if (video.playbackRate !== 1) video.playbackRate = 1;
+      holdRoomPause(video);
       return;
     }
     if (state.isBuffering || !utils.isVideoReady()) return;
