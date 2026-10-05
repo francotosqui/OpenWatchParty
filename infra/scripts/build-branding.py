@@ -11,28 +11,36 @@ Sources:
 
 Why this script exists
 ----------------------
-The master artwork is drawn on an opaque white background with hard, barely
-anti-aliased edges.  Cutting the background out with a simple threshold (or a
-"remove white background" tool) leaves the anti-aliased blend pixels opaque:
-a light fringe along every edge, plus stair-stepped outlines.  Both are very
-visible on dark themes.
+The master artwork is drawn on an opaque white background.  Cutting the white
+out with a threshold (or a "remove white background" tool) leaves the
+anti-aliased blend pixels opaque: a light fringe along every edge, very
+visible on dark themes, and stair-stepped outlines.  It also cannot tell
+white design elements (bubble dots, monitor bezel, ring nodes) from the
+background, so those have to be preserved deliberately.
 
 Pipeline
 --------
-1. supersample the source 4x (bilinear) so every edge becomes a smooth ramp;
-2. find the solid ("core") pixels:
-     - artwork pieces: pixels that are neither connected-to-border white nor
-       within r_band of it, which preserves enclosed whites such as the bubble
-       dots, the white bar under the monitor and the ring nodes,
-     - text pieces: glyph pixels (whiteness < 0.9) eroded by r_core, which
-       preserves glossy gradients such as the highlight on "Open";
-3. propagate the nearest core colour into the surrounding pixels (colour
-   bleed) so anti-aliased pixels keep the colour of the shape they belong to;
-4. alpha per pixel is 1 - t with t = (w - w_fg) / (1 - w_fg), where w is the
-   pixel whiteness and w_fg the whiteness of the bled colour.  Compositing
-   the result back onto white reproduces the source image exactly, while
-   solid areas stay fully opaque;
-5. downsample with premultiplied-alpha averaging for clean anti-aliased edges.
+1. classify every pixel of a piece:
+     - background: near-white pixels connected to the border (flood fill),
+       removed;
+     - design white: every other near-white pixel, kept fully opaque;
+     - interior: everything further than the boundary band from the
+       background, kept fully opaque with its original colour;
+     - boundary: the remaining anti-aliasing band;
+2. propagate the nearest interior colour into the boundary band (colour
+   bleed) so blend pixels keep the colour of the shape they belong to;
+3. alpha per boundary pixel is 1 - t with t = (w - w_fg) / (1 - w_fg), where
+   w is the pixel whiteness and w_fg the whiteness of the bled colour; a
+   near-white bled colour makes that unmix degenerate, so those pixels fall
+   back to their own whiteness;
+4. text pieces (the wordmark) use the same unmix with a stricter rule: near
+   whites are background and the core is the dark pixels eroded by one
+   pixel, which keeps glyph counters transparent;
+5. recompose the README canvas and write both PNGs.
+
+Compositing the result back onto white reproduces the master artwork while
+the boundary pixels keep their real coverage, so the edges stay clean on any
+background.
 
 Usage:
     infra/scripts/build-branding.py            regenerate the assets
@@ -55,8 +63,6 @@ SOURCE = ROOT / "assets" / "branding" / "source-logo-monitor.png"
 README_LOGO = ROOT / "docs" / "readme-logo.png"
 APP_ICON = ROOT / "docs" / "app-icon.png"
 
-SUPERSAMPLE = 4  # supersampling factor used throughout
-
 # Geometry of the master artwork, in source pixels (left, top, right, bottom).
 ILLUSTRATION_BOX = (95, 180, 1000, 685)
 TEXT_BOX = (90, 718, 1362, 927)
@@ -67,16 +73,18 @@ README_CANVAS = (1360, 800)
 ILLUSTRATION_AT = (215, 30)
 TEXT_AT = (45, 558)
 
-# Radii, expressed in supersampled pixels.
-R_BAND_ART = 12    # artwork: width of the de-fringed boundary band (3 px at 1x)
-R_BLEED_ART = 24   # artwork: colour bleed reach (6 px at 1x)
-R_BLEED_TXT = 16   # text: colour bleed reach (4 px at 1x)
-R_CORE_TXT = 4     # text: erosion used to select solid glyph pixels (1 px at 1x)
+# Near-white threshold, boundary band width and bleed reach, in pixels.
+WHITE = 0.90
+BAND = 2
+BLEED_RADIUS = 6
 
 
 def dilate(mask: np.ndarray, radius: int) -> np.ndarray:
     """Grow a boolean mask by ``radius`` pixels (4-connectivity)."""
-    current = mask.copy()
+    if radius <= 0:
+        return mask.copy()
+    padded = np.pad(mask, radius, mode="constant", constant_values=False)
+    current = padded
     for _ in range(radius):
         grown = current.copy()
         grown[1:, :] |= current[:-1, :]
@@ -84,7 +92,7 @@ def dilate(mask: np.ndarray, radius: int) -> np.ndarray:
         grown[:, 1:] |= current[:, :-1]
         grown[:, :-1] |= current[:, 1:]
         current = grown
-    return current
+    return current[radius:-radius, radius:-radius]
 
 
 def erode(mask: np.ndarray, radius: int) -> np.ndarray:
@@ -92,7 +100,7 @@ def erode(mask: np.ndarray, radius: int) -> np.ndarray:
     return ~dilate(~mask, radius)
 
 
-def white_background(whiteness: np.ndarray, threshold: float = 0.9) -> np.ndarray:
+def flood_background(whiteness: np.ndarray, threshold: float = WHITE) -> np.ndarray:
     """Near-white pixels connected to the border, i.e. the actual background."""
     binary = np.where(whiteness >= threshold, 255, 0).astype(np.uint8)
     # Images created by fromarray() can be read-only, which makes floodfill a no-op.
@@ -118,62 +126,48 @@ def bleed_colors(colors: np.ndarray, core: np.ndarray, radius: int):
 
 
 def process(piece: Image.Image, mode: str) -> tuple[np.ndarray, np.ndarray]:
-    """Turn a white-background piece into (colours, alpha) at SUPERSAMPLE scale."""
-    upscaled = piece.resize(
-        (piece.width * SUPERSAMPLE, piece.height * SUPERSAMPLE), Image.BILINEAR
-    )
-    pixels = np.asarray(upscaled).astype(np.float32)
+    """Turn a white-background piece into (colours, alpha) at native scale."""
+    pixels = np.asarray(piece).astype(np.float32)
     whiteness = pixels.min(axis=2) / 255.0
 
     if mode == "artwork":
-        background = white_background(whiteness)
-        band = dilate(background, R_BAND_ART) & ~background
-        core = ~background & ~band
+        background = flood_background(whiteness)
+        # Every other near-white pixel is a design element (dots, bezel, bar,
+        # nodes, thin outlines): keep it opaque.
+        design_white = (whiteness >= WHITE) & ~background
+        near_background = dilate(background, BAND)
+        interior = ~background & ~near_background
+        core = interior | design_white
     elif mode == "text":
         # Glyphs are everything that is not (nearly) white; eroding the mask
         # by a pixel keeps the colour of solid glyph pixels only.
-        core = erode(whiteness < 0.9, R_CORE_TXT)
-        background = np.zeros_like(core)
+        background = whiteness >= 0.97
+        core_seed = whiteness <= 0.75
+        core = erode(core_seed, 1)
+        if not core.any():
+            core = core_seed
     else:
         raise ValueError(f"unknown mode: {mode}")
 
-    bleed = R_BLEED_ART if mode == "artwork" else R_BLEED_TXT
-    colors, known = bleed_colors(pixels, core, bleed)
+    colors, known = bleed_colors(pixels, core, BLEED_RADIUS)
     colors = np.where(core[..., None], pixels, colors)
 
-    # Unmix the white background: t is the fraction of white in the pixel.
+    # Unmix the white background with the bled foreground colour.
     foreground = colors.min(axis=2) / 255.0
-    denominator = 1.0 - foreground
-    t = np.ones_like(whiteness)
-    unmixable = denominator > 1e-3
-    t[unmixable] = (whiteness[unmixable] - foreground[unmixable]) / denominator[unmixable]
-    t = np.clip(t, 0.0, 1.0)
+    denominator = np.maximum(1.0 - foreground, 1e-6)
+    t = np.clip((whiteness - foreground) / denominator, 0.0, 1.0)
     alpha = 1.0 - t
-
+    if mode == "artwork":
+        # A near-white bled colour makes the unmix degenerate; fall back to
+        # the pixel's own whiteness (a white element fading out).
+        alpha = np.where(foreground > 0.90, whiteness, alpha)
     alpha = np.where(core, 1.0, alpha)
     alpha = np.where(background, 0.0, alpha)
     alpha = np.where(~core & ~known, 0.0, alpha)
-    colors = np.where(alpha[..., None] > 1e-4, colors, 0.0)
+    alpha = np.clip(alpha, 0.0, 1.0)
+    alpha[alpha < 4.0 / 255.0] = 0.0
+    colors = np.where(alpha[..., None] > 0, colors, 0.0)
     return colors, alpha
-
-
-def downsample(colors: np.ndarray, alpha: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Area-average colours and alpha (premultiplied, so edges stay clean)."""
-    height, width = alpha.shape
-    out_height, out_width = height // SUPERSAMPLE, width // SUPERSAMPLE
-    premultiplied = (colors * alpha[..., None]).reshape(
-        out_height, SUPERSAMPLE, out_width, SUPERSAMPLE, 3
-    ).sum(axis=(1, 3))
-    alpha_sum = alpha.reshape(
-        out_height, SUPERSAMPLE, out_width, SUPERSAMPLE
-    ).sum(axis=(1, 3))
-    averaged_alpha = alpha_sum / (SUPERSAMPLE * SUPERSAMPLE)
-    averaged_colors = np.where(
-        alpha_sum[..., None] > 1e-6,
-        premultiplied / np.maximum(alpha_sum[..., None], 1e-6),
-        0.0,
-    )
-    return np.clip(averaged_colors, 0, 255), np.clip(averaged_alpha, 0, 1)
 
 
 def to_image(colors: np.ndarray, alpha: np.ndarray) -> Image.Image:
@@ -184,7 +178,7 @@ def to_image(colors: np.ndarray, alpha: np.ndarray) -> Image.Image:
 
 
 def render_piece(source: Image.Image, box: tuple[int, int, int, int], mode: str) -> Image.Image:
-    return to_image(*downsample(*process(source.crop(box), mode)))
+    return to_image(*process(source.crop(box), mode))
 
 
 def compose(
