@@ -3,6 +3,7 @@
   const ui = OWP.ui = OWP.ui || {};
   const {
     PANEL_ID,
+    BTN_ID,
     HEADER_BTN_CLASS,
     LEGACY_HEADER_BTN_ID,
     MODERN_HEADER_BTN_ID,
@@ -72,10 +73,13 @@
     else applyDefaultPlacement(panel);
   };
 
+  // The header buttons and the player's OSD button all toggle the panel.
+  const panelToggleButtons = () => [...headerButtons(), document.getElementById(BTN_ID)].filter(Boolean);
+
   const syncExpandedState = () => {
     const panel = document.getElementById(PANEL_ID);
     const expanded = String(!!panel && !panel.classList.contains('hide'));
-    headerButtons().forEach(button => {
+    panelToggleButtons().forEach(button => {
       if (button.getAttribute('aria-expanded') !== expanded) button.setAttribute('aria-expanded', expanded);
     });
   };
@@ -93,6 +97,7 @@
       placePanelBelowHeader(panel, event.currentTarget);
       panel.classList.remove('hide');
       if (ui.render) ui.render(true);
+      if (ui.isKeyboardClick && ui.isKeyboardClick(event) && ui.focusPanelStart) ui.focusPanelStart(panel);
     }
     syncExpandedState();
   };

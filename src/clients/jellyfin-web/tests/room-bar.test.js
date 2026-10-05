@@ -18,12 +18,18 @@ require('../ui/render.js');
 OWP.actions = { schedulePing: () => {} };
 require('../ws/handlers/clock.js');
 
-const { PANEL_ID, ROOM_MODE_CLASS } = OWP.constants;
+const { PANEL_ID, BTN_ID, ROOM_MODE_CLASS } = OWP.constants;
+const realStopPlayerCapture = OWP.ui.stopPlayerCapture;
 const updateRoomListUI = OWP.ui.updateRoomListUI;
 let focused = null;
 Object.getPrototypeOf(document.createElement('div')).focus = function focus() {
   focused = this;
 };
+Object.getPrototypeOf(document.createElement('div')).blur = function blur() {
+  if (focused === this) focused = null;
+};
+// The element the focus stubs above last focused.
+Object.defineProperty(FakeDocument.prototype, 'activeElement', { configurable: true, get: () => focused });
 const byId = id => document.getElementById(id);
 const panel = () => byId(PANEL_ID);
 const expanded = id => byId(id).getAttribute('aria-expanded');
@@ -282,6 +288,227 @@ describe('room bar', () => {
     renderRoom({ isHost: false });
     assert.deepEqual(openSections(), ['owp-leave-confirm']);
     assert.equal(panel().querySelector('.owp-leave-question').textContent, 'Leave the room?');
+  });
+
+  it('leaves focus on the button when a drop-down opens', () => {
+    renderRoom();
+    focused = null;
+    byId('owp-btn-people').click();
+    byId('owp-btn-chat').click();
+    assert.deepEqual(openSections(), ['owp-chat-section']);
+    assert.equal(focused, null);
+  });
+
+  it('closes the open drop-down with Escape and goes back to its button', () => {
+    renderRoom();
+    byId('owp-btn-people').click();
+    let prevented = false;
+    byId('owp-participants-list').dispatchEvent({ type: 'keydown', key: 'Escape', preventDefault() { prevented = true; } });
+    assert.deepEqual(openSections(), []);
+    assert.equal(expanded('owp-btn-people'), 'false');
+    assert.equal(focused, byId('owp-btn-people'));
+    assert.equal(prevented, true);
+
+    // From a bar button too.
+    byId('owp-btn-leave').click();
+    byId('owp-btn-chat').dispatchEvent({ type: 'keydown', key: 'Escape', preventDefault() {} });
+    assert.deepEqual(openSections(), []);
+    assert.equal(focused, byId('owp-btn-leave'));
+  });
+
+  it('closes the chat with Escape from its input, which stops key events', () => {
+    OWP.ui.stopPlayerCapture = realStopPlayerCapture;
+    renderRoom();
+    byId('owp-btn-chat').click();
+    byId('owp-chat-input').dispatchEvent({ type: 'keydown', key: 'Escape', preventDefault() {} });
+    assert.deepEqual(openSections(), []);
+    assert.equal(focused, byId('owp-btn-chat'));
+  });
+
+  it('leaves Escape alone when no drop-down is open', () => {
+    renderRoom();
+    focused = null;
+    let prevented = false;
+    byId('owp-btn-people').dispatchEvent({ type: 'keydown', key: 'Escape', preventDefault() { prevented = true; } });
+    assert.equal(prevented, false);
+    assert.equal(focused, null);
+  });
+
+  it('tells assistive technology whether the player button has the panel open', () => {
+    const osd = document.createElement('div');
+    osd.className = 'videoOsdBottom';
+    const buttons = document.createElement('div');
+    buttons.className = 'buttons';
+    osd.appendChild(buttons);
+    document.body.appendChild(osd);
+    panel().classList.add('hide');
+    OWP.state.inRoom = false;
+
+    OWP.ui.injectOsdButton();
+    const button = byId(BTN_ID);
+    assert.equal(button.getAttribute('aria-label'), 'Watch Party');
+    assert.equal(button.getAttribute('aria-controls'), PANEL_ID);
+    assert.equal(button.getAttribute('aria-expanded'), 'false');
+
+    focused = null;
+    button.dispatchEvent({ type: 'click', detail: 1, preventDefault() {}, stopPropagation() {} });
+    assert.equal(panel().classList.contains('hide'), false);
+    assert.equal(button.getAttribute('aria-expanded'), 'true');
+    // A mouse click leaves focus alone.
+    assert.equal(focused, null);
+    button.dispatchEvent({ type: 'click', detail: 1, preventDefault() {}, stopPropagation() {} });
+    assert.equal(button.getAttribute('aria-expanded'), 'false');
+  });
+
+  it('moves focus into the panel when the player button is used from the keyboard', () => {
+    const osd = document.createElement('div');
+    osd.className = 'videoOsdBottom';
+    const buttons = document.createElement('div');
+    buttons.className = 'buttons';
+    osd.appendChild(buttons);
+    document.body.appendChild(osd);
+    panel().classList.add('hide');
+    Object.assign(OWP.state, {
+      inRoom: true,
+      roomId: 'room-1',
+      roomName: "FrancoTosky's room",
+      clientId: 'client-a5be',
+      isHost: false,
+      participantCount: 2,
+      participants: [{ name: 'FrancoTosky', isHost: true }, { name: 'Ana', isHost: false }]
+    });
+    OWP.ui.injectOsdButton();
+
+    focused = null;
+    byId(BTN_ID).dispatchEvent({ type: 'click', detail: 0, preventDefault() {}, stopPropagation() {} });
+
+    assert.equal(focused, byId('owp-btn-people'));
+  });
+
+  it('puts keyboard focus on the first control of the room list, before its close button', () => {
+    OWP.state.inRoom = false;
+    OWP.ui.render(true);
+    // Create Room is enabled while something plays.
+    byId('owp-btn-create').disabled = false;
+
+    focused = null;
+    OWP.ui.focusPanelStart(panel());
+
+    assert.equal(focused, byId('owp-btn-create'));
+    assert.equal(panel().querySelector('.owp-close-btn') !== focused, true);
+  });
+
+  it('falls back to the close button when nothing else can take focus', () => {
+    OWP.state.inRoom = false;
+    OWP.ui.render(true);
+    byId('owp-btn-create').disabled = true;
+
+    focused = null;
+    OWP.ui.focusPanelStart(panel());
+
+    assert.equal(focused, panel().querySelector('.owp-close-btn'));
+  });
+
+  it('keeps keyboard focus on a control that is drawn again', () => {
+    renderRoom();
+    byId('owp-chat-input').focus();
+    OWP.ui.render(true);
+    assert.equal(focused, byId('owp-chat-input'));
+  });
+
+  it('keeps keyboard focus in the panel when Create Room turns the lobby into the room bar', () => {
+    OWP.state.inRoom = false;
+    OWP.ui.render(true);
+    byId('owp-btn-create').focus();
+
+    renderRoom();
+
+    assert.equal(focused, byId('owp-btn-people'));
+  });
+
+  it('does not take focus when it was outside the panel', () => {
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    outside.focus();
+    renderRoom();
+    assert.equal(focused, outside);
+  });
+
+  it('moves keyboard focus out of the panel it hides', () => {
+    const opener = document.createElement('button');
+    opener.id = 'owp-test-opener';
+    opener.getClientRects = () => [{}];
+    document.body.appendChild(opener);
+    renderRoom();
+    panel().dataset.opener = opener.id;
+
+    byId('owp-btn-people').focus();
+    OWP.ui.hidePanel();
+    assert.ok(panel().classList.contains('hide'));
+    assert.equal(focused, opener);
+
+    // Without a shown opener, focus just leaves the panel.
+    panel().classList.remove('hide');
+    opener.getClientRects = () => [];
+    byId('owp-btn-people').focus();
+    OWP.ui.hidePanel();
+    assert.equal(focused, null);
+
+    // Focus outside the panel is left alone.
+    panel().classList.remove('hide');
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    outside.focus();
+    OWP.ui.hidePanel();
+    assert.equal(focused, outside);
+  });
+
+  describe('room list updates with keyboard focus on a Join button', () => {
+    const room = (id, count = 1) => ({ id, name: `${id}'s room`, count, media_id: 'media' });
+    const joinFor = id => byId('owp-room-list').querySelectorAll('button').find(button => button.dataset.roomId === id);
+    const lobbyWith = (rooms) => {
+      OWP.state.inRoom = false;
+      OWP.state.rooms = rooms;
+      OWP.ui.render(true);
+      updateRoomListUI();
+    };
+
+    it('keeps focus on the same room when the list is drawn again', () => {
+      lobbyWith([room('ana'), room('bo')]);
+      joinFor('bo').focus();
+
+      OWP.state.rooms = [room('ana'), room('bo', 2), room('cy')];
+      updateRoomListUI();
+
+      assert.equal(focused, joinFor('bo'));
+      assert.equal(focused.parentNode.querySelector('.owp-room-count').textContent, '2 users');
+    });
+
+    it('moves focus to the first control once the focused room is gone', () => {
+      lobbyWith([room('ana'), room('bo')]);
+      joinFor('bo').focus();
+
+      OWP.state.rooms = [room('ana')];
+      updateRoomListUI();
+      assert.equal(focused, joinFor('ana'));
+
+      OWP.state.rooms = [];
+      updateRoomListUI();
+      assert.ok(panel().contains(focused));
+      assert.equal(focused, panel().querySelector('.owp-close-btn'));
+    });
+
+    it('leaves focus alone when it is outside the list', () => {
+      lobbyWith([room('ana')]);
+      const outside = document.createElement('button');
+      document.body.appendChild(outside);
+      outside.focus();
+
+      OWP.state.rooms = [room('ana', 3)];
+      updateRoomListUI();
+
+      assert.equal(focused, outside);
+    });
   });
 
   it('updates the people count with the names and with count updates', () => {
