@@ -67,6 +67,14 @@
   h.handleError = (msg) => {
     const message = msg.payload?.message || 'Unknown error';
     console.error('[OpenWatchParty] Server error:', message);
+    if (state.inviteJoinPending) {
+      // A bad or expired invite must fall back to the normal room list.
+      state.inviteJoinPending = false;
+      if (OWP.actions?.resetRoomState) OWP.actions.resetRoomState();
+      ui.showToast(message);
+      ui.render();
+      return;
+    }
     if (state.rejoinPending && OWP.actions?.failRoomRejoin) {
       OWP.actions.failRoomRejoin(message);
       return;

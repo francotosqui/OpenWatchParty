@@ -1,6 +1,8 @@
 use base64::engine::general_purpose::{STANDARD, URL_SAFE, URL_SAFE_NO_PAD};
 use base64::Engine;
-use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Header, Validation};
+use jsonwebtoken::{
+    decode, decode_header, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -14,6 +16,45 @@ pub struct Claims {
     pub iss: String,
     pub exp: usize,
     pub iat: usize,
+}
+
+/// Marker carried by invite tickets so they can never be replayed as session
+/// tokens (and vice versa): the two claim sets are not interchangeable.
+pub const INVITE_TICKET_MARKER: &str = "invite";
+pub const DEFAULT_INVITE_TTL_SECONDS: u64 = 3600;
+pub const MIN_INVITE_TTL_SECONDS: u64 = 60;
+pub const MAX_INVITE_TTL_SECONDS: u64 = 86_400;
+
+/// Claims of a room-scoped invite ticket. The room and the expiry are the
+/// security-relevant fields; `typ` identifies the token kind and `nonce` keeps
+/// each ticket unique.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InviteClaims {
+    pub room: String,
+    pub typ: String,
+    pub nonce: String,
+    pub aud: String,
+    pub iss: String,
+    pub exp: usize,
+    pub iat: usize,
+}
+
+/// Why an invite ticket was rejected. Callers map these to the existing
+/// protocol error codes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InviteTicketError {
+    Invalid(String),
+    Expired,
+    RoomMismatch,
+}
+
+/// Brings a requested lifetime into the accepted range. `None` and zero fall
+/// back to the default so a caller cannot ask for a perpetual invite.
+pub fn clamp_invite_ttl(ttl_seconds: Option<u64>) -> u64 {
+    ttl_seconds
+        .filter(|ttl| *ttl > 0)
+        .unwrap_or(DEFAULT_INVITE_TTL_SECONDS)
+        .clamp(MIN_INVITE_TTL_SECONDS, MAX_INVITE_TTL_SECONDS)
 }
 
 const MIN_ENTROPY_BITS: f64 = 80.0;
@@ -261,6 +302,78 @@ impl JwtConfig {
             || claims.exp.saturating_sub(claims.iat) > 86_400
         {
             return Err("Invalid token lifetime".to_string());
+        }
+        Ok(claims)
+    }
+
+    /// Mints a room-scoped invite ticket signed with the shared secret.
+    /// Returns the ticket and its `exp` as Unix seconds. Deployments without a
+    /// shared secret (insecure or asymmetric-only) cannot sign invites.
+    pub fn mint_invite_ticket(
+        &self,
+        room_id: &str,
+        ttl_seconds: Option<u64>,
+    ) -> Result<(String, u64), String> {
+        if !self.enabled || self.secret.is_empty() {
+            return Err("Invite links require JWT authentication with a shared secret".to_string());
+        }
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let ttl = clamp_invite_ttl(ttl_seconds) as usize;
+        let claims = InviteClaims {
+            room: room_id.to_string(),
+            typ: INVITE_TICKET_MARKER.to_string(),
+            nonce: uuid::Uuid::new_v4().to_string(),
+            aud: self.audience.clone(),
+            iss: self.issuer.clone(),
+            exp: now.saturating_add(ttl),
+            iat: now,
+        };
+        let ticket = encode(
+            &Header::new(Algorithm::HS256),
+            &claims,
+            &EncodingKey::from_secret(self.secret.as_bytes()),
+        )
+        .map_err(|error| format!("Could not sign invite ticket: {error}"))?;
+        Ok((ticket, claims.exp as u64))
+    }
+
+    /// Verifies an invite ticket's signature, audience, issuer, invite marker,
+    /// expiry and room scope. A ticket signed for another room is rejected even
+    /// though it is otherwise valid.
+    pub fn validate_invite_ticket(
+        &self,
+        ticket: &str,
+        room_id: &str,
+    ) -> Result<InviteClaims, InviteTicketError> {
+        if !self.enabled || self.secret.is_empty() {
+            return Err(InviteTicketError::Invalid(
+                "Invite links require JWT authentication with a shared secret".to_string(),
+            ));
+        }
+        let mut validation = Validation::new(Algorithm::HS256);
+        validation.set_audience(&[&self.audience]);
+        validation.set_issuer(&[&self.issuer]);
+        // `exp` is checked below so an expired ticket keeps its distinct error.
+        validation.validate_exp = false;
+        validation.leeway = JWT_EXPIRATION_LEEWAY_SECONDS;
+        let claims = decode::<InviteClaims>(
+            ticket,
+            &DecodingKey::from_secret(self.secret.as_bytes()),
+            &validation,
+        )
+        .map_err(|error| InviteTicketError::Invalid(format!("Invalid invite ticket: {error}")))?
+        .claims;
+        if claims.typ != INVITE_TICKET_MARKER {
+            return Err(InviteTicketError::Invalid(
+                "Invalid invite ticket: missing invite marker".to_string(),
+            ));
+        }
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        if claims.exp <= now {
+            return Err(InviteTicketError::Expired);
+        }
+        if claims.room != room_id {
+            return Err(InviteTicketError::RoomMismatch);
         }
         Ok(claims)
     }
@@ -918,5 +1031,165 @@ ghwPqeM2CO//6dCav8vYSdem
         );
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // --- Invite tickets -------------------------------------------------------
+
+    fn test_config() -> JwtConfig {
+        JwtConfig {
+            secret: "B0vLhmX5ZY1mQ4NfIYBcr8VWxOTQ02cbeQ9x7B3K4ow=".to_string(),
+            audience: "OpenWatchParty".to_string(),
+            issuer: "Jellyfin".to_string(),
+            enabled: true,
+        }
+    }
+
+    fn manual_invite_ticket(
+        config: &JwtConfig,
+        room: &str,
+        typ: &str,
+        exp: usize,
+        iat: usize,
+    ) -> String {
+        encode(
+            &Header::new(Algorithm::HS256),
+            &InviteClaims {
+                room: room.to_string(),
+                typ: typ.to_string(),
+                nonce: "nonce".to_string(),
+                aud: config.audience.clone(),
+                iss: config.issuer.clone(),
+                exp,
+                iat,
+            },
+            &EncodingKey::from_secret(config.secret.as_bytes()),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn invite_ticket_round_trip_binds_the_room_and_expiry() {
+        let config = test_config();
+        let now = crate::utils::now_ms() / 1000;
+
+        let (ticket, expires_at) = config.mint_invite_ticket("room-1", Some(300)).unwrap();
+
+        assert!(expires_at >= now + MIN_INVITE_TTL_SECONDS);
+        assert!(expires_at <= now + 300);
+        let claims = config.validate_invite_ticket(&ticket, "room-1").unwrap();
+        assert_eq!(claims.room, "room-1");
+        assert_eq!(claims.typ, INVITE_TICKET_MARKER);
+        assert!(!claims.nonce.is_empty());
+        assert_eq!(claims.exp as u64, expires_at);
+    }
+
+    #[test]
+    fn expired_invite_ticket_is_reported_as_expired() {
+        let config = test_config();
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let ticket = manual_invite_ticket(
+            &config,
+            "room-1",
+            INVITE_TICKET_MARKER,
+            now.saturating_sub(1),
+            now.saturating_sub(120),
+        );
+
+        assert_eq!(
+            config.validate_invite_ticket(&ticket, "room-1"),
+            Err(InviteTicketError::Expired)
+        );
+    }
+
+    #[test]
+    fn tampered_or_foreign_signed_invite_ticket_is_rejected() {
+        let config = test_config();
+        let (mut ticket, _) = config.mint_invite_ticket("room-1", None).unwrap();
+        let last = ticket.pop().unwrap();
+        ticket.push(if last == 'A' { 'B' } else { 'A' });
+        assert!(matches!(
+            config.validate_invite_ticket(&ticket, "room-1"),
+            Err(InviteTicketError::Invalid(_))
+        ));
+
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let mut other = test_config();
+        other.secret = "98WPRKE6UmMf3yz96/mQPgkiEnDw4mIo1BPYNUA45rQ=".to_string();
+        let foreign = manual_invite_ticket(&other, "room-1", INVITE_TICKET_MARKER, now + 300, now);
+        assert!(matches!(
+            config.validate_invite_ticket(&foreign, "room-1"),
+            Err(InviteTicketError::Invalid(_))
+        ));
+    }
+
+    #[test]
+    fn invite_ticket_for_another_room_is_rejected() {
+        let config = test_config();
+        let (ticket, _) = config.mint_invite_ticket("room-1", None).unwrap();
+
+        assert_eq!(
+            config.validate_invite_ticket(&ticket, "room-2"),
+            Err(InviteTicketError::RoomMismatch)
+        );
+    }
+
+    #[test]
+    fn invite_ticket_without_the_marker_is_rejected() {
+        let config = test_config();
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let ticket = manual_invite_ticket(&config, "room-1", "session", now + 300, now);
+
+        assert!(matches!(
+            config.validate_invite_ticket(&ticket, "room-1"),
+            Err(InviteTicketError::Invalid(message)) if message.contains("marker")
+        ));
+    }
+
+    #[test]
+    fn session_tokens_and_invite_tickets_are_not_interchangeable() {
+        let config = test_config();
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let session_token = encode(
+            &Header::default(),
+            &Claims {
+                sub: "user-1".to_string(),
+                name: "Alice".to_string(),
+                aud: config.audience.clone(),
+                iss: config.issuer.clone(),
+                exp: now + 300,
+                iat: now,
+            },
+            &EncodingKey::from_secret(config.secret.as_bytes()),
+        )
+        .unwrap();
+        assert!(matches!(
+            config.validate_invite_ticket(&session_token, "room-1"),
+            Err(InviteTicketError::Invalid(_))
+        ));
+
+        let (invite, _) = config.mint_invite_ticket("room-1", None).unwrap();
+        assert!(config.validate_token(&invite).is_err());
+    }
+
+    #[test]
+    fn invite_ttl_is_clamped_to_safe_bounds() {
+        assert_eq!(clamp_invite_ttl(None), DEFAULT_INVITE_TTL_SECONDS);
+        assert_eq!(clamp_invite_ttl(Some(0)), DEFAULT_INVITE_TTL_SECONDS);
+        assert_eq!(clamp_invite_ttl(Some(1)), MIN_INVITE_TTL_SECONDS);
+        assert_eq!(clamp_invite_ttl(Some(300)), 300);
+        assert_eq!(clamp_invite_ttl(Some(u64::MAX)), MAX_INVITE_TTL_SECONDS);
+    }
+
+    #[test]
+    fn invite_minting_requires_a_shared_secret() {
+        let config = JwtConfig {
+            secret: String::new(),
+            audience: "OpenWatchParty".to_string(),
+            issuer: "Jellyfin".to_string(),
+            enabled: false,
+        };
+
+        assert!(config.mint_invite_ticket("room-1", None).is_err());
+        assert!(config.validate_invite_ticket("ticket", "room-1").is_err());
     }
 }

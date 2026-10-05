@@ -1,12 +1,14 @@
 use super::super::constants::MAX_CLIENTS_PER_ROOM;
 use super::super::dispatch::{error_message, is_authenticated, send_error, ErrorCode};
 use super::super::validation::sanitize_name;
+use crate::auth::{InviteTicketError, JwtConfig};
 use crate::messaging::{collect_room_senders, send_message, send_to_senders, ClientSender};
 use crate::room::{handle_leave, participant_list_message, send_leave_notification};
 use crate::types::{Client, IncomingMessage, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::time::Instant;
 
 type JoinNotifications = (
@@ -84,10 +86,73 @@ fn prepare_join_notifications_at(
     )
 }
 
+/// A `join_room` may carry an invite ticket. A ticket must verify, be unexpired
+/// and be scoped to the room being joined; anything else leaves membership
+/// untouched and reports the failure with the existing authentication codes.
+async fn reject_invalid_invite_ticket(
+    client_id: &str,
+    parsed: &IncomingMessage,
+    room_id: &str,
+    state: &SharedState,
+    jwt_config: &Arc<JwtConfig>,
+) -> bool {
+    let Some(ticket) = parsed
+        .payload
+        .as_ref()
+        .and_then(|payload| payload.get("invite_ticket"))
+    else {
+        return false;
+    };
+    let Some(ticket) = ticket.as_str().filter(|ticket| !ticket.is_empty()) else {
+        send_error(
+            client_id,
+            state,
+            ErrorCode::AuthenticationFailed,
+            "Invalid invite ticket",
+        )
+        .await;
+        return true;
+    };
+    match jwt_config.validate_invite_ticket(ticket, room_id) {
+        Ok(_) => false,
+        Err(InviteTicketError::Expired) => {
+            send_error(
+                client_id,
+                state,
+                ErrorCode::AuthenticationExpired,
+                "Invite ticket has expired",
+            )
+            .await;
+            true
+        }
+        Err(InviteTicketError::RoomMismatch) => {
+            send_error(
+                client_id,
+                state,
+                ErrorCode::AuthenticationFailed,
+                "Invite ticket does not match this room",
+            )
+            .await;
+            true
+        }
+        Err(InviteTicketError::Invalid(_)) => {
+            send_error(
+                client_id,
+                state,
+                ErrorCode::AuthenticationFailed,
+                "Invalid invite ticket",
+            )
+            .await;
+            true
+        }
+    }
+}
+
 pub(in crate::ws) async fn handle_join_room(
     client_id: &str,
     parsed: &IncomingMessage,
     state: &SharedState,
+    jwt_config: &Arc<JwtConfig>,
 ) {
     if !is_authenticated(client_id, state).await {
         send_error(
@@ -109,6 +174,9 @@ pub(in crate::ws) async fn handle_join_room(
         .await;
         return;
     };
+    if reject_invalid_invite_ticket(client_id, parsed, room_id, state, jwt_config).await {
+        return;
+    }
 
     let payload_name = parsed
         .payload
@@ -192,12 +260,81 @@ fn enqueue_join_notifications(client_id: &str, notifications: JoinNotifications)
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::{InviteClaims, INVITE_TICKET_MARKER};
     use crate::test_helpers;
     use crate::types::{ClientMessageType, IncomingMessage};
+    use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 
     fn assert_error_code(message: WsMessage, code: &str) {
         assert_eq!(message.msg_type, "error");
         assert_eq!(message.payload.unwrap()["code"], code);
+    }
+
+    fn test_jwt_config() -> Arc<JwtConfig> {
+        Arc::new(JwtConfig {
+            secret: "B0vLhmX5ZY1mQ4NfIYBcr8VWxOTQ02cbeQ9x7B3K4ow=".to_string(),
+            audience: "OpenWatchParty".to_string(),
+            issuer: "Jellyfin".to_string(),
+            enabled: true,
+        })
+    }
+
+    async fn state_with_joinable_room() -> (
+        SharedState,
+        Arc<JwtConfig>,
+        tokio::sync::mpsc::Receiver<Result<warp::ws::Message, warp::Error>>,
+    ) {
+        let state = test_helpers::create_state();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx("user-host", "Host", true);
+        let (guest, guest_rx) = test_helpers::create_client_with_rx("user-guest", "Guest", true);
+        host.room_id = Some("room".to_string());
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("guest".to_string(), guest);
+            locked.rooms.insert(
+                "room".to_string(),
+                test_helpers::create_room("room", "host"),
+            );
+        }
+        (state, test_jwt_config(), guest_rx)
+    }
+
+    fn join_message_with_ticket(room_id: &str, ticket: &str) -> IncomingMessage {
+        IncomingMessage {
+            msg_type: ClientMessageType::JoinRoom,
+            room: Some(room_id.to_string()),
+            client: Some("guest".to_string()),
+            payload: Some(serde_json::json!({ "invite_ticket": ticket })),
+            ts: crate::utils::now_ms(),
+            server_ts: None,
+        }
+    }
+
+    fn manual_invite_ticket(config: &JwtConfig, room: &str, exp: usize, iat: usize) -> String {
+        encode(
+            &Header::new(Algorithm::HS256),
+            &InviteClaims {
+                room: room.to_string(),
+                typ: INVITE_TICKET_MARKER.to_string(),
+                nonce: "nonce".to_string(),
+                aud: config.audience.clone(),
+                iss: config.issuer.clone(),
+                exp,
+                iat,
+            },
+            &EncodingKey::from_secret(config.secret.as_bytes()),
+        )
+        .unwrap()
+    }
+
+    async fn guest_joined(state: &SharedState) -> bool {
+        state
+            .read()
+            .await
+            .rooms
+            .get("room")
+            .is_some_and(|room| room.clients.contains(&"guest".to_string()))
     }
 
     #[test]
@@ -333,7 +470,7 @@ mod tests {
             );
         }
 
-        handle_join_room("guest", &join_message("room-b"), &state).await;
+        handle_join_room("guest", &join_message("room-b"), &state, &test_jwt_config()).await;
 
         let locked = state.read().await;
         assert!(!locked.rooms["room-a"]
@@ -380,7 +517,7 @@ mod tests {
             locked.rooms.insert("room".to_string(), room);
         }
 
-        handle_join_room("guest", &join_message("room"), &state).await;
+        handle_join_room("guest", &join_message("room"), &state, &test_jwt_config()).await;
 
         let locked = state.read().await;
         assert_eq!(
@@ -411,7 +548,7 @@ mod tests {
             );
         }
 
-        handle_join_room("guest", &join_message("room"), &state).await;
+        handle_join_room("guest", &join_message("room"), &state, &test_jwt_config()).await;
 
         let expected = serde_json::json!({
             "participants": [
@@ -439,7 +576,13 @@ mod tests {
     async fn missing_destination_preserves_previous_membership() {
         let state = state_with_guest_in_previous_room().await;
 
-        handle_join_room("guest", &join_message("missing"), &state).await;
+        handle_join_room(
+            "guest",
+            &join_message("missing"),
+            &state,
+            &test_jwt_config(),
+        )
+        .await;
 
         assert_previous_membership(&state).await;
     }
@@ -456,7 +599,7 @@ mod tests {
         let mut message = join_message("unused");
         message.room = None;
 
-        handle_join_room("guest", &message, &state).await;
+        handle_join_room("guest", &message, &state, &test_jwt_config()).await;
 
         assert_error_code(test_helpers::recv_msg(&mut rx).unwrap(), "ROOM_ID_REQUIRED");
     }
@@ -471,7 +614,13 @@ mod tests {
             .clients
             .insert("guest".to_string(), client);
 
-        handle_join_room("guest", &join_message("missing"), &state).await;
+        handle_join_room(
+            "guest",
+            &join_message("missing"),
+            &state,
+            &test_jwt_config(),
+        )
+        .await;
 
         assert_error_code(test_helpers::recv_msg(&mut rx).unwrap(), "ROOM_NOT_FOUND");
     }
@@ -488,7 +637,7 @@ mod tests {
             locked.rooms.insert("full".to_string(), full_room);
         }
 
-        handle_join_room("guest", &join_message("full"), &state).await;
+        handle_join_room("guest", &join_message("full"), &state, &test_jwt_config()).await;
 
         assert_previous_membership(&state).await;
     }
@@ -507,7 +656,7 @@ mod tests {
             locked.rooms.insert("full".to_string(), room);
         }
 
-        handle_join_room("guest", &join_message("full"), &state).await;
+        handle_join_room("guest", &join_message("full"), &state, &test_jwt_config()).await;
 
         assert_error_code(test_helpers::recv_msg(&mut rx).unwrap(), "ROOM_FULL");
     }
@@ -537,7 +686,13 @@ mod tests {
             );
         }
 
-        handle_join_room("host-a", &join_message("room-b"), &state).await;
+        handle_join_room(
+            "host-a",
+            &join_message("room-b"),
+            &state,
+            &test_jwt_config(),
+        )
+        .await;
 
         let locked = state.read().await;
         assert!(!locked.rooms.contains_key("room-a"));
@@ -584,5 +739,168 @@ mod tests {
             ts: crate::utils::now_ms(),
             server_ts: None,
         }
+    }
+
+    #[tokio::test]
+    async fn valid_invite_ticket_joins_the_room() {
+        let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
+        let (ticket, _) = jwt_config.mint_invite_ticket("room", Some(300)).unwrap();
+
+        handle_join_room(
+            "guest",
+            &join_message_with_ticket("room", &ticket),
+            &state,
+            &jwt_config,
+        )
+        .await;
+
+        assert!(guest_joined(&state).await);
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+            "room_state"
+        );
+    }
+
+    #[tokio::test]
+    async fn expired_invite_ticket_is_rejected_without_joining() {
+        let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let ticket = manual_invite_ticket(
+            &jwt_config,
+            "room",
+            now.saturating_sub(1),
+            now.saturating_sub(120),
+        );
+
+        handle_join_room(
+            "guest",
+            &join_message_with_ticket("room", &ticket),
+            &state,
+            &jwt_config,
+        )
+        .await;
+
+        assert_error_code(
+            test_helpers::recv_msg(&mut guest_rx).unwrap(),
+            "AUTHENTICATION_EXPIRED",
+        );
+        assert!(!guest_joined(&state).await);
+    }
+
+    #[tokio::test]
+    async fn tampered_invite_ticket_is_rejected_without_joining() {
+        let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
+        let (mut ticket, _) = jwt_config.mint_invite_ticket("room", None).unwrap();
+        let last = ticket.pop().unwrap();
+        ticket.push(if last == 'A' { 'B' } else { 'A' });
+
+        handle_join_room(
+            "guest",
+            &join_message_with_ticket("room", &ticket),
+            &state,
+            &jwt_config,
+        )
+        .await;
+
+        assert_error_code(
+            test_helpers::recv_msg(&mut guest_rx).unwrap(),
+            "AUTHENTICATION_FAILED",
+        );
+        assert!(!guest_joined(&state).await);
+    }
+
+    #[tokio::test]
+    async fn invite_ticket_for_another_room_is_rejected() {
+        let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
+        let (ticket, _) = jwt_config.mint_invite_ticket("other-room", None).unwrap();
+
+        handle_join_room(
+            "guest",
+            &join_message_with_ticket("room", &ticket),
+            &state,
+            &jwt_config,
+        )
+        .await;
+
+        assert_error_code(
+            test_helpers::recv_msg(&mut guest_rx).unwrap(),
+            "AUTHENTICATION_FAILED",
+        );
+        assert!(!guest_joined(&state).await);
+    }
+
+    #[tokio::test]
+    async fn invite_ticket_after_the_room_closed_is_rejected() {
+        let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
+        let (ticket, _) = jwt_config.mint_invite_ticket("room", None).unwrap();
+        state.write().await.rooms.remove("room");
+
+        handle_join_room(
+            "guest",
+            &join_message_with_ticket("room", &ticket),
+            &state,
+            &jwt_config,
+        )
+        .await;
+
+        assert_error_code(
+            test_helpers::recv_msg(&mut guest_rx).unwrap(),
+            "ROOM_NOT_FOUND",
+        );
+        assert!(!guest_joined(&state).await);
+    }
+
+    #[tokio::test]
+    async fn non_string_invite_ticket_is_rejected() {
+        let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
+        let mut message = join_message("room");
+        message.payload = Some(serde_json::json!({ "invite_ticket": 42 }));
+
+        handle_join_room("guest", &message, &state, &jwt_config).await;
+
+        assert_error_code(
+            test_helpers::recv_msg(&mut guest_rx).unwrap(),
+            "AUTHENTICATION_FAILED",
+        );
+        assert!(!guest_joined(&state).await);
+    }
+
+    #[tokio::test]
+    async fn join_without_a_ticket_is_unchanged() {
+        let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
+
+        handle_join_room("guest", &join_message("room"), &state, &jwt_config).await;
+
+        assert!(guest_joined(&state).await);
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+            "room_state"
+        );
+    }
+
+    #[tokio::test]
+    async fn invite_tickets_are_rejected_without_a_shared_secret() {
+        let (state, _jwt_config, mut guest_rx) = state_with_joinable_room().await;
+        let insecure = Arc::new(JwtConfig {
+            secret: String::new(),
+            audience: "OpenWatchParty".to_string(),
+            issuer: "Jellyfin".to_string(),
+            enabled: false,
+        });
+        let ticket = manual_invite_ticket(&test_jwt_config(), "room", 4_000_000_000, 0);
+
+        handle_join_room(
+            "guest",
+            &join_message_with_ticket("room", &ticket),
+            &state,
+            &insecure,
+        )
+        .await;
+
+        assert_error_code(
+            test_helpers::recv_msg(&mut guest_rx).unwrap(),
+            "AUTHENTICATION_FAILED",
+        );
+        assert!(!guest_joined(&state).await);
     }
 }

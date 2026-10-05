@@ -75,6 +75,56 @@ public sealed class TokenResponseTests
         Assert.False(authenticatedResponse.RootElement.GetProperty("hide_native_syncplay_button").GetBoolean());
     }
 
+    [Theory]
+    [InlineData(false, 120)]
+    [InlineData(true, 120)]
+    [InlineData(false, 3600)]
+    [InlineData(true, 3600)]
+    public void Responses_CarryTheConfiguredInviteTtl(bool insecure, int ttl)
+    {
+        var config = new PluginConfiguration
+        {
+            AllowInsecureNoAuth = insecure,
+            JwtSecret = insecure ? string.Empty : ValidSecret,
+            SessionServerUrl = "wss://session.example/ws",
+            InviteTtlSeconds = ttl
+        };
+
+        using var response = GetTokenResponse(config);
+
+        Assert.Equal(ttl, response.RootElement.GetProperty("invite_ttl_seconds").GetInt32());
+    }
+
+    [Fact]
+    public void Responses_DefaultAndClampTheInviteTtl()
+    {
+        var defaulted = new PluginConfiguration
+        {
+            JwtSecret = ValidSecret,
+            SessionServerUrl = "wss://session.example/ws"
+        };
+        var tooShort = new PluginConfiguration
+        {
+            JwtSecret = ValidSecret,
+            SessionServerUrl = "wss://session.example/ws",
+            InviteTtlSeconds = 5
+        };
+        var tooLong = new PluginConfiguration
+        {
+            JwtSecret = ValidSecret,
+            SessionServerUrl = "wss://session.example/ws",
+            InviteTtlSeconds = 999_999
+        };
+
+        using var defaultedResponse = GetTokenResponse(defaulted);
+        using var tooShortResponse = GetTokenResponse(tooShort);
+        using var tooLongResponse = GetTokenResponse(tooLong);
+
+        Assert.Equal(3600, defaultedResponse.RootElement.GetProperty("invite_ttl_seconds").GetInt32());
+        Assert.Equal(60, tooShortResponse.RootElement.GetProperty("invite_ttl_seconds").GetInt32());
+        Assert.Equal(86_400, tooLongResponse.RootElement.GetProperty("invite_ttl_seconds").GetInt32());
+    }
+
     private static JsonDocument GetTokenResponse(PluginConfiguration config)
     {
         var result = Assert.IsType<OkObjectResult>(CreateController().GetTokenForConfiguration(config));

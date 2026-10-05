@@ -61,6 +61,7 @@ public class OpenWatchPartyController : ControllerBase
         "ws/handlers/playback.js",
         "ws/handlers/clock.js",
         "ws/connection.js",
+        "app/invite.js",
         "app/lifecycle.js",
         "app/cleanup.js"
     };
@@ -375,6 +376,7 @@ public class OpenWatchPartyController : ControllerBase
                 user_name = userName,
                 session_server_url = sessionServerUrl,
                 hide_native_syncplay_button = config.HideNativeSyncPlayButton,
+                invite_ttl_seconds = config.InviteTtlSeconds,
                 protocol_version = ProtocolVersion
             });
         }
@@ -397,6 +399,7 @@ public class OpenWatchPartyController : ControllerBase
             user_name = userName,
             session_server_url = sessionServerUrl,
             hide_native_syncplay_button = config.HideNativeSyncPlayButton,
+            invite_ttl_seconds = config.InviteTtlSeconds,
             protocol_version = ProtocolVersion
         });
     }

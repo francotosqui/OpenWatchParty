@@ -252,7 +252,13 @@ mod concurrency_tests {
             ts: now_ms(),
             server_ts: None,
         };
-        handle_join_room("guest", &join, &state).await;
+        let jwt_config = std::sync::Arc::new(crate::auth::JwtConfig {
+            secret: String::new(),
+            audience: "test".to_string(),
+            issuer: "test".to_string(),
+            enabled: false,
+        });
+        handle_join_room("guest", &join, &state, &jwt_config).await;
         close_room("room", &state).await;
 
         let messages: Vec<_> =

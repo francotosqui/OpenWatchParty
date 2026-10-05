@@ -63,6 +63,7 @@ Generates a JWT token for the authenticated user.
   "user_name": "John",
   "session_server_url": "wss://jellyfin.example.com/ws",
   "hide_native_syncplay_button": false,
+  "invite_ttl_seconds": 3600,
   "protocol_version": 1
 }
 ```
@@ -77,11 +78,14 @@ Generates a JWT token for the authenticated user.
   "user_name": "John",
   "session_server_url": "wss://jellyfin.example.com/ws",
   "hide_native_syncplay_button": false,
+  "invite_ttl_seconds": 3600,
   "protocol_version": 1
 }
 ```
 
 `hide_native_syncplay_button` is `true` when the administrator enabled **Hide Jellyfin's SyncPlay button**; the web client then hides the built-in SyncPlay button, and shows it again when a later response turns the setting off.
+
+`invite_ttl_seconds` is the configured **Invite TTL** (60-86400 seconds). The client sends it when asking the session server for a new invite link; the session server clamps it again.
 
 `protocol_version` is the WebSocket protocol version the issued token authorizes; it is carried in the client's `auth` message (see the [protocol specification](protocol.md#protocol-version)).
 
@@ -253,7 +257,7 @@ curl -X POST \
 | `JwtAudience` | string | `"OpenWatchParty"` | The `aud` (audience) claim in generated tokens. Must match the session server's expected audience if configured. |
 | `JwtIssuer` | string | `"Jellyfin"` | The `iss` (issuer) claim in generated tokens. Must match the session server's expected issuer if configured. |
 | `TokenTtlSeconds` | int | `3600` | Token lifetime in seconds. Valid range: 60-86400 (1 min to 24 hours). Values outside this range are clamped. |
-| `InviteTtlSeconds` | int | `3600` | *Reserved for future use.* Intended for room invite link expiration. Currently not implemented. |
+| `InviteTtlSeconds` | int | `3600` | Lifetime of room invite links in seconds. Valid range: 60-86400 (1 min to 24 hours). Values outside this range are clamped. The session server enforces the same bounds when minting a ticket. |
 | `SessionServerUrl` | string | `""` | WebSocket server URL (e.g., `wss://party.example.com/ws`). **When empty**, the client auto-detects using the same hostname with port 3000 (e.g., `ws://jellyfin.local:3000/ws`). |
 | `DefaultMaxBitrate` | int | `0` | Maximum streaming bitrate in bits per second. `0` = Auto (no limit). Common values: `8000000` (1080p), `4000000` (720p), `1500000` (480p). |
 | `PreferDirectPlay` | bool | `true` | When `true`, attempts direct play without transcoding if the client supports the media format. Reduces server load and improves quality. |
@@ -272,6 +276,49 @@ The `SessionServerUrl` field determines how clients connect to the session serve
 - Session server runs on a different host
 - Using a reverse proxy that routes `/ws` to the session server
 - Port 3000 is not accessible from clients
+
+## Session Server API
+
+The session server exposes one additional HTTP endpoint beside `/health`.
+
+### POST /invite
+
+Mints a short-lived, room-scoped invite ticket for a watch party host.
+
+**Authentication:** Required (session JWT from `GET /OpenWatchParty/Token`, sent as `Authorization: Bearer <token>`)
+
+**Request:**
+```json
+{
+  "room_id": "uuid-room-id",
+  "ttl_seconds": 3600
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `room_id` | string | Yes | Room the ticket is scoped to; the authenticated user must be its host |
+| `ttl_seconds` | number | No | Requested lifetime; clamped to 60-86400 seconds (default 3600) |
+
+**Response (200):**
+```json
+{
+  "ticket": "eyJhbGciOiJIUzI1NiIs...",
+  "expires_at": 1678903600
+}
+```
+
+**Status Codes:**
+| Code | Description |
+|------|-------------|
+| 200 | Ticket minted |
+| 401 | Missing or invalid session JWT |
+| 403 | The authenticated user is not the room host |
+| 404 | Room not found (closed rooms included) |
+| 429 | Rate limit exceeded (10 requests/min per user) |
+| 503 | Invite links require JWT authentication with a shared secret |
+
+The link never contains the Jellyfin API token or the session JWT: the browser-side ticket is scoped to one room, expires, and only ever appears in the invite URL (`?owp_invite=<ticket>`).
 
 ## WebSocket API
 

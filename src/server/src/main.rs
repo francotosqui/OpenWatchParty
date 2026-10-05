@@ -50,6 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tasks::spawn_zombie_cleanup(state.clone(), &app_tasks);
     tasks::spawn_heartbeat(state.clone(), &app_tasks);
 
+    let invite_state = state.clone();
     let routes = routes::build_ws_route_with_tasks(
         state,
         jwt_config.clone(),
@@ -57,6 +58,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ingress_config,
         app_tasks.clone(),
     )
+    .or(routes::build_invite_route(
+        invite_state,
+        jwt_config.clone(),
+        allowed_origins.clone(),
+    ))
     .or(routes::build_health_route(jwt_config, allowed_origins))
     .recover(routes::handle_rejection);
 

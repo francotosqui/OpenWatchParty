@@ -68,6 +68,7 @@
 
   const handleAuthenticatedConnection = () => {
     state.connectionPhase = 'authenticated';
+    if (OWP.actions?.consumePendingInvite) OWP.actions.consumePendingInvite();
     if (!state.rejoinPending || !state.desiredRoomId) return;
     const roomId = state.desiredRoomId;
     allowRoomState(roomId);

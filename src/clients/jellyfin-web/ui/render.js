@@ -20,7 +20,8 @@
     logout: ['M14 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2', 'M9 12h12l-3 -3', 'M18 15l3 -3'],
     x: ['M18 6l-12 12', 'M6 6l12 12'],
     chevron: ['M6 9l6 6l6 -6'],
-    send: ['M10 14l11 -11', 'M21 3l-6.5 18a.55 .55 0 0 1 -1 0l-3.5 -7l-7 -3.5a.55 .55 0 0 1 0 -1l18 -6.5']
+    send: ['M10 14l11 -11', 'M21 3l-6.5 18a.55 .55 0 0 1 -1 0l-3.5 -7l-7 -3.5a.55 .55 0 0 1 0 -1l18 -6.5'],
+    share: ['M6 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', 'M18 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', 'M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', 'M8.7 10.7l6.6 -3.4', 'M8.7 13.3l6.6 3.4']
   };
 
   const createIcon = (name) => {
@@ -217,7 +218,16 @@
     leaveBtn.classList.add('danger');
     leaveBtn.onclick = () => toggleRoomSection('leave');
 
-    bar.append(ui.buildSyncStatusIndicator(), latency, roomName, peopleBtn, chatBtn, leaveBtn, createCloseButton());
+    // Invite links are minted by the host: guests get no button at all.
+    const roomActions = [peopleBtn, chatBtn];
+    if (state.isHost) {
+      const inviteBtn = createBarButton('owp-btn-invite', 'Invite', 'share');
+      inviteBtn.onclick = () => OWP.actions && OWP.actions.copyInviteLink && OWP.actions.copyInviteLink();
+      roomActions.push(inviteBtn);
+    }
+    roomActions.push(leaveBtn);
+
+    bar.append(ui.buildSyncStatusIndicator(), latency, roomName, ...roomActions, createCloseButton());
 
     const drop = createElement('div', 'owp-room-drop');
     drop.id = 'owp-room-drop';

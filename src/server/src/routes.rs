@@ -2,17 +2,23 @@ use crate::auth::JwtConfig;
 use crate::types::SharedState;
 use ipnet::IpNet;
 use log::warn;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use warp::{Filter, Reply};
 
 const DEFAULT_MAX_CONNECTIONS: usize = 256;
 const DEFAULT_MAX_CONNECTIONS_PER_IP: usize = 32;
 const DEFAULT_AUTH_TIMEOUT_SECONDS: u64 = 10;
+const DEFAULT_INVITE_REQUESTS_PER_MINUTE: u32 = 10;
+const INVITE_RATE_WINDOW: Duration = Duration::from_secs(60);
+// Bounded bookkeeping: entries are pruned once this many inviters are tracked.
+const MAX_TRACKED_INVITERS: usize = 1024;
+const MAX_INVITE_REQUEST_BYTES: u64 = 1024;
 
 #[derive(Debug)]
 struct OriginRejected;
@@ -191,6 +197,215 @@ fn is_origin_allowed(origin: &str, allowed: &Arc<Vec<String>>) -> bool {
         return true;
     }
     allowed.iter().any(|o| o == origin)
+}
+
+#[derive(Clone, Copy)]
+struct InviteWindow {
+    started: Instant,
+    count: u32,
+}
+
+/// Fixed-window per-client limiter for invite-ticket requests, following the
+/// WebSocket message limiter: the window starts with the first accepted request
+/// and resets after `window`.
+#[derive(Clone)]
+pub struct InviteRateLimiter {
+    max_requests: u32,
+    window: Duration,
+    clients: Arc<Mutex<HashMap<String, InviteWindow>>>,
+}
+
+impl InviteRateLimiter {
+    pub fn new(max_requests: u32, window: Duration) -> Self {
+        Self {
+            max_requests,
+            window,
+            clients: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    fn allow(&self, key: &str) -> bool {
+        let now = Instant::now();
+        let mut clients = self
+            .clients
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if clients.len() >= MAX_TRACKED_INVITERS && !clients.contains_key(key) {
+            let window = self.window;
+            clients.retain(|_, entry| now.duration_since(entry.started) < window);
+        }
+        let entry = clients.entry(key.to_string()).or_insert(InviteWindow {
+            started: now,
+            count: 0,
+        });
+        if now.duration_since(entry.started) >= self.window {
+            entry.started = now;
+            entry.count = 0;
+        }
+        entry.count += 1;
+        entry.count <= self.max_requests
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct InviteRequest {
+    room_id: String,
+    #[serde(default)]
+    ttl_seconds: Option<u64>,
+}
+
+fn bearer_token(authorization: Option<&str>) -> Option<&str> {
+    let value = authorization?.trim();
+    let (scheme, token) = value.split_once(' ')?;
+    if !scheme.eq_ignore_ascii_case("bearer") {
+        return None;
+    }
+    let token = token.trim();
+    (!token.is_empty()).then_some(token)
+}
+
+fn error_reply(status: warp::http::StatusCode, message: &str) -> warp::reply::Response {
+    warp::reply::with_status(
+        warp::reply::json(&serde_json::json!({ "error": message })),
+        status,
+    )
+    .into_response()
+}
+
+async fn handle_invite_request(
+    authorization: Option<String>,
+    request: InviteRequest,
+    state: SharedState,
+    jwt_config: Arc<JwtConfig>,
+    limiter: InviteRateLimiter,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    if !jwt_config.enabled {
+        return Ok(error_reply(
+            warp::http::StatusCode::SERVICE_UNAVAILABLE,
+            "Invite links require JWT authentication with a shared secret",
+        ));
+    }
+    let Some(token) = bearer_token(authorization.as_deref()) else {
+        return Ok(error_reply(
+            warp::http::StatusCode::UNAUTHORIZED,
+            "Authentication required",
+        ));
+    };
+    let claims = match jwt_config.validate_token(token) {
+        Ok(claims) => claims,
+        Err(_) => {
+            return Ok(error_reply(
+                warp::http::StatusCode::UNAUTHORIZED,
+                "Invalid session token",
+            ))
+        }
+    };
+    if !limiter.allow(&claims.sub) {
+        return Ok(error_reply(
+            warp::http::StatusCode::TOO_MANY_REQUESTS,
+            "Rate limit exceeded",
+        ));
+    }
+
+    let is_host = {
+        let locked = state.read().await;
+        match locked.rooms.get(&request.room_id) {
+            None => {
+                return Ok(error_reply(
+                    warp::http::StatusCode::NOT_FOUND,
+                    "Room not found",
+                ))
+            }
+            Some(room) => locked
+                .clients
+                .get(&room.host_id)
+                .is_some_and(|client| client.user_id == claims.sub),
+        }
+    };
+    if !is_host {
+        return Ok(error_reply(
+            warp::http::StatusCode::FORBIDDEN,
+            "Only the room host can create invite links",
+        ));
+    }
+
+    match jwt_config.mint_invite_ticket(&request.room_id, request.ttl_seconds) {
+        Ok((ticket, expires_at)) => Ok(warp::reply::json(&serde_json::json!({
+            "ticket": ticket,
+            "expires_at": expires_at
+        }))
+        .into_response()),
+        Err(error) => Ok(error_reply(
+            warp::http::StatusCode::SERVICE_UNAVAILABLE,
+            &error,
+        )),
+    }
+}
+
+fn build_cors(
+    allowed_origins: &[String],
+    methods: Vec<&'static str>,
+    headers: Vec<&'static str>,
+) -> warp::cors::Builder {
+    if allowed_origins.iter().any(|o| o == "*") {
+        warp::cors()
+            .allow_any_origin()
+            .allow_methods(methods)
+            .allow_headers(headers)
+    } else {
+        warp::cors()
+            .allow_origins(
+                allowed_origins
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>(),
+            )
+            .allow_methods(methods)
+            .allow_headers(headers)
+    }
+}
+
+pub fn build_invite_route(
+    state: SharedState,
+    jwt_config: Arc<JwtConfig>,
+    allowed_origins: Arc<Vec<String>>,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    build_invite_route_with_limiter(
+        state,
+        jwt_config,
+        allowed_origins,
+        InviteRateLimiter::new(DEFAULT_INVITE_REQUESTS_PER_MINUTE, INVITE_RATE_WINDOW),
+    )
+}
+
+pub fn build_invite_route_with_limiter(
+    state: SharedState,
+    jwt_config: Arc<JwtConfig>,
+    allowed_origins: Arc<Vec<String>>,
+    limiter: InviteRateLimiter,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    let state_filter = warp::any().map(move || state.clone());
+    let jwt_filter = {
+        let config = jwt_config;
+        warp::any().map(move || config.clone())
+    };
+    let limiter_filter = warp::any().map(move || limiter.clone());
+    let cors = build_cors(
+        &allowed_origins,
+        vec!["POST"],
+        vec!["authorization", "content-type"],
+    );
+
+    warp::path("invite")
+        .and(warp::post())
+        .and(warp::header::optional::<String>("authorization"))
+        .and(warp::body::content_length_limit(MAX_INVITE_REQUEST_BYTES))
+        .and(warp::body::json::<InviteRequest>())
+        .and(state_filter)
+        .and(jwt_filter)
+        .and(limiter_filter)
+        .and_then(handle_invite_request)
+        .with(cors)
 }
 
 #[cfg(test)]
@@ -745,6 +960,227 @@ mod tests {
         let authenticated = locked.clients.values().next().unwrap();
         assert_eq!(authenticated.session_expires_at, Some(now + 120));
         assert_eq!(authenticated.authentication_version, 2);
+    }
+
+    fn now_seconds() -> u64 {
+        crate::utils::now_ms() / 1000
+    }
+
+    fn token_for_subject(config: &JwtConfig, subject: &str, expiration: u64) -> String {
+        encode(
+            &Header::default(),
+            &Claims {
+                sub: subject.to_string(),
+                name: "Alice".to_string(),
+                aud: config.audience.clone(),
+                iss: config.issuer.clone(),
+                exp: expiration as usize,
+                iat: (crate::utils::now_ms() / 1000) as usize,
+            },
+            &EncodingKey::from_secret(config.secret.as_bytes()),
+        )
+        .unwrap()
+    }
+
+    fn invite_route(
+        state: SharedState,
+        jwt_config: Arc<JwtConfig>,
+        max_requests: u32,
+    ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+        build_invite_route_with_limiter(
+            state,
+            jwt_config,
+            Arc::new(vec!["http://localhost:8096".to_string()]),
+            InviteRateLimiter::new(max_requests, Duration::from_secs(60)),
+        )
+    }
+
+    async fn state_with_hosts() -> SharedState {
+        let state = crate::test_helpers::create_state();
+        let mut locked = state.write().await;
+        for (client_id, user_id, room_id) in [
+            ("host-client", "user-host", "room-1"),
+            ("host-two", "user-two", "room-2"),
+        ] {
+            let (mut client, _rx) =
+                crate::test_helpers::create_client_with_rx(user_id, "Host", true);
+            client.room_id = Some(room_id.to_string());
+            locked.clients.insert(client_id.to_string(), client);
+            locked.rooms.insert(
+                room_id.to_string(),
+                crate::test_helpers::create_room(room_id, client_id),
+            );
+        }
+        drop(locked);
+        state
+    }
+
+    fn invite_request(token: Option<&str>, body: serde_json::Value) -> warp::test::RequestBuilder {
+        let request = warp::test::request()
+            .method("POST")
+            .path("/invite")
+            .header("content-type", "application/json")
+            .header("origin", "http://localhost:8096")
+            .body(serde_json::to_string(&body).unwrap());
+        match token {
+            Some(token) => request.header("authorization", format!("Bearer {token}")),
+            None => request,
+        }
+    }
+
+    #[tokio::test]
+    async fn invite_endpoint_mints_a_room_scoped_ticket_for_the_host() {
+        let jwt_config = test_jwt_config(true);
+        let route = invite_route(state_with_hosts().await, jwt_config.clone(), 10);
+        let token = token_for_subject(&jwt_config, "user-host", now_seconds() + 300);
+
+        let response = invite_request(
+            Some(&token),
+            serde_json::json!({ "room_id": "room-1", "ttl_seconds": 300 }),
+        )
+        .reply(&route)
+        .await;
+
+        assert_eq!(response.status(), 200);
+        let body: serde_json::Value = serde_json::from_slice(response.body()).unwrap();
+        let ticket = body["ticket"].as_str().unwrap();
+        let claims = jwt_config.validate_invite_ticket(ticket, "room-1").unwrap();
+        assert_eq!(claims.room, "room-1");
+        assert_eq!(body["expires_at"].as_u64().unwrap(), claims.exp as u64);
+        assert!(claims.exp as u64 <= now_seconds() + 300);
+    }
+
+    #[tokio::test]
+    async fn invite_endpoint_clamps_the_requested_ttl() {
+        let jwt_config = test_jwt_config(true);
+        let route = invite_route(state_with_hosts().await, jwt_config.clone(), 10);
+        let token = token_for_subject(&jwt_config, "user-host", now_seconds() + 300);
+
+        let response = invite_request(
+            Some(&token),
+            serde_json::json!({ "room_id": "room-1", "ttl_seconds": 999_999 }),
+        )
+        .reply(&route)
+        .await;
+
+        assert_eq!(response.status(), 200);
+        let body: serde_json::Value = serde_json::from_slice(response.body()).unwrap();
+        let expires_at = body["expires_at"].as_u64().unwrap();
+        assert!(expires_at <= now_seconds() + crate::auth::MAX_INVITE_TTL_SECONDS);
+        assert!(expires_at >= now_seconds() + crate::auth::MIN_INVITE_TTL_SECONDS);
+    }
+
+    #[tokio::test]
+    async fn invite_endpoint_rejects_non_hosts_and_unknown_rooms() {
+        let jwt_config = test_jwt_config(true);
+        let route = invite_route(state_with_hosts().await, jwt_config.clone(), 10);
+        let guest_token = token_for_subject(&jwt_config, "user-guest", now_seconds() + 300);
+
+        let non_host = invite_request(
+            Some(&guest_token),
+            serde_json::json!({ "room_id": "room-1" }),
+        )
+        .reply(&route)
+        .await;
+        assert_eq!(non_host.status(), 403);
+
+        let host_token = token_for_subject(&jwt_config, "user-host", now_seconds() + 300);
+        let unknown = invite_request(
+            Some(&host_token),
+            serde_json::json!({ "room_id": "missing" }),
+        )
+        .reply(&route)
+        .await;
+        assert_eq!(unknown.status(), 404);
+    }
+
+    #[tokio::test]
+    async fn invite_endpoint_requires_a_valid_session_token() {
+        let jwt_config = test_jwt_config(true);
+        let route = invite_route(state_with_hosts().await, jwt_config.clone(), 10);
+
+        let missing = invite_request(None, serde_json::json!({ "room_id": "room-1" }))
+            .reply(&route)
+            .await;
+        assert_eq!(missing.status(), 401);
+
+        let invalid = invite_request(
+            Some("not-a-jwt"),
+            serde_json::json!({ "room_id": "room-1" }),
+        )
+        .reply(&route)
+        .await;
+        assert_eq!(invalid.status(), 401);
+    }
+
+    #[tokio::test]
+    async fn invite_endpoint_is_rate_limited_per_client() {
+        let jwt_config = test_jwt_config(true);
+        let route = invite_route(state_with_hosts().await, jwt_config.clone(), 2);
+        let host_one = token_for_subject(&jwt_config, "user-host", now_seconds() + 300);
+        let host_two = token_for_subject(&jwt_config, "user-two", now_seconds() + 300);
+
+        for _ in 0..2 {
+            let response =
+                invite_request(Some(&host_one), serde_json::json!({ "room_id": "room-1" }))
+                    .reply(&route)
+                    .await;
+            assert_eq!(response.status(), 200);
+        }
+        let limited = invite_request(Some(&host_one), serde_json::json!({ "room_id": "room-1" }))
+            .reply(&route)
+            .await;
+        assert_eq!(limited.status(), 429);
+
+        let other_client =
+            invite_request(Some(&host_two), serde_json::json!({ "room_id": "room-2" }))
+                .reply(&route)
+                .await;
+        assert_eq!(other_client.status(), 200);
+    }
+
+    #[tokio::test]
+    async fn invite_endpoint_is_unavailable_without_a_shared_secret() {
+        let jwt_config = test_jwt_config(false);
+        let route = invite_route(state_with_hosts().await, jwt_config, 10);
+
+        let response = invite_request(
+            Some("any-token"),
+            serde_json::json!({ "room_id": "room-1" }),
+        )
+        .reply(&route)
+        .await;
+
+        assert_eq!(response.status(), 503);
+    }
+
+    #[tokio::test]
+    async fn invite_endpoint_answers_cors_preflight() {
+        let jwt_config = test_jwt_config(true);
+        let route = invite_route(state_with_hosts().await, jwt_config, 10);
+
+        let response = warp::test::request()
+            .method("OPTIONS")
+            .path("/invite")
+            .header("origin", "http://localhost:8096")
+            .header("access-control-request-method", "POST")
+            .header(
+                "access-control-request-headers",
+                "authorization, content-type",
+            )
+            .reply(&route)
+            .await;
+
+        assert_eq!(response.status(), 200);
+        assert_eq!(
+            response.headers()["access-control-allow-origin"],
+            "http://localhost:8096"
+        );
+        let allowed = response.headers()["access-control-allow-headers"]
+            .to_str()
+            .unwrap()
+            .to_ascii_lowercase();
+        assert!(allowed.contains("authorization"));
     }
 
     #[tokio::test(start_paused = true)]

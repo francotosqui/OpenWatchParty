@@ -159,6 +159,7 @@
     ui.injectStyles();
     createPanel();
     injectHeaderButtons();
+    if (OWP.actions && OWP.actions.captureInviteLink) OWP.actions.captureInviteLink();
     if (OWP.actions && OWP.actions.connect) {
       console.log('[OpenWatchParty] Initiating WebSocket connection...');
       OWP.actions.connect();

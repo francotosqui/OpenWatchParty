@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 const OWP = require('./setup.js');
 const normalize = OWP.utils.normalizeSessionServerUrl;
+const buildInviteUrl = OWP.utils.buildInviteUrl;
+const parseInviteTicket = OWP.utils.parseInviteTicket;
 
 describe('session server URL validation', () => {
   const httpsPage = { protocol: 'https:', hostname: 'media.example', port: '' };
@@ -54,5 +56,40 @@ describe('session server URL validation', () => {
     assert.equal(normalize('wss://sessions.example/ws', httpsPage).thirdParty, true);
     assert.equal(normalize('wss://media.example:8443/ws', httpsPage).thirdParty, true);
     assert.equal(normalize('wss://media.example/ws', httpsPage).thirdParty, false);
+  });
+});
+
+describe('invite link URLs', () => {
+  const page = {
+    protocol: 'https:',
+    hostname: 'media.example',
+    port: '8096',
+    pathname: '/web/index.html'
+  };
+  const rootPage = { ...page, pathname: '/', port: '' };
+
+  it('builds a link to the web root with the ticket as a query parameter', () => {
+    const href = buildInviteUrl('a.b.c', page);
+
+    assert.equal(href, 'https://media.example:8096/web/?owp_invite=a.b.c');
+    assert.equal(parseInviteTicket(href), 'a.b.c');
+  });
+
+  it('keeps root deployments at the root and encodes reserved characters', () => {
+    const href = buildInviteUrl('a+b/c==', rootPage);
+
+    assert.equal(href, 'https://media.example/?owp_invite=a%2Bb%2Fc%3D%3D');
+    assert.equal(parseInviteTicket(href), 'a+b/c==');
+  });
+
+  it('parses the ticket from an absolute URL and ignores unrelated ones', () => {
+    assert.equal(
+      parseInviteTicket('https://media.example/web/?foo=bar&owp_invite=ticket.1.2#/details'),
+      'ticket.1.2'
+    );
+    assert.equal(parseInviteTicket('https://media.example/web/?other=1'), '');
+    assert.equal(parseInviteTicket('not a url'), '');
+    assert.equal(parseInviteTicket(''), '');
+    assert.equal(buildInviteUrl('', page), '');
   });
 });

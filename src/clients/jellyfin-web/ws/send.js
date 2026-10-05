@@ -56,7 +56,9 @@
       pendingMediaId: '',
       suppressUntil: 0,
       playbackBlocked: false,
-      playbackFailureNotified: false
+      playbackFailureNotified: false,
+      inviteJoinPending: false,
+      pendingInviteTicket: ''
     });
     state.playbackRequestAttempt++;
     state.autoJoinAttempt++;
@@ -86,7 +88,7 @@
     });
   };
 
-  const joinRoom = (id, isReconnect = false) => {
+  const joinRoom = (id, isReconnect = false, inviteTicket = '') => {
     if (!isReconnect && actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     state.desiredRoomId = id;
     state.rejectedRejoinRoomIds = state.rejectedRejoinRoomIds.filter(roomId => roomId !== id);
@@ -95,7 +97,9 @@
     const userName = state.userName
       || window.ApiClient?._currentUser?.Name
       || 'Anonymous';
-    send('join_room', { user_name: userName }, id);
+    const payload = { user_name: userName };
+    if (inviteTicket) payload.invite_ticket = inviteTicket;
+    send('join_room', payload, id);
   };
 
   const leaveRoom = () => {
