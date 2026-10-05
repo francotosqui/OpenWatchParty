@@ -24,6 +24,38 @@
     share: ['M6 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', 'M18 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', 'M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', 'M8.7 10.7l6.6 -3.4', 'M8.7 13.3l6.6 3.4']
   };
 
+  // The Watch Party icon for the header and player buttons: a screen with a
+  // play button and two viewers. Original artwork contributed to the project
+  // by francotosqui, drawn on Material's 24 grid with 2-unit lines so it sits
+  // next to Jellyfin's own icons (Cast, Search) at the same size and weight.
+  const WATCH_PARTY_ICON = [
+    ['path', { fill: 'none', stroke: 'currentColor', 'stroke-width': '2', d: 'M5.9 15H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h18a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-2.9' }],
+    ['path', { d: 'M10.2 6.9v4.6l4-2.3z' }],
+    ['circle', { cx: '8.6', cy: '14.8', r: '1.9' }],
+    ['circle', { cx: '15.4', cy: '14.8', r: '1.9' }],
+    ['path', { d: 'M5 21a3.6 3.1 0 0 1 7.2 0zM11.8 21a3.6 3.1 0 0 1 7.2 0z' }]
+  ];
+
+  // Wrapped in `.material-icons` so it takes the size the native icons get in
+  // each button.
+  const createWatchPartyIcon = () => {
+    const wrapper = createElement('span', 'material-icons owp-watch-party-icon');
+    wrapper.setAttribute('aria-hidden', 'true');
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'currentColor');
+    svg.setAttribute('focusable', 'false');
+    WATCH_PARTY_ICON.forEach(([tag, attributes]) => {
+      const shape = document.createElementNS(SVG_NS, tag);
+      Object.entries(attributes).forEach(([name, value]) => shape.setAttribute(name, value));
+      svg.appendChild(shape);
+    });
+    wrapper.appendChild(svg);
+    return wrapper;
+  };
+  // The header buttons (ui/header.js) use it too.
+  ui.createWatchPartyIcon = createWatchPartyIcon;
+
   const createIcon = (name) => {
     const svg = document.createElementNS(SVG_NS, 'svg');
     svg.setAttribute('class', `owp-icon owp-icon-${name}`);
@@ -336,7 +368,7 @@
     btn.id = BTN_ID;
     btn.className = 'paper-icon-button-light btnWatchParty autoSize';
     btn.title = 'Watch Party';
-    btn.innerHTML = '<span class="material-icons theaters" aria-hidden="true"></span>';
+    btn.appendChild(createWatchPartyIcon());
     btn.onclick = (e) => {
       e.stopPropagation(); e.preventDefault();
       const panel = document.getElementById(PANEL_ID);
