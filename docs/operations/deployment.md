@@ -216,6 +216,14 @@ If `cloudflared` runs on the Docker host (not in a container), use the host IP o
 
 Set `TRUSTED_PROXIES` to the address of the `cloudflared` container (or the host, when the tunnel runs on the host) so the session server can derive the real client address from `X-Forwarded-For` for the per-IP connection limit. Without it, every tunneled client shares the tunnel's address for that limit. See [Reverse Proxy Trust](configuration.md#reverse-proxy-trust) and [Per-IP Limits: Verdict](security.md#per-ip-limits-verdict).
 
+### Caching Proxies and CDNs
+
+The plugin injects the web client as `/OpenWatchParty/ClientScript?v=<hash>`, where `<hash>` changes whenever the client code changes. The loader and its modules are served with `Cache-Control: public, max-age=31536000, immutable` while `v` matches the current hash (see [GET /OpenWatchParty/ClientScript](../technical/api.md#get-openwatchpartyclientscript)).
+
+**Any cache in front of Jellyfin must keep the query string in its cache key.** A proxy or CDN that ignores query strings drops `v` from the key, so after a plugin update it keeps serving the files it cached for the previous version, and browsers get a stale or mixed client. Such a setup is not supported: Jellyfin's own image and API URLs rely on query values in the same way.
+
+The defaults keep the query string: nginx's `proxy_cache_key` (`$scheme$proxy_host$request_uri`) and Cloudflare's Standard caching level both do. Avoid Cloudflare's "Ignore query string" level, and cache rules that remove the query string from the cache key.
+
 ## SSL/TLS Configuration
 
 ### Let's Encrypt with Caddy
