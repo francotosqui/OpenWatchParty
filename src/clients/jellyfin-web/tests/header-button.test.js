@@ -219,8 +219,9 @@ describe('header Watch Party button', () => {
     first.header.remove();
     const second = modernHeader();
 
-    hooks.pageObserver().callback([]);
-    hooks.pageObserver().callback([]);
+    const rebuilt = [{ target: document.body, addedNodes: [second.header], removedNodes: [first.header] }];
+    hooks.pageObserver().callback(rebuilt);
+    hooks.pageObserver().callback(rebuilt);
     assert.equal(hooks.frames.length, 1);
     hooks.runFrame();
 
@@ -236,11 +237,71 @@ describe('header Watch Party button', () => {
     OWP.ui.injectHeaderButtons();
     assert.equal(headerButtons().length, 0);
 
-    const { box } = modernHeader();
-    hooks.pageObserver().callback([]);
+    const { box, header } = modernHeader();
+    hooks.pageObserver().callback([{ target: document.body, addedNodes: [header], removedNodes: [] }]);
     hooks.runFrame();
 
     assert.equal(box.children[0].id, MODERN_HEADER_BTN_ID);
+  });
+
+  it('adds the button when the whole layout, header included, is mounted again', () => {
+    const hooks = installPageHooks();
+    OWP.ui.injectHeaderButtons();
+    const { header, box } = modernHeader();
+    const layout = element('div', 'reactRoot');
+    layout.appendChild(header);
+    document.body.appendChild(layout);
+
+    hooks.pageObserver().callback([{ target: document.body, addedNodes: [layout], removedNodes: [] }]);
+    hooks.runFrame();
+
+    assert.equal(box.children[0].id, MODERN_HEADER_BTN_ID);
+  });
+
+  it('ignores page changes outside the headers while the panel is closed', () => {
+    const hooks = installPageHooks();
+    modernHeader();
+    OWP.ui.injectHeaderButtons();
+    const page = element('div', 'page itemDetailPage');
+    const card = element('div', 'card');
+    page.appendChild(card);
+    document.body.appendChild(page);
+
+    hooks.pageObserver().callback([
+      { target: document.body, addedNodes: [page], removedNodes: [] },
+      { target: page, addedNodes: [document.createTextNode('0:42')], removedNodes: [] }
+    ]);
+
+    assert.equal(hooks.frames.length, 0);
+  });
+
+  it('reacts to a change inside a header', () => {
+    const hooks = installPageHooks();
+    const { box } = modernHeader();
+    OWP.ui.injectHeaderButtons();
+    box.children[0].remove();
+
+    hooks.pageObserver().callback([{ target: box, addedNodes: [], removedNodes: [] }]);
+    hooks.runFrame();
+
+    assert.equal(box.children[0].id, MODERN_HEADER_BTN_ID);
+  });
+
+  it('follows every page change only while the panel opened from the header is open', () => {
+    const hooks = installPageHooks();
+    modernHeader();
+    OWP.ui.injectHeaderButtons();
+    const button = document.getElementById(MODERN_HEADER_BTN_ID);
+    const playerChange = [{ target: document.body, addedNodes: [element('div', 'page videoOsdPage')], removedNodes: [] }];
+
+    button.click();
+    hooks.pageObserver().callback(playerChange);
+    assert.equal(hooks.frames.length, 1);
+    hooks.runFrame();
+
+    button.click();
+    hooks.pageObserver().callback(playerChange);
+    assert.equal(hooks.frames.length, 0);
   });
 
   it('opens the panel below the header and closes it on the next click', () => {

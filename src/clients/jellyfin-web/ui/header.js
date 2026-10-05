@@ -23,6 +23,8 @@
     'header.MuiAppBar-root a[href="#/search"]'
   ].join(', ');
   const LEGACY_BUTTON_CLASSES = 'headerButton headerButtonRight paper-icon-button-light';
+  // Both containers above live in one of these.
+  const HEADER_SELECTOR = 'header, .skinHeader';
 
   let observer = null;
   let panelObserver = null;
@@ -135,13 +137,33 @@
     });
   };
 
+  const panelFollowsHeader = () => {
+    const panel = document.getElementById(PANEL_ID);
+    return openedFromHeader && !!panel && !panel.classList.contains('hide');
+  };
+
+  // A change inside a header, or a header added to the page.
+  const touchesHeader = records => records.some(record => (
+    (record.target && typeof record.target.closest === 'function' && record.target.closest(HEADER_SELECTOR))
+    || Array.from(record.addedNodes || []).some(node => node.nodeType === 1
+      && (node.closest(HEADER_SELECTOR) || node.querySelector(HEADER_SELECTOR)))
+  ));
+
+  // Busy pages (the player, chat, library grids) change all the time, so only
+  // header changes trigger a lookup, unless the open panel follows the header
+  // (the player swaps headers, say). The periodic injection in lifecycle
+  // catches anything missed here.
+  const onPageChange = (records) => {
+    if (panelFollowsHeader() || touchesHeader(records)) scheduleUpdate();
+  };
+
   // Jellyfin rebuilds its app bar when leaving the dashboard or switching
   // layouts, and swaps headers when the player opens; watch the page so the
   // button comes back and the panel moves right away.
   const startObservers = () => {
     if (typeof window.MutationObserver !== 'function' || typeof window.requestAnimationFrame !== 'function') return;
     if (!observer && document.body) {
-      observer = new window.MutationObserver(scheduleUpdate);
+      observer = new window.MutationObserver(onPageChange);
       observer.observe(document.body, { childList: true, subtree: true });
       if (typeof window.addEventListener === 'function') window.addEventListener('resize', scheduleUpdate);
       if (window.visualViewport) window.visualViewport.addEventListener('resize', scheduleUpdate);
