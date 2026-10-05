@@ -136,6 +136,7 @@ describe('room reconnection lifecycle', () => {
       roomId: 'room-a',
       isHost: false,
       participants: [{ name: 'Old', isHost: true }],
+      roomBarSection: 'leave',
       lastRttMs: 12,
       currentVideoElement: video
     });
@@ -145,6 +146,7 @@ describe('room reconnection lifecycle', () => {
     assert.equal(video.playbackRate, 1);
     assert.equal(OWP.state.inRoom, false);
     assert.deepEqual(OWP.state.participants, []);
+    assert.equal(OWP.state.roomBarSection, '');
     assert.equal(OWP.state.desiredRoomId, 'room-a');
     assert.equal(OWP.state.rejoinPending, true);
     await new Promise(resolve => setTimeout(resolve, 10));

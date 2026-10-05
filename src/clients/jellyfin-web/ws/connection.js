@@ -129,6 +129,7 @@
         state.roomId = '';
         state.readyRoomId = '';
         state.participants = [];
+        state.roomBarSection = '';
       }
     }
     ui.render();
