@@ -38,10 +38,14 @@ def main():
     if not PASSWORD:
         raise RuntimeError("OWP_DEV_PASSWORD must not be empty")
 
+    info = None
     for attempt in range(60):
         try:
             info = request("/System/Info/Public")
-            break
+            # A fresh Jellyfin can answer 200 with an empty payload while it
+            # starts; wait until the startup state is actually reported.
+            if "StartupWizardCompleted" in info:
+                break
         except HTTPError as exc:
             if exc.code not in (404, 503):
                 raise
