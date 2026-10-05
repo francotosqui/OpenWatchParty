@@ -203,6 +203,10 @@ Examples:
 
 The sqrt curve provides stronger correction for larger drifts while staying smooth. Browser pitch correction (`preservesPitch`) keeps audio natural even at 2.0x.
 
+### Paused Rooms
+
+While the room plays, the host's periodic `state_update` resumes a guest who paused. A paused room sends none (the server drops state updates that change nothing), so the loop pauses a guest whose video plays while the room is paused. It waits while a room command is being applied or a host play is scheduled.
+
 ## 5. HLS Handling and Feedback Loop Prevention
 
 ### The HLS Problem

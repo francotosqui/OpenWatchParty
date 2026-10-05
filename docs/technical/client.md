@@ -227,12 +227,14 @@ Otherwise → send player_event
 ```
 
 #### `syncLoop() -> void`
-Synchronization loop called every second (non-hosts only).
+Synchronization loop called every 500 ms (`SYNC_LOOP_MS`, non-hosts only).
 
 **Drift correction algorithm:**
 ```
 1. If host or not in room → reset playbackRate to 1
 2. If no sync or state !== 'playing' → reset playbackRate to 1
+   If the room is paused and the video plays (a guest pressed play) → pause it,
+   unless a room command is being applied or a host play is scheduled
 3. If isBuffering or readyState < 3 → do nothing (let it load)
 4. If video paused → reset playbackRate to 1
 5. Calculate expected position:
