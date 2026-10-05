@@ -2,6 +2,7 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
   const state = OWP.state;
+  const t = OWP.i18n.t;
   const { PANEL_ID, BTN_ID, DEFAULT_WS_URL, ROOM_MODE_CLASS } = OWP.constants;
 
   const createElement = (tag, className, text) => {
@@ -90,15 +91,14 @@
   const createCloseButton = () => {
     const button = createElement('button', 'owp-close-btn owp-bar-btn');
     button.type = 'button';
-    button.title = 'Close panel';
-    button.setAttribute('aria-label', 'Close panel');
+    button.title = t('closePanel');
+    button.setAttribute('aria-label', t('closePanel'));
     button.appendChild(createIcon('x'));
     button.onclick = hidePanel;
     return button;
   };
 
   const CREATE_ROOM_HINT_ID = 'owp-create-hint';
-  const CREATE_ROOM_HINT = 'Start playing something to create a room.';
 
   // A room starts from what is playing; without it there is nothing to share.
   const canCreateRoom = () => Boolean(OWP.utils?.getPlayingItemId?.());
@@ -123,23 +123,23 @@
 
     const lobby = createElement('div', 'owp-lobby-container');
     const roomSection = createElement('div', 'owp-section');
-    roomSection.appendChild(createElement('div', 'owp-label', 'Available rooms'));
+    roomSection.appendChild(createElement('div', 'owp-label', t('availableRooms')));
     const roomList = createElement('div');
     roomList.id = 'owp-room-list';
     roomSection.appendChild(roomList);
     const createSection = createElement('div', 'owp-section owp-create-section');
-    const btn = createElement('button', 'owp-btn', 'Create Room');
+    const btn = createElement('button', 'owp-btn', t('createRoom'));
     btn.id = 'owp-btn-create';
     btn.style.width = '100%';
     btn.onclick = () => OWP.actions && OWP.actions.createRoom && OWP.actions.createRoom();
     btn.setAttribute('aria-describedby', CREATE_ROOM_HINT_ID);
-    const hint = createElement('div', 'owp-hint', CREATE_ROOM_HINT);
+    const hint = createElement('div', 'owp-hint', t('createRoomHint'));
     hint.id = CREATE_ROOM_HINT_ID;
     createSection.append(btn, hint);
     lobby.append(roomSection, createSection);
 
     const footer = createElement('div', 'owp-footer');
-    footer.append(document.createTextNode('Server: '), document.createTextNode(String(DEFAULT_WS_URL.replace(/^wss?:\/\//, '').replace('/ws', ''))));
+    footer.append(document.createTextNode(t('server')), document.createTextNode(String(DEFAULT_WS_URL.replace(/^wss?:\/\//, '').replace('/ws', ''))));
     panel.replaceChildren(header, lobby, footer);
     ui.updateRoomListUI();
     updateCreateRoomButton();
@@ -151,16 +151,16 @@
   // with commas cannot pass for the host or for several people.
   const fillParticipantList = (list) => {
     if (!state.participants.length) {
-      list.replaceChildren(document.createTextNode(`Online: ${String(state.participantCount || 1)}`));
+      list.replaceChildren(document.createTextNode(t('onlineCount', { count: state.participantCount || 1 })));
       return;
     }
     list.replaceChildren(...state.participants.map((participant) => {
-      const name = participant.name || 'Guest';
+      const name = participant.name || t('guest');
       const item = createElement('div', 'owp-participant');
       const avatar = createElement('span', 'owp-participant-avatar', Array.from(name)[0].toUpperCase());
       avatar.setAttribute('aria-hidden', 'true');
       item.append(avatar, createElement('span', 'owp-participant-name', name));
-      if (participant.isHost) item.appendChild(createElement('span', 'owp-host-badge', 'Host'));
+      if (participant.isHost) item.appendChild(createElement('span', 'owp-host-badge', t('host')));
       return item;
     }));
   };
@@ -168,7 +168,7 @@
   const participantTotal = () => state.participants.length || state.participantCount || 1;
 
   // Icon-only buttons: the count goes in the accessible name too.
-  const peopleLabel = () => `Participants, ${String(participantTotal())}`;
+  const peopleLabel = () => t('participantsCount', { count: participantTotal() });
 
   const updateParticipantList = () => {
     const list = document.getElementById('owp-participants-list');
@@ -245,11 +245,11 @@
     const clientId = String(state.clientId).split('-')[1] || '...';
     // The last measured value, so a redraw does not blank it until the next pong.
     const latency = createElement('span', 'owp-latency', state.lastRttMs === null ? '-' : `${state.lastRttMs} ms`);
-    latency.title = `Latency to the watch party server (client ${clientId})`;
-    const roomName = createElement('span', 'owp-room-name', state.roomName);
-    roomName.title = state.roomName;
+    latency.title = t('latency', { client: clientId });
+    const roomName = createElement('span', 'owp-room-name', OWP.i18n.localizeRoomName(state.roomName));
+    roomName.title = roomName.textContent;
 
-    const peopleBtn = createBarButton('owp-btn-people', 'Participants', 'users', 'owp-people-section');
+    const peopleBtn = createBarButton('owp-btn-people', t('participants'), 'users', 'owp-people-section');
     peopleBtn.setAttribute('aria-label', peopleLabel());
     const peopleCount = createElement('span', 'owp-people-count', String(participantTotal()));
     peopleCount.id = 'owp-people-count';
@@ -258,21 +258,21 @@
     peopleBtn.append(peopleCount, arrow);
     peopleBtn.onclick = () => toggleRoomSection('people');
 
-    const chatBtn = createBarButton('owp-btn-chat', 'Chat', 'chat', 'owp-chat-section');
+    const chatBtn = createBarButton('owp-btn-chat', t('chat'), 'chat', 'owp-chat-section');
     const badge = createElement('span', 'owp-chat-badge');
     badge.id = 'owp-chat-badge';
     chatBtn.appendChild(badge);
     chatBtn.onclick = () => toggleRoomSection('chat');
 
     // Leaving always asks first; for the host it ends the room for everyone.
-    const leaveBtn = createBarButton('owp-btn-leave', state.isHost ? 'Close room' : 'Leave room', 'logout', 'owp-leave-confirm');
+    const leaveBtn = createBarButton('owp-btn-leave', state.isHost ? t('closeRoom') : t('leaveRoom'), 'logout', 'owp-leave-confirm');
     leaveBtn.classList.add('danger');
     leaveBtn.onclick = () => toggleRoomSection('leave');
 
     // Invite links are minted by the host: guests get no button at all.
     const roomActions = [peopleBtn, chatBtn];
     if (state.isHost) {
-      const inviteBtn = createBarButton('owp-btn-invite', 'Invite', 'share');
+      const inviteBtn = createBarButton('owp-btn-invite', t('invite'), 'share');
       inviteBtn.onclick = () => OWP.actions && OWP.actions.copyInviteLink && OWP.actions.copyInviteLink();
       roomActions.push(inviteBtn);
     }
@@ -301,30 +301,30 @@
     const input = createElement('input');
     input.id = 'owp-chat-input';
     input.type = 'text';
-    input.placeholder = 'Type a message...';
+    input.placeholder = t('typeMessage');
     input.maxLength = 500;
     const send = createElement('button');
     send.id = 'owp-chat-send';
     send.type = 'button';
-    send.title = 'Send message';
-    send.setAttribute('aria-label', 'Send message');
+    send.title = t('sendMessage');
+    send.setAttribute('aria-label', t('sendMessage'));
     send.appendChild(createIcon('send'));
     inputContainer.append(input, send);
     chatSection.append(messages, inputContainer);
 
     const confirm = createElement('div', 'owp-leave-confirm');
     confirm.id = 'owp-leave-confirm';
-    const cancel = createElement('button', 'owp-pill-btn secondary', 'Cancel');
+    const cancel = createElement('button', 'owp-pill-btn secondary', t('cancel'));
     cancel.type = 'button';
     cancel.onclick = () => {
       toggleRoomSection('leave');
       leaveBtn.focus();
     };
-    const confirmLeave = createElement('button', 'owp-pill-btn danger', state.isHost ? 'Close room' : 'Leave');
+    const confirmLeave = createElement('button', 'owp-pill-btn danger', state.isHost ? t('closeRoom') : t('leave'));
     confirmLeave.id = 'owp-btn-confirm-leave';
     confirmLeave.type = 'button';
     confirmLeave.onclick = leaveRoom;
-    const question = state.isHost ? 'Close the room for everyone?' : 'Leave the room?';
+    const question = state.isHost ? t('closeRoomQuestion') : t('leaveRoomQuestion');
     confirm.append(createElement('span', 'owp-leave-question', question), cancel, confirmLeave);
     drop.append(peopleSection, chatSection, confirm);
 
@@ -414,7 +414,7 @@
     const btn = document.createElement('button');
     btn.id = BTN_ID;
     btn.className = 'paper-icon-button-light btnWatchParty autoSize';
-    btn.title = 'Watch Party';
+    btn.title = t('watchParty');
     btn.appendChild(createWatchPartyIcon());
     btn.onclick = (e) => {
       e.stopPropagation(); e.preventDefault();
@@ -428,11 +428,12 @@
       }
       btn.setAttribute('aria-expanded', String(!panel.classList.contains('hide')));
     };
-    btn.setAttribute('aria-label', 'Watch Party');
+    btn.setAttribute('aria-label', t('watchParty'));
     btn.setAttribute('aria-controls', PANEL_ID);
     const currentPanel = document.getElementById(PANEL_ID);
     btn.setAttribute('aria-expanded', String(!!currentPanel && !currentPanel.classList.contains('hide')));
-    const favBtn = videoOsd.querySelector('[title="Add to favorites"], [title="Remove from favorites"]');
+    // By class: its title follows the Jellyfin language.
+    const favBtn = videoOsd.querySelector('.btnUserRating');
     if (favBtn) {
       favBtn.insertAdjacentElement('beforebegin', btn);
     } else {

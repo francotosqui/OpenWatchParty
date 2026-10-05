@@ -3,6 +3,7 @@
   const h = OWP._wsHandlers = OWP._wsHandlers || {};
   const state = OWP.state;
   const ui = OWP.ui;
+  const t = OWP.i18n.t;
 
   h.handleRoomList = (msg) => {
     state.rooms = msg.payload || [];
@@ -27,7 +28,7 @@
     state.participantCount = msg.payload.participant_count;
     if (state.inRoom) ui.updateParticipantList();
     if (state.lastParticipantCount && state.participantCount > state.lastParticipantCount) {
-      ui.showToast('A participant joined the room');
+      ui.showToast(t('participantJoined'));
     }
     state.lastParticipantCount = state.participantCount;
   };
@@ -37,7 +38,7 @@
       state.participantCount = msg.payload.participant_count;
       if (state.inRoom) {
         ui.updateParticipantList();
-        ui.showToast('A participant left the room');
+        ui.showToast(t('participantLeft'));
       }
       state.lastParticipantCount = state.participantCount;
     }
@@ -59,14 +60,14 @@
       state.inRoom = false;
       state.roomId = '';
     }
-    const reason = msg.payload?.reason || 'The room was closed';
+    const reason = OWP.i18n.localizeRoomClosedReason(msg.payload?.reason);
     ui.showToast(reason);
     ui.render();
   };
 
   h.handleError = (msg) => {
-    const message = msg.payload?.message || 'Unknown error';
-    console.error('[OpenWatchParty] Server error:', message);
+    const message = OWP.i18n.localizeServerError(msg.payload?.code, msg.payload?.message);
+    console.error('[OpenWatchParty] Server error:', msg.payload?.code, msg.payload?.message);
     if (state.inviteJoinPending) {
       // A bad or expired invite must fall back to the normal room list.
       state.inviteJoinPending = false;

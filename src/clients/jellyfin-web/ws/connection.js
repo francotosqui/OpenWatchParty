@@ -4,6 +4,7 @@
   const state = OWP.state;
   const utils = OWP.utils;
   const ui = OWP.ui;
+  const t = OWP.i18n.t;
   const { DEFAULT_WS_URL, RECONNECT_BASE_MS, RECONNECT_MAX_MS, ROOM_REJOIN_TIMEOUT_MS, PING_INIT_MS, PING_STABLE_MS, PING_STABLE_AFTER, AUTH_TOAST_SUPPRESS_MS, PROTOCOL_VERSION } = OWP.constants;
 
   const clearRoomRejoinTimer = () => {
@@ -73,7 +74,7 @@
     const roomId = state.desiredRoomId;
     allowRoomState(roomId);
     actions.joinRoom(roomId, true);
-    scheduleRoomRejoinTimeout(roomId, 'Could not rejoin the watch party');
+    scheduleRoomRejoinTimeout(roomId, t('rejoinFailed'));
   };
 
   const onWsOpen = (token, socket) => {
@@ -100,7 +101,7 @@
     schedulePing();
     if (!token) handleAuthenticatedConnection();
     else if (state.rejoinPending && state.desiredRoomId) {
-      scheduleRoomRejoinTimeout(state.desiredRoomId, 'Could not reauthenticate the watch party connection');
+      scheduleRoomRejoinTimeout(state.desiredRoomId, t('reauthFailed'));
     }
     ui.render();
   };
@@ -120,7 +121,7 @@
       if (state.isHost) {
         cancelRoomRejoin();
         if (actions.resetRoomState) actions.resetRoomState();
-        if (ui.showToast) ui.showToast('The watch party closed when the host disconnected');
+        if (ui.showToast) ui.showToast(t('hostDisconnected'));
       } else {
         if (actions.normalizePlaybackRate) actions.normalizePlaybackRate();
         state.desiredRoomId = state.roomId;
@@ -205,7 +206,7 @@
     }
     if (!authResult || !['authenticated', 'insecure'].includes(authResult.mode)) {
       state.isConnecting = false;
-      const message = authResult?.message || 'OpenWatchParty authentication returned an invalid result';
+      const message = authResult?.message || t('authInvalidResult');
       state.authBlocked = true;
       state.authError = message;
       state.authFailedToken = OWP.actions.getJellyfinAccessToken

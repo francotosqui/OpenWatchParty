@@ -3,6 +3,7 @@
   const playback = OWP.playback = OWP.playback || {};
   const state = OWP.state;
   const utils = OWP.utils;
+  const t = OWP.i18n.t;
   const {
     DRIFT_DEADZONE_SEC,
     DRIFT_SOFT_MAX_SEC,
@@ -52,7 +53,7 @@
         deadline = Date.now() + MEDIA_READY_TIMEOUT_MS;
         if (mediaId && playback.ensurePlayback) playback.ensurePlayback(mediaId, 0, null, true);
         if (!timeoutReported && OWP.ui?.showToast) {
-          OWP.ui.showToast('Still waiting for the watch party media');
+          OWP.ui.showToast(t('waitingForMedia'));
           timeoutReported = true;
         }
       }
@@ -191,7 +192,7 @@
     if (state.pendingPlayUntil && utils.getServerNow() < state.pendingPlayUntil) return;
     utils.log('SYNC', { type: 'hold_room_pause', pos: video.currentTime });
     video.pause();
-    if (OWP.ui && OWP.ui.showToast) OWP.ui.showToast('Only the host can control playback');
+    if (OWP.ui && OWP.ui.showToast) OWP.ui.showToast(t('hostOnlyPlayback'));
   };
 
   const syncLoop = () => {

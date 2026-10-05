@@ -3,6 +3,7 @@
   const ui = OWP.ui = OWP.ui || {};
   const state = OWP.state;
   const utils = OWP.utils;
+  const t = OWP.i18n.t;
   const { HOME_SECTION_ID } = OWP.constants;
 
   const ensureHomeSection = (container) => {
@@ -27,7 +28,7 @@
       icon.className = 'material-icons sectionTitleIcon';
       icon.style.marginRight = '8px';
       icon.textContent = 'groups';
-      title.append(icon, document.createTextNode(' Watch Parties'));
+      title.append(icon, document.createTextNode(` ${t('watchParties')}`));
       titleContainer.appendChild(title);
       const scroller = document.createElement('div');
       scroller.className = 'emby-scroller';
@@ -64,7 +65,7 @@
             icon.className = 'material-icons';
             icon.style.cssText = 'font-size:14px;vertical-align:middle;';
             icon.textContent = 'groups';
-            countEl.replaceChildren(icon, document.createTextNode(` ${String(room.count)} watching`));
+            countEl.replaceChildren(icon, document.createTextNode(` ${t('watching', { count: room.count })}`));
           }
         }
       } else {
