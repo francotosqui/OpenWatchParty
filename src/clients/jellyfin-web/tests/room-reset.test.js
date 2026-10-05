@@ -109,10 +109,18 @@ describe('room state reset', () => {
       send: data => sent.push(JSON.parse(data))
     };
 
-    OWP.actions.leaveRoom();
+    let hidden = 0;
+    OWP.ui.hidePanel = () => { hidden++; };
+    try {
+      OWP.actions.leaveRoom();
+    } finally {
+      delete OWP.ui.hidePanel;
+    }
 
     assert.equal(sent[0].type, 'leave_room');
     assertRoomStateReset(video);
+    // Through ui.hidePanel, so keyboard focus leaves the hidden panel.
+    assert.equal(hidden, 1);
   });
 
   it('uses the common reset when the host closes the room', () => {

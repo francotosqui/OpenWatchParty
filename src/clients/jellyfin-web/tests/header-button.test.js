@@ -38,6 +38,8 @@ Object.getPrototypeOf(document.createElement('div')).blur = function blur() {
   if (focused === this) focused = null;
   this.blurredForTest = true;
 };
+// The element the focus stubs above last focused.
+Object.defineProperty(FakeDocument.prototype, 'activeElement', { configurable: true, get: () => focused });
 
 const element = (tag, className = '', attributes = {}) => {
   const node = document.createElement(tag);
@@ -326,6 +328,38 @@ describe('header Watch Party button', () => {
     assert.ok(panel().classList.contains('hide'));
   });
 
+  it('moves focus into the panel only when the header button is used from the keyboard', () => {
+    modernHeader();
+    OWP.ui.injectHeaderButtons();
+    const button = document.getElementById(MODERN_HEADER_BTN_ID);
+    const click = detail => button.dispatchEvent({ type: 'click', detail, preventDefault() {}, stopPropagation() {} });
+
+    focused = null;
+    click(1);
+    assert.equal(panel().classList.contains('hide'), false);
+    assert.equal(focused, null);
+    click(1);
+
+    // Nothing plays, so Create Room is disabled and the close button takes focus.
+    click(0);
+    assert.ok(panel().querySelectorAll('button').includes(focused));
+    assert.ok(focused.classList.contains('owp-close-btn'));
+  });
+
+  it('keeps the player button expanded state in step with the panel', () => {
+    modernHeader();
+    OWP.ui.injectHeaderButtons();
+    const osdButton = element('button', 'btnWatchParty', { 'aria-expanded': 'false' });
+    osdButton.id = BTN_ID;
+    document.body.appendChild(osdButton);
+
+    document.getElementById(MODERN_HEADER_BTN_ID).click();
+    assert.equal(osdButton.getAttribute('aria-expanded'), 'true');
+
+    document.getElementById(MODERN_HEADER_BTN_ID).click();
+    assert.equal(osdButton.getAttribute('aria-expanded'), 'false');
+  });
+
   it('places the panel below the legacy header too', () => {
     legacyHeader();
     OWP.ui.injectHeaderButtons();
@@ -467,7 +501,8 @@ describe('header Watch Party button', () => {
     const lobbyClose = panel().querySelector('.owp-close-btn');
     assert.equal(lobbyClose.getAttribute('aria-label'), 'Close panel');
     assert.ok(lobbyClose.querySelector('.owp-icon-x'));
-    focused = null;
+    // Clicking a button focuses it, as in a browser.
+    lobbyClose.focus();
     lobbyClose.click();
     assert.ok(panel().classList.contains('hide'));
     assert.equal(focused, button);
@@ -500,8 +535,9 @@ describe('header Watch Party button', () => {
     const osdButton = document.getElementById(BTN_ID);
 
     osdButton.click();
-    focused = null;
-    panel().querySelector('.owp-close-btn').click();
+    const firstClose = panel().querySelector('.owp-close-btn');
+    firstClose.focus();
+    firstClose.click();
     assert.equal(focused, osdButton);
 
     const headerButton = document.getElementById(MODERN_HEADER_BTN_ID);

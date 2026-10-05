@@ -70,24 +70,30 @@
     return svg;
   };
 
+  // Hides the panel. Keyboard focus inside it must not stay in a hidden panel:
+  // it goes back to the button that opened the panel when that button is
+  // shown, or out of the panel otherwise.
+  const hidePanel = () => {
+    const panel = document.getElementById(PANEL_ID);
+    if (!panel) return;
+    const active = document.activeElement;
+    const hadFocus = !!active && active !== panel && typeof panel.contains === 'function' && panel.contains(active);
+    panel.classList.add('hide');
+    if (!hadFocus) return;
+    const opener = panel.dataset.opener && document.getElementById(panel.dataset.opener);
+    if (opener && typeof opener.getClientRects === 'function' && opener.getClientRects().length > 0) opener.focus();
+    else if (typeof active.blur === 'function') active.blur();
+  };
+
   // Hides the panel from inside it, so closing does not mean reaching for the
-  // button that opened it; focus goes back to that button when it is shown.
+  // button that opened it.
   const createCloseButton = () => {
     const button = createElement('button', 'owp-close-btn owp-bar-btn');
     button.type = 'button';
     button.title = 'Close panel';
     button.setAttribute('aria-label', 'Close panel');
     button.appendChild(createIcon('x'));
-    button.onclick = () => {
-      const panel = document.getElementById(PANEL_ID);
-      if (!panel) return;
-      panel.classList.add('hide');
-      // Keep keyboard focus out of the hidden panel: back on the button that
-      // opened it, or nowhere if that button is not shown any more.
-      const opener = panel.dataset.opener && document.getElementById(panel.dataset.opener);
-      if (opener && typeof opener.getClientRects === 'function' && opener.getClientRects().length > 0) opener.focus();
-      else button.blur();
-    };
+    button.onclick = hidePanel;
     return button;
   };
 
@@ -219,6 +225,19 @@
     applyRoomSection();
   };
 
+  // Escape closes the open drop-down and puts focus back on its button.
+  const closeRoomSectionFromKeyboard = (event) => {
+    if (event.key !== 'Escape') return false;
+    const open = ROOM_SECTIONS.find(section => section.name === state.roomBarSection);
+    if (!open) return false;
+    event.preventDefault();
+    state.roomBarSection = '';
+    applyRoomSection();
+    const button = document.getElementById(open.buttonId);
+    if (button) button.focus();
+    return true;
+  };
+
   const leaveRoom = () => OWP.actions && OWP.actions.leaveRoom && OWP.actions.leaveRoom();
 
   const renderRoom = (panel) => {
@@ -263,6 +282,8 @@
 
     const drop = createElement('div', 'owp-room-drop');
     drop.id = 'owp-room-drop';
+    bar.addEventListener('keydown', closeRoomSectionFromKeyboard);
+    drop.addEventListener('keydown', closeRoomSectionFromKeyboard);
 
     const peopleSection = createElement('div');
     peopleSection.id = 'owp-people-section';
@@ -317,6 +338,9 @@
     if (!chatInput || !chatSend) return;
     ui.stopPlayerCapture(chatInput);
     chatInput.addEventListener('keydown', (e) => {
+      // The input stops key events from bubbling (so the player ignores
+      // typing), so the drop-down's Escape handler is called from here.
+      if (closeRoomSectionFromKeyboard(e)) return;
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         if (OWP.chat && OWP.chat.send(chatInput.value)) {
@@ -347,6 +371,12 @@
       ui.renderHomeWatchParties();
       return;
     }
+    // A full draw replaces every control. Keyboard focus inside the panel
+    // (on Create Room or Join, say) goes to the same control if it is drawn
+    // again, or to the first one, instead of falling out of the dialog.
+    const active = document.activeElement;
+    const focusInside = !!active && active !== panel && typeof panel.contains === 'function' && panel.contains(active);
+    const focusedId = focusInside ? active.id : '';
     panel.dataset.inRoom = String(state.inRoom);
     if (state.inRoom) panel.classList.add(ROOM_MODE_CLASS);
     else panel.classList.remove(ROOM_MODE_CLASS);
@@ -358,7 +388,24 @@
     }
     ui.updateStatusIndicator();
     ui.renderHomeWatchParties();
+    if (focusInside && !panel.classList.contains('hide')) {
+      const same = focusedId && document.getElementById(focusedId);
+      if (same && panel.contains(same)) same.focus({ preventScroll: true });
+      else focusPanelStart(panel);
+    }
   };
+
+  // A panel opened from the keyboard takes focus, as a dialog should: its first
+  // control other than the close button, or the close button. A mouse click
+  // leaves focus alone, so the player's keyboard shortcuts keep working.
+  const focusPanelStart = (panel) => {
+    const buttons = Array.from(panel.querySelectorAll('button')).filter(button => !button.disabled);
+    const target = buttons.find(button => !button.classList.contains('owp-close-btn')) || buttons[0];
+    if (target) target.focus({ preventScroll: true });
+  };
+
+  // Enter and Space fire `click` with `detail` 0; a mouse click counts its clicks.
+  const isKeyboardClick = event => !!event && event.detail === 0;
 
   const injectOsdButton = () => {
     if (document.getElementById(BTN_ID)) return;
@@ -377,8 +424,14 @@
         panel.dataset.opener = BTN_ID;
         if (ui.resetPanelPlacement) ui.resetPanelPlacement(panel);
         render(true);
+        if (isKeyboardClick(e)) focusPanelStart(panel);
       }
+      btn.setAttribute('aria-expanded', String(!panel.classList.contains('hide')));
     };
+    btn.setAttribute('aria-label', 'Watch Party');
+    btn.setAttribute('aria-controls', PANEL_ID);
+    const currentPanel = document.getElementById(PANEL_ID);
+    btn.setAttribute('aria-expanded', String(!!currentPanel && !currentPanel.classList.contains('hide')));
     const favBtn = videoOsd.querySelector('[title="Add to favorites"], [title="Remove from favorites"]');
     if (favBtn) {
       favBtn.insertAdjacentElement('beforebegin', btn);
@@ -387,5 +440,5 @@
     }
   };
 
-  Object.assign(ui, { render, injectOsdButton, updateCreateRoomButton, updateParticipantList });
+  Object.assign(ui, { render, injectOsdButton, updateCreateRoomButton, updateParticipantList, focusPanelStart, isKeyboardClick, hidePanel });
 })();

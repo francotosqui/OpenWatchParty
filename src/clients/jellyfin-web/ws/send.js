@@ -106,8 +106,12 @@
     if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     send('leave_room');
     resetRoomState();
-    const panel = document.getElementById(OWP.constants.PANEL_ID);
-    if (panel) panel.classList.add('hide');
+    if (OWP.ui && OWP.ui.hidePanel) {
+      OWP.ui.hidePanel();
+    } else {
+      const panel = document.getElementById(OWP.constants.PANEL_ID);
+      if (panel) panel.classList.add('hide');
+    }
   };
 
   Object.assign(actions, {
