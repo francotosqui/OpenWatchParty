@@ -3,6 +3,7 @@
   const actions = OWP.actions = OWP.actions || {};
   const state = OWP.state;
   const utils = OWP.utils;
+  const { PROTOCOL_VERSION } = OWP.constants;
   const TOKEN_REQUEST_TIMEOUT_MS = 10000;
 
   const getJellyfinUsername = () => {
@@ -93,7 +94,12 @@
         if (result.mode === 'authenticated' && refreshSocket && refreshSocket.readyState === WebSocket.OPEN) {
           refreshSocket.send(JSON.stringify({
             type: 'auth',
-            payload: { token: result.token, user_name: state.userName, user_id: state.userId },
+            payload: {
+              token: result.token,
+              user_name: state.userName,
+              user_id: state.userId,
+              protocol_version: PROTOCOL_VERSION
+            },
             ts: utils.nowMs()
           }));
           console.log('[OpenWatchParty] Token refreshed and re-authenticated');

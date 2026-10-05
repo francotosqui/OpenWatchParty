@@ -16,6 +16,7 @@
     && (allowEmpty || Array.from(value).length > 0)
     && Array.from(value).length <= max;
   const timestamp = value => Number.isSafeInteger(value) && value >= 0;
+  const protocolVersion = value => Number.isSafeInteger(value) && value >= 1;
   const position = value => typeof value === 'number' && Number.isFinite(value)
     && value >= 0 && value <= MAX_POSITION;
   const count = value => Number.isInteger(value) && value >= 0 && value <= MAX_PARTICIPANTS;
@@ -50,8 +51,10 @@
 
   const validateAuthSuccess = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
-    if (!onlyKeys(message.payload, ['user_name'])) return 'auth_success has unknown fields';
-    return string(message.payload.user_name, MAX_NAME_LENGTH) ? null : 'user_name is invalid';
+    if (!onlyKeys(message.payload, ['user_name', 'protocol_version'])) return 'auth_success has unknown fields';
+    if (!string(message.payload.user_name, MAX_NAME_LENGTH)) return 'user_name is invalid';
+    if (!optional(message.payload.protocol_version, protocolVersion)) return 'protocol_version is invalid';
+    return null;
   };
 
   const validateRoomState = (message) => {

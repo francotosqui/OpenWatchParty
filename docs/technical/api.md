@@ -63,7 +63,8 @@ Generates a JWT token for the authenticated user.
   "user_name": "John",
   "session_server_url": "wss://jellyfin.example.com/ws",
   "hide_native_syncplay_button": false,
-  "invite_ttl_seconds": 3600
+  "invite_ttl_seconds": 3600,
+  "protocol_version": 1
 }
 ```
 
@@ -77,13 +78,16 @@ Generates a JWT token for the authenticated user.
   "user_name": "John",
   "session_server_url": "wss://jellyfin.example.com/ws",
   "hide_native_syncplay_button": false,
-  "invite_ttl_seconds": 3600
+  "invite_ttl_seconds": 3600,
+  "protocol_version": 1
 }
 ```
 
 `hide_native_syncplay_button` is `true` when the administrator enabled **Hide Jellyfin's SyncPlay button**; the web client then hides the built-in SyncPlay button, and shows it again when a later response turns the setting off.
 
 `invite_ttl_seconds` is the configured **Invite TTL** (60-86400 seconds). The client sends it when asking the session server for a new invite link; the session server clamps it again.
+
+`protocol_version` is the WebSocket protocol version the issued token authorizes; it is carried in the client's `auth` message (see the [protocol specification](protocol.md#protocol-version)).
 
 **Status Codes:**
 | Code | Description |
@@ -110,7 +114,8 @@ curl -H "Authorization: MediaBrowser Token=\"YOUR_API_KEY\"" \
   "auth_enabled": true,
   "expires_in": 3600,
   "user_id": "d4f8a2b1-c3e4-5f6a-7b8c-9d0e1f2a3b4c",
-  "user_name": "admin"
+  "user_name": "admin",
+  "protocol_version": 1
 }
 ```
 

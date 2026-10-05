@@ -149,7 +149,8 @@ public ActionResult GetToken()
             user_id = userId,
             user_name = userName,
             session_server_url = sessionServerUrl,
-            hide_native_syncplay_button = config.HideNativeSyncPlayButton
+            hide_native_syncplay_button = config.HideNativeSyncPlayButton,
+            protocol_version = ProtocolVersion
         });
     }
 
@@ -162,7 +163,8 @@ public ActionResult GetToken()
         user_id = userId,
         user_name = userName,
         session_server_url = sessionServerUrl,
-        hide_native_syncplay_button = config.HideNativeSyncPlayButton
+        hide_native_syncplay_button = config.HideNativeSyncPlayButton,
+        protocol_version = ProtocolVersion
     });
 }
 ```
@@ -172,6 +174,7 @@ public ActionResult GetToken()
 - Rate limiting (30 tokens/minute/user)
 - JWT token generation
 - Graceful handling when JWT not configured
+- `protocol_version` advertises the WebSocket protocol version the token authorizes (see the [protocol specification](protocol.md#protocol-version))
 
 ### JWT Token Generation
 

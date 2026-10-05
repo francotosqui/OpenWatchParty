@@ -4,7 +4,7 @@
   const state = OWP.state;
   const utils = OWP.utils;
   const ui = OWP.ui;
-  const { DEFAULT_WS_URL, RECONNECT_BASE_MS, RECONNECT_MAX_MS, ROOM_REJOIN_TIMEOUT_MS, PING_INIT_MS, PING_STABLE_MS, PING_STABLE_AFTER, AUTH_TOAST_SUPPRESS_MS } = OWP.constants;
+  const { DEFAULT_WS_URL, RECONNECT_BASE_MS, RECONNECT_MAX_MS, ROOM_REJOIN_TIMEOUT_MS, PING_INIT_MS, PING_STABLE_MS, PING_STABLE_AFTER, AUTH_TOAST_SUPPRESS_MS, PROTOCOL_VERSION } = OWP.constants;
 
   const clearRoomRejoinTimer = () => {
     if (state.roomRejoinTimer) {
@@ -89,13 +89,13 @@
     state.lastAuthToastMessage = '';
     state.lastAuthToastAt = 0;
     if (utils.flushLogBuffer) utils.flushLogBuffer();
-    const authPayload = {};
+    // The version is always declared: it is what lets the server negotiate
+    // even when the client has no token or identity to authenticate with.
+    const authPayload = { protocol_version: PROTOCOL_VERSION };
     if (token) authPayload.token = token;
     if (state.userName) authPayload.user_name = state.userName;
     if (state.userId) authPayload.user_id = state.userId;
-    if (Object.keys(authPayload).length > 0) {
-      socket.send(JSON.stringify({ type: 'auth', payload: authPayload, ts: utils.nowMs() }));
-    }
+    socket.send(JSON.stringify({ type: 'auth', payload: authPayload, ts: utils.nowMs() }));
     actions.send('ping', { client_ts: utils.nowMs() });
     schedulePing();
     if (!token) handleAuthenticatedConnection();

@@ -32,6 +32,7 @@ public sealed class TokenResponseTests
 
         Assert.True(response.RootElement.GetProperty("insecure_mode").GetBoolean());
         Assert.Equal(hide, response.RootElement.GetProperty("hide_native_syncplay_button").GetBoolean());
+        Assert.Equal(1, response.RootElement.GetProperty("protocol_version").GetInt32());
     }
 
     [Theory]
@@ -50,6 +51,7 @@ public sealed class TokenResponseTests
 
         Assert.True(response.RootElement.GetProperty("auth_enabled").GetBoolean());
         Assert.Equal(hide, response.RootElement.GetProperty("hide_native_syncplay_button").GetBoolean());
+        Assert.Equal(1, response.RootElement.GetProperty("protocol_version").GetInt32());
     }
 
     [Fact]
