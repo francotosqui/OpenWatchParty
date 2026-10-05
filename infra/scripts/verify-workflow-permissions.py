@@ -46,6 +46,9 @@ EXPECTED = {
         "build": {"contents": "read"},
         "deploy": {"pages": "write", "id-token": "write"},
     },
+    "e2e.yml": {
+        "e2e": {"contents": "read"},
+    },
     "security.yml": {
         "secret-scan": {"contents": "read"},
         "cargo-audit": {"contents": "read"},

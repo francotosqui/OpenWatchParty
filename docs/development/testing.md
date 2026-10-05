@@ -78,6 +78,36 @@ dotnet test
 dotnet test --collect:"XPlat Code Coverage"
 ```
 
+### JavaScript Client
+
+```bash
+cd src/clients/jellyfin-web
+
+# Unit tests, lint and syntax checks
+npm test
+npm run lint
+```
+
+### End-to-End (Playwright)
+
+The `e2e` suite drives the real Jellyfin Web UI with two browser contexts
+(`testhost` and `testclient1`) against the development stack. It covers room
+creation and joins, play/pause/seek propagation, the paused-room hold, leaving,
+reconnection and the home card lifecycle.
+
+```bash
+# Boots the stack, then runs the suite
+just e2e
+
+# Iterate without rebuilding the stack
+cd e2e
+npm test
+```
+
+The suite uses the installed Google Chrome (`OWP_BROWSER_CHANNEL` to override)
+so H.264 playback works without extra downloads. See `e2e/README.md` for the
+environment variables and the test list.
+
 ## Manual Testing
 
 ### Test Environment
