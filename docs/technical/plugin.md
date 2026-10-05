@@ -85,40 +85,29 @@ Serves the client JavaScript bundle with caching support.
 ```csharp
 [HttpGet("ClientScript")]
 [Produces("text/javascript")]
-public async Task<ActionResult> GetClientScript()
+public ActionResult GetClientScript()
 {
-    // ETag validation for cache
-    var requestETag = Request.Headers["If-None-Match"].FirstOrDefault();
-    if (!string.IsNullOrEmpty(requestETag) && requestETag == _cachedScriptETag)
+    var (content, etag) = _scriptCache.Value;
+
+    // The cache lifetime follows the requested client hash. Headers are set
+    // before the 304 check, so a Not Modified response keeps the current policy.
+    Response.Headers["Cache-Control"] = GetClientAssetCacheControl(Request.Query, ClientAssetVersion.Value);
+    Response.Headers["ETag"] = etag;
+
+    if (RequestMatchesETag(etag))
     {
         return StatusCode(304); // Not Modified
     }
 
-    // Load from embedded resource (cached after first load)
-    if (_cachedScript == null)
-    {
-        var assembly = typeof(OpenWatchPartyController).Assembly;
-        var resourceName = "OpenWatchParty.Plugin.Web.plugin.js";
-        using var stream = assembly.GetManifestResourceStream(resourceName);
-        if (stream == null) return NotFound();
-        using var reader = new StreamReader(stream);
-        _cachedScript = await reader.ReadToEndAsync();
-        _cachedScriptETag = $"\"{ComputeETag(_cachedScript)}\"";
-    }
-
-    // Set cache headers
-    Response.Headers["Cache-Control"] = "public, max-age=3600";
-    Response.Headers["ETag"] = _cachedScriptETag;
-
-    return Content(_cachedScript, "text/javascript");
+    return Content(content, "text/javascript");
 }
 ```
 
 **Features:**
-- Embedded resource loading
-- ETag-based cache validation
+- Embedded resource loading, cached after the first load
+- ETag-based cache validation, including weak and list `If-None-Match` values
 - HTTP 304 Not Modified support
-- 1-hour cache lifetime
+- Cache lifetime from the `v` query value, the content hash of the loader and modules: `public, max-age=31536000, immutable` for the current hash, `no-store` for any other value, `public, max-age=3600` without `v` (see the [API reference](api.md#get-openwatchpartyclientscript))
 
 #### `GET /OpenWatchParty/Token`
 
