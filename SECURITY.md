@@ -19,3 +19,7 @@ You should receive an acknowledgement within 3 business days and an initial asse
 ## Scope
 
 Reports may cover the Rust session server, Jellyfin plugin, browser client, release artifacts, container images, CI/CD workflows, and dependency supply chain.
+
+## Technical Documentation
+
+The threat model (assets, actors, trust boundaries, STRIDE analysis) and the inventory of abuse limits (message and frame size, rate-limit windows, command cooldown, connection caps, authentication timeout, token rate limiting, name and chat length limits, proxy trust) are documented in [`docs/operations/security.md`](docs/operations/security.md).

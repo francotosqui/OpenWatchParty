@@ -214,6 +214,8 @@ Plugin settings:
 
 If `cloudflared` runs on the Docker host (not in a container), use the host IP or `host.docker.internal` instead of the service name.
 
+Set `TRUSTED_PROXIES` to the address of the `cloudflared` container (or the host, when the tunnel runs on the host) so the session server can derive the real client address from `X-Forwarded-For` for the per-IP connection limit. Without it, every tunneled client shares the tunnel's address for that limit. See [Reverse Proxy Trust](configuration.md#reverse-proxy-trust) and [Per-IP Limits: Verdict](security.md#per-ip-limits-verdict).
+
 ## SSL/TLS Configuration
 
 ### Let's Encrypt with Caddy
@@ -295,6 +297,10 @@ services:
     security_opt:
       - no-new-privileges:true
 ```
+
+### 7. Trust Only Your Reverse Proxy
+
+Set `TRUSTED_PROXIES` to the exact addresses or narrow CIDRs of the proxies you operate so the per-IP connection limit sees the real client address. Never trust `X-Forwarded-For` supplied by the public internet. See [Reverse Proxy Trust](configuration.md#reverse-proxy-trust) and the [Threat Model](security.md#threat-model).
 
 ## Health Checks
 

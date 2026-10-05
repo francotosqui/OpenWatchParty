@@ -92,13 +92,15 @@ ALLOWED_ORIGINS=*
 
 ### Reverse Proxy Trust
 
-The server ignores `X-Forwarded-For` unless the direct peer address belongs to `TRUSTED_PROXIES`. Configure only reverse proxies you operate, using exact addresses or narrow CIDRs. When trusted, the first valid address in `X-Forwarded-For` is used for the per-IP connection limit; otherwise the direct peer IP is used.
+The server ignores `X-Forwarded-For` unless the direct peer address belongs to `TRUSTED_PROXIES`. Configure only reverse proxies you operate, using exact addresses or narrow CIDRs. When trusted, the per-IP connection limit uses the first address from the right of `X-Forwarded-For` that is not itself in a trusted network, so a client cannot spoof its address by prepending values; otherwise the direct peer IP is used.
 
 ```bash
 TRUSTED_PROXIES=127.0.0.1/32,10.20.0.0/16
 ```
 
 WebSocket messages and individual frames are capped at 64 KiB by Warp before message assembly. Connections exceeding either concurrent connection limit receive HTTP `429`; clients exceeding the application message rate or the JWT authentication deadline are closed with WebSocket policy code `1008`.
+
+See the [threat model](security.md#threat-model) for the proxy misconfiguration threat and the explicit [per-IP limits verdict](security.md#per-ip-limits-verdict), and [Trust Only Your Reverse Proxy](deployment.md#7-trust-only-your-reverse-proxy) for deployment guidance.
 
 ## Client Configuration
 
