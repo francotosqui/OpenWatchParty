@@ -45,7 +45,7 @@ Technical terms used throughout this documentation:
 | Term | Full Name | Description |
 |------|-----------|-------------|
 | **HLS** | HTTP Live Streaming | Adaptive streaming protocol that breaks video into small segments. Used by Jellyfin for transcoded content. Introduces buffering challenges for synchronization. |
-| **RTT** | Round-Trip Time | Time for a message to travel from client to server and back. Displayed in the Watch Party panel as latency indicator. Lower is better (typically 20-100ms on local network). |
+| **RTT** | Round-Trip Time | Time for a message to travel from client to server and back. Displayed in the room bar as latency. Lower is better (typically 20-100ms on local network). |
 | **EMA** | Exponential Moving Average | Smoothing algorithm used for clock synchronization. Prevents sudden jumps in time offset by averaging new measurements with previous values (α=0.4). |
 | **JWT** | JSON Web Token | Compact, URL-safe token format for authentication. Contains user identity claims signed with a secret key. Used to verify users connecting to the session server. |
 | **CORS** | Cross-Origin Resource Sharing | Browser security mechanism controlling which websites can connect to the session server. Configure `ALLOWED_ORIGINS` to restrict access. |

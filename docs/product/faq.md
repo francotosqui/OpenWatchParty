@@ -46,7 +46,7 @@ Not currently. Only the host can control playback. Democratic mode is planned fo
 The room closes and all participants are disconnected. A participant cannot become the new host.
 
 ### Can I chat with other viewers?
-Yes! A text chat is available in the Watch Party panel. Messages are sent to all room participants in real time via the session server.
+Yes! A text chat is available from the chat icon in the room bar. Messages are sent to all room participants in real time via the session server.
 
 ### Does everyone need the same video quality?
 No. Each client transcodes independently based on their connection and device. Sync is based on playback position, not video quality.

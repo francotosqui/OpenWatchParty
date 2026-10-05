@@ -57,7 +57,7 @@ nav_order: 2
 ### Jellyfin Versions
 | Version | Status |
 |---------|--------|
-| 12.0 / 12.1 | Validated package (`12.0.0`, ABI `12.0.0.0`) and image (`12.1`) for OpenWatchParty `0.4.0` |
+| 12.0 / 12.1 | Validated package (`12.0.0`, ABI `12.0.0.0`) and image (`12.1`) for OpenWatchParty `0.5.0` |
 | ABI 12.0.0.0 | Plugin compatibility target |
 | 10.11.3 / ABI 10.11.0.0 | Last supported by OpenWatchParty `0.3.4` |
 | Others | See compatibility matrix |

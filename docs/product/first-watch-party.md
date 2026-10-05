@@ -9,7 +9,7 @@ nav_order: 3
 This walkthrough takes you from a working Jellyfin server to a room with two
 people watching together. Follow **one** setup path, then continue with the
 shared host-and-guest steps. The screenshots show Jellyfin 12.1 and
-OpenWatchParty 0.4.0; labels may vary with your language or version.
+OpenWatchParty 0.5.0; labels may vary with your language or version.
 
 ## Choose a setup path
 
@@ -163,7 +163,7 @@ for containerized proxies and other topologies.
 As the host, play **the same movie** your guest can access. For the local
 demo, choose *Wing It!* from **Blender Open Movies (Dev)**. Pause while
 your guest gets ready. Reveal the player controls (move the pointer over the
-video), then select the **Watch Party** groups icon near the right end of the
+video), then select the **Watch Party** film icon near the right end of the
 control bar.
 
 ![Jellyfin player showing the Watch Party button circled at the right end of the controls]({{ '/assets/images/tutorial-player-button.png' | relative_url }})
@@ -187,7 +187,7 @@ In a **second browser profile or device**, sign in with a different Jellyfin
 account. On the home page, the **Watch Parties** row shows the host's room and
 movie while the room is active.
 
-![Guest's Jellyfin home page showing a Wing It! watch-party card for Room de testhost, marked 3]({{ '/assets/images/tutorial-guest-home.png' | relative_url }})
+![Guest's Jellyfin home page showing a Wing It! watch-party card for testhost's room, marked 3]({{ '/assets/images/tutorial-guest-home.png' | relative_url }})
 
 **3** — The card's movie title and host name let you confirm you picked the
 right room. If the row is absent, reload the page and check that the host is
@@ -212,7 +212,7 @@ the guest should follow. Chat opens from the chat icon. The exit icon asks
 before leaving: for the host it closes the room for everyone, for the guest it
 only leaves.
 
-![Real participant panel showing Online 2, In sync and Leave, with the sync indicator marked 5]({{ '/assets/images/tutorial-guest-sync.png' | relative_url }})
+![Participant room bar listing both names and the host badge, with the green sync dot marked 5]({{ '/assets/images/tutorial-guest-sync.png' | relative_url }})
 
 **5** — The green **In sync** state is the confirmation on the guest side.
 
