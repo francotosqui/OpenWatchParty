@@ -90,6 +90,7 @@ describe('media-correlated ready state', () => {
     ensuredMedia = [];
     ensureCalls = [];
     Object.assign(OWP.state, {
+      mediaSwitchUntil: 0,
       clientId: 'guest',
       inRoom: false,
       roomId: '',
@@ -164,6 +165,8 @@ describe('media-correlated ready state', () => {
 
   it('declares ready on the playing media while a hidden page names the previous one', async () => {
     const previousVideo = currentVideo;
+    // OWP left the player to open the room media (see launchViaDetailsPage).
+    OWP.state.mediaSwitchUntil = Date.now() + 20000;
     OWP._wsHandlers.handleRoomState(roomState('room-a', 'new-media'), previousVideo);
 
     // Jellyfin plays the room media, but the hidden page of the previous item
@@ -175,6 +178,8 @@ describe('media-correlated ready state', () => {
     assert.equal(currentMediaId, 'old-media');
     assert.ok(currentVideo.currentTime > 19 && currentVideo.currentTime < 21);
     assert.equal(currentVideo.pauseCalls, 1);
+    // The room media plays: closing the player now leaves the room at once.
+    assert.equal(OWP.state.mediaSwitchUntil, 0);
     assert.deepEqual(sent.map(message => message.payload), [{ room: 'room-a', media_id: 'new-media' }]);
     assert.equal(ensureCalls.some(call => call[3] === true), false);
   });

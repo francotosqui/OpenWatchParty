@@ -100,6 +100,8 @@
         return;
       }
       state.pendingMediaId = '';
+      // The room media plays: closing the player is an exit again.
+      state.mediaSwitchUntil = 0;
       if (typeof onReady === 'function') onReady(video);
       notifyReady(roomId, mediaId);
       cleanup();
