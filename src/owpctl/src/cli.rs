@@ -28,6 +28,7 @@ pub enum Command {
     Configure(ConfigureArgs),
     Doctor(DiagnosticArgs),
     Status(DiagnosticArgs),
+    Logs(LogsArgs),
     Upgrade(ApplyArgs),
     Backup(BackupArgs),
     Uninstall(UninstallArgs),
@@ -81,6 +82,19 @@ pub struct DiagnosticArgs {
     pub quiet: bool,
     #[arg(long)]
     pub api_token_file: Option<PathBuf>,
+    /// Write a redacted support bundle (report, configuration and state) to this file.
+    #[arg(long)]
+    pub bundle: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct LogsArgs {
+    /// Number of recent log lines to show before following.
+    #[arg(long, default_value_t = 100)]
+    pub tail: u32,
+    /// Print the recent lines and exit instead of following.
+    #[arg(long)]
+    pub no_follow: bool,
 }
 
 #[derive(Debug, Args)]
@@ -133,4 +147,43 @@ pub struct PairArgs {
     pub api_token_file: PathBuf,
     #[arg(long)]
     pub trust_store: PathBuf,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn logs_defaults_to_a_hundred_lines_and_follows() {
+        let cli = Cli::try_parse_from(["owpctl", "logs"]).expect("logs parses");
+        let Command::Logs(arguments) = cli.command else {
+            panic!("expected the logs command");
+        };
+        assert_eq!(arguments.tail, 100);
+        assert!(!arguments.no_follow);
+    }
+
+    #[test]
+    fn logs_accepts_tail_and_no_follow() {
+        let cli =
+            Cli::try_parse_from(["owpctl", "logs", "--tail", "25", "--no-follow"]).expect("parses");
+        let Command::Logs(arguments) = cli.command else {
+            panic!("expected the logs command");
+        };
+        assert_eq!(arguments.tail, 25);
+        assert!(arguments.no_follow);
+    }
+
+    #[test]
+    fn doctor_accepts_a_bundle_path() {
+        let cli = Cli::try_parse_from(["owpctl", "doctor", "--bundle", "/tmp/owp-bundle.json"])
+            .expect("parses");
+        let Command::Doctor(arguments) = cli.command else {
+            panic!("expected the doctor command");
+        };
+        assert_eq!(
+            arguments.bundle.as_deref(),
+            Some(std::path::Path::new("/tmp/owp-bundle.json"))
+        );
+    }
 }
