@@ -149,6 +149,19 @@
   // so an older session server still shows something useful. Each name and the
   // host badge are separate elements, so a name such as "Ana (host)" or one
   // with commas cannot pass for the host or for several people.
+  // Each participant's status (participant_statuses), shown under the name with
+  // a colored dot. Older servers and clients send none: the row stays as it was.
+  const PARTICIPANT_STATUS = {
+    playing: { label: 'Playing', tone: 'good' },
+    paused: { label: 'Paused', tone: 'idle' },
+    in_sync: { label: 'In sync', tone: 'good' },
+    catching_up: { label: 'Catching up', tone: 'warn' },
+    buffering: { label: 'Buffering', tone: 'warn' },
+    loading: { label: 'Loading', tone: 'info' },
+    blocked: { label: 'Needs to press Play', tone: 'bad' },
+    not_watching: { label: 'Not watching', tone: 'idle' }
+  };
+
   const fillParticipantList = (list) => {
     if (!state.participants.length) {
       list.replaceChildren(document.createTextNode(`Online: ${String(state.participantCount || 1)}`));
@@ -159,8 +172,21 @@
       const item = createElement('div', 'owp-participant');
       const avatar = createElement('span', 'owp-participant-avatar', Array.from(name)[0].toUpperCase());
       avatar.setAttribute('aria-hidden', 'true');
-      item.append(avatar, createElement('span', 'owp-participant-name', name));
-      if (participant.isHost) item.appendChild(createElement('span', 'owp-host-badge', 'Host'));
+      const nameEl = createElement('span', 'owp-participant-name', name);
+      const badge = participant.isHost ? createElement('span', 'owp-host-badge', 'Host') : null;
+      const status = PARTICIPANT_STATUS[participant.status];
+      if (!status) {
+        item.append(avatar, nameEl);
+        if (badge) item.appendChild(badge);
+        return item;
+      }
+      item.classList.add('owp-has-status');
+      const line = createElement('span', 'owp-participant-line');
+      line.appendChild(nameEl);
+      if (badge) line.appendChild(badge);
+      const main = createElement('span', 'owp-participant-main');
+      main.append(line, createElement('span', `owp-participant-status ${status.tone}`, status.label));
+      item.append(avatar, main);
       return item;
     }));
   };

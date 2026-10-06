@@ -171,8 +171,8 @@ describe('room reconnection lifecycle', () => {
       payload: { participants: [{ name: 'Host', is_host: true }, { name: 'Guest', is_host: false }] }
     });
     assert.deepEqual(OWP.state.participants, [
-      { name: 'Host', isHost: true },
-      { name: 'Guest', isHost: false }
+      { name: 'Host', isHost: true, status: null },
+      { name: 'Guest', isHost: false, status: null }
     ]);
   });
 

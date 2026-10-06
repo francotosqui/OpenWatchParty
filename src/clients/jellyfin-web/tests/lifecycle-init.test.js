@@ -117,4 +117,45 @@ describe('application lifecycle initialization', () => {
     assert.equal(OWP.state.authBlocked, false);
     assert.equal(OWP.state.authError, '');
   });
+
+  it('reports this client\'s status on every sync tick in a room, host or guest', () => {
+    const intervals = new Map();
+    const setInterval = OWP.timers.setInterval;
+    const calls = [];
+    OWP.timers.setInterval = (callback, delay) => {
+      intervals.set(delay, callback);
+      return intervals.size;
+    };
+    // lifecycle.js keeps the playback object it found at load time.
+    Object.assign(OWP.playback, {
+      syncLoop: () => calls.push('syncLoop'),
+      reportStatus: () => calls.push('reportStatus')
+    });
+    OWP.state.initialized = false;
+    try {
+      OWP.app.init();
+    } finally {
+      OWP.timers.setInterval = setInterval;
+    }
+    const tick = intervals.get(OWP.constants.SYNC_LOOP_MS);
+    try {
+      Object.assign(OWP.state, { inRoom: true, isHost: false });
+      tick();
+      assert.deepEqual(calls, ['syncLoop', 'reportStatus']);
+
+      calls.length = 0;
+      OWP.state.isHost = true;
+      tick();
+      assert.deepEqual(calls, ['reportStatus']);
+
+      calls.length = 0;
+      Object.assign(OWP.state, { inRoom: false, isHost: false });
+      tick();
+      assert.deepEqual(calls, []);
+    } finally {
+      Object.assign(OWP.state, { inRoom: false, isHost: false });
+      OWP.playback.syncLoop = () => {};
+      delete OWP.playback.reportStatus;
+    }
+  });
 });

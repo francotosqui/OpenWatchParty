@@ -133,9 +133,25 @@
       width: 20px; height: 20px; border-radius: 50%; background: #0c447c; color: #85b7eb; font-size: 11px;
     }
     .owp-participant-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* With a status: the name and the Host badge on top, the status below */
+    .owp-participant.owp-has-status { align-items: flex-start; }
+    .owp-participant.owp-has-status .owp-participant-avatar { margin-top: 2px; }
+    .owp-participant-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+    .owp-participant-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .owp-participant-status { display: flex; align-items: center; gap: 5px; margin-top: 1px; font-size: 11px; }
+    /* The dot sits on the middle of the letters, not of the line box */
+    .owp-participant-status::before {
+      content: ''; flex-shrink: 0; position: relative; top: 0.05em;
+      width: 7px; height: 7px; border-radius: 50%; background: currentColor;
+    }
+    .owp-participant-status.good { color: #97c459; }
+    .owp-participant-status.warn { color: #ef9f27; }
+    .owp-participant-status.info { color: #85b7eb; }
+    .owp-participant-status.bad { color: #f09595; }
+    .owp-participant-status.idle { color: #85847e; }
     .owp-host-badge {
       flex-shrink: 0; padding: 0 4px; border-radius: 5px;
-      background: #27500a; color: #97c459; font-size: 11px; text-transform: lowercase;
+      background: #27500a; color: #97c459; font-size: 11px;
     }
     .owp-input {
       width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444;

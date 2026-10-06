@@ -12,7 +12,8 @@
     INITIAL_SYNC_DRIFT_THRESHOLD,
     INITIAL_SYNC_MAX_DRIFT,
     MEDIA_READY_POLL_MS,
-    MEDIA_READY_TIMEOUT_MS
+    MEDIA_READY_TIMEOUT_MS,
+    PARTICIPANT_STATUS_HOLD_MS
   } = OWP.constants;
 
   const notifyReady = (roomId, mediaId) => {
@@ -224,5 +225,38 @@
     applySyncCorrection(drift, abs, video, expected, serverNow);
   };
 
-  Object.assign(playback, { watchReady, syncLoop });
+  // How this client is doing, as the room's participants list shows it.
+  const ownStatus = () => {
+    const video = state.currentVideoElement || utils.getVideo();
+    if (!video) return 'not_watching';
+    if (state.pendingMediaId || state.syncStatus === 'pending_play') return 'loading';
+    if (state.isBuffering) return 'buffering';
+    if (!utils.isVideoReady()) return 'loading';
+    if (state.isHost) return video.paused ? 'paused' : 'playing';
+    if (state.syncStatus === 'blocked') return 'blocked';
+    if (state.syncStatus === 'syncing') return 'catching_up';
+    return 'in_sync';
+  };
+
+  // Sends this client's status to the room once it has held for a second, so
+  // drift correction going in and out of sync does not flood the room. Only to
+  // a server that sent participant_statuses for this room: an older one would
+  // answer with an error. Sent again after a reconnection (a new client id).
+  const reportStatus = () => {
+    if (!state.inRoom || state.statusesRoomId !== state.roomId || !state.ws || state.ws.readyState !== 1) return;
+    const status = ownStatus();
+    const now = utils.nowMs();
+    if (status !== state.statusCandidate) {
+      state.statusCandidate = status;
+      state.statusCandidateSince = now;
+      return;
+    }
+    const key = `${state.roomId}|${state.clientId}|${status}`;
+    if (key === state.statusSentKey || now - state.statusCandidateSince < PARTICIPANT_STATUS_HOLD_MS) return;
+    if (!OWP.actions?.send) return;
+    OWP.actions.send('participant_status', { status });
+    state.statusSentKey = key;
+  };
+
+  Object.assign(playback, { watchReady, syncLoop, ownStatus, reportStatus });
 })();

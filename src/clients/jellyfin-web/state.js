@@ -123,6 +123,7 @@
     PING_STABLE_AFTER: 5,          // Pongs before switching to stable interval
     HOME_REFRESH_MS: 5000,        // Home watch parties refresh (increased from 2s)
     SYNC_LOOP_MS: 500,            // Sync loop for playback rate correction
+    PARTICIPANT_STATUS_HOLD_MS: 1000, // A status must hold this long before it is sent to the room
     RECONNECT_BASE_MS: 1000,      // Base reconnect delay (1s)
     RECONNECT_MAX_MS: 30000,      // Max reconnect delay (30s)
     AUTH_RETRY_BASE_MS: 5000,     // First retry delay after a blocked authentication (5s)
@@ -192,7 +193,11 @@
     pendingJoinRoomId: '',  // Room to join after navigating to video player
     roomName: '',
     participantCount: 0,
-    participants: [],      // [{ name, isHost }] from participant_list; empty until the server sends one
+    participants: [],      // [{ name, isHost, status }] from participant_list and participant_statuses
+    statusesRoomId: '',    // The room whose server sent participant_statuses: it accepts participant_status
+    statusCandidate: '',   // This client's status, and since when, until it holds long enough to send
+    statusCandidateSince: 0,
+    statusSentKey: '',     // room|client|status last sent, so a status is sent once per room and connection
     roomBarSection: '',    // Drop-down open under the room bar: 'people', 'chat', 'leave' or ''
     lastSyncServerTs: 0,
     lastSyncPosition: 0,

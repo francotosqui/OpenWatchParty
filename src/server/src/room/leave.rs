@@ -1,5 +1,5 @@
 use crate::messaging::{broadcast_room_list, collect_room_senders, send_to_senders, ClientSender};
-use crate::room::{close_room_parts, participant_list_message};
+use crate::room::{close_room_parts, participant_list_message, participant_statuses_message};
 use crate::types::{Client, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
@@ -24,6 +24,7 @@ fn detach_client_from_room(
 
     room.clients.retain(|id| id != client_id);
     room.ready_clients.remove(client_id);
+    room.statuses.remove(client_id);
     if room.host_id == client_id {
         room.pending_play = None;
     }
@@ -40,8 +41,12 @@ fn detach_client_from_room(
             server_ts: Some(now_ms()),
         };
         let participant_list = participant_list_message(room, clients);
+        let statuses = participant_statuses_message(room);
         let senders = collect_room_senders(room, clients, None);
-        Some(LeaveOutcome::Left((senders, vec![msg, participant_list])))
+        Some(LeaveOutcome::Left((
+            senders,
+            vec![msg, participant_list, statuses],
+        )))
     }
 }
 
@@ -198,6 +203,9 @@ mod tests {
             locked.clients.insert("guest".to_string(), guest);
             let mut room = test_helpers::create_room("room", "host");
             room.clients.push("guest".to_string());
+            for (id, status) in [("host", "playing"), ("guest", "blocked")] {
+                room.statuses.insert(id.to_string(), status);
+            }
             locked.rooms.insert("room".to_string(), room);
         }
 
@@ -213,6 +221,15 @@ mod tests {
             list.payload.unwrap()["participants"],
             serde_json::json!([{ "name": "Franco", "is_host": true }])
         );
+        let statuses = test_helpers::recv_msg(&mut host_rx).unwrap();
+        assert_eq!(statuses.msg_type, "participant_statuses");
+        assert_eq!(
+            statuses.payload.unwrap()["statuses"],
+            serde_json::json!(["playing"])
+        );
+        assert!(!state.read().await.rooms["room"]
+            .statuses
+            .contains_key("guest"));
     }
 
     #[test]

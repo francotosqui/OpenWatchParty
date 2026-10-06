@@ -96,7 +96,7 @@ Defines global shared state and configuration constants.
 | `joiningItemId` | string | Media ID being loaded |
 | `roomName` | string | Current room name |
 | `participantCount` | number | Room participant count |
-| `participants` | array | `{ name, isHost }` entries from `participant_list`; empty until the server sends one |
+| `participants` | array | `{ name, isHost, status }` entries from `participant_list` and `participant_statuses`; empty until the server sends one |
 | `roomBarSection` | string | Drop-down open under the room bar: `'people'`, `'chat'`, `'leave'` or `''` |
 | `lastSyncServerTs` | number | Server timestamp of last sync |
 | `lastSyncPosition` | number | Position of last sync (seconds) |
@@ -299,7 +299,10 @@ Response to `create_room` or `join_room`:
 Updates participant counter and shows toast for new participant.
 
 #### `participant_list`
-Stores the participants' names for the current room and shows them instead of the count, one row per name with a separate **Host** badge. Lists for another room are ignored, and joining another room clears the previous names.
+Stores the participants' names for the current room and shows them instead of the count, one row per name with a separate **Host** badge. Lists for another room are ignored, and joining another room clears the previous names. The statuses are cleared until `participant_statuses` follows.
+
+#### `participant_statuses`
+Stores each participant's status, when the list has the same length as the participants, and shows it under the name. It also marks the server as accepting `participant_status`: from then on `playback.reportStatus()` (run on every sync tick in a room) sends this client's status, from `playback.ownStatus()`, once it has held for `PARTICIPANT_STATUS_HOLD_MS`.
 
 #### `room_closed`
 Resets state when room is closed (host disconnected).
