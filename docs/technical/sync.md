@@ -207,6 +207,24 @@ The sqrt curve provides stronger correction for larger drifts while staying smoo
 
 While the room plays, the host's periodic `state_update` resumes a guest who paused. A paused room sends none (the server drops state updates that change nothing), so the loop pauses a guest whose video plays while the room is paused. It waits while a room command is being applied or a host play is scheduled.
 
+### Manual Nudge (Sync Adjustment)
+
+When the plugin's **Show the sync adjustment button in rooms** setting is on, guests get a sync adjustment drop-down in the room bar (`playback.nudgeState()` and `playback.nudge()` in `playback/sync.js`). It uses the same expected position as `syncLoop`:
+
+```
+drift = expected - video.currentTime     (positive = behind the host)
+step  = min(NUDGE_STEP_SEC, |drift|, room left in the buffered range)
+video.currentTime += sign(drift) * step
+```
+
+- **Local only.** Guests never send seeks, so the room state does not change; the next host command or state update applies as usual, and the automatic correction keeps running.
+- **No overshoot.** A nudge moves at most to the host's position.
+- **In sync below `NUDGE_MIN_DRIFT_SEC`.** Nothing to nudge.
+- **HLS segments.** The target stays inside the buffered range around the current position, `NUDGE_BUFFER_MARGIN_SEC` away from its edges, so a nudge never triggers a new segment fetch and the buffering that comes with it. If less than `NUDGE_MIN_MOVE_SEC` is left, the nudge waits.
+- **Ignored while a room command is applied.** Nothing happens while `isSyncing`, a scheduled action or a scheduled play is pending, during the initial sync or its cooldown, or while the video is seeking. The same applies when the room is paused, the video is buffering, or the room's media is still loading.
+
+`playback.trackDrift()` runs after `syncLoop` (only when the setting is on) and keeps `outOfSyncSince`, which the drop-down shows next to the current playback rate.
+
 ## 5. HLS Handling and Feedback Loop Prevention
 
 ### The HLS Problem
@@ -402,6 +420,10 @@ fn schedule_pending_play(room_id, created_at, rooms, clients) {
 | `INITIAL_SYNC_MAX_MS` | 30000ms | Client | Max initial sync phase duration |
 | `INITIAL_SYNC_DRIFT_THRESHOLD` | 0.5s | Client | Exit initial sync when caught up |
 | `SYNC_LOOP_MS` | 500ms | Client | Sync loop interval |
+| `NUDGE_STEP_SEC` | 0.5s | Client | Largest manual nudge toward the host |
+| `NUDGE_MIN_DRIFT_SEC` | 0.15s | Client | Drift below which there is nothing to nudge |
+| `NUDGE_MIN_MOVE_SEC` | 0.05s | Client | Smallest nudge worth a seek |
+| `NUDGE_BUFFER_MARGIN_SEC` | 0.1s | Client | Distance kept from the buffered range's edges |
 | `PLAY_SCHEDULE_MS` | 1000ms | Server | Delay before play |
 | `CONTROL_SCHEDULE_MS` | 300ms | Server | Delay before pause/seek |
 | `MAX_READY_WAIT_MS` | 2000ms | Server | Ready timeout |

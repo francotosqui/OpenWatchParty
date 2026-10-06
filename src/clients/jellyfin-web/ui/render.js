@@ -21,7 +21,8 @@
     x: ['M18 6l-12 12', 'M6 6l12 12'],
     chevron: ['M6 9l6 6l6 -6'],
     send: ['M10 14l11 -11', 'M21 3l-6.5 18a.55 .55 0 0 1 -1 0l-3.5 -7l-7 -3.5a.55 .55 0 0 1 0 -1l18 -6.5'],
-    share: ['M6 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', 'M18 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', 'M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', 'M8.7 10.7l6.6 -3.4', 'M8.7 13.3l6.6 3.4']
+    share: ['M6 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', 'M18 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', 'M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0', 'M8.7 10.7l6.6 -3.4', 'M8.7 13.3l6.6 3.4'],
+    refresh: ['M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4', 'M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4']
   };
 
   // The Watch Party icon for the header and player buttons: a screen with a
@@ -198,8 +199,81 @@
   const ROOM_SECTIONS = [
     { name: 'people', sectionId: 'owp-people-section', buttonId: 'owp-btn-people' },
     { name: 'chat', sectionId: 'owp-chat-section', buttonId: 'owp-btn-chat' },
+    { name: 'sync', sectionId: 'owp-sync-section', buttonId: 'owp-btn-sync' },
     { name: 'leave', sectionId: 'owp-leave-confirm', buttonId: 'owp-btn-leave' }
   ];
+
+  // The sync adjustment: offered to guests when the plugin enables it. The
+  // host is the reference and never needs it.
+  const offersSyncNudge = () => state.showSyncNudge && !state.isHost;
+
+  const NUDGE_STATUS = {
+    behind: { marker: 'syncing', text: abs => `${abs.toFixed(1)} s behind the host` },
+    ahead: { marker: 'syncing', text: abs => `${abs.toFixed(1)} s ahead of the host` },
+    synced: { marker: 'synced', text: () => 'In sync with the host' },
+    busy: { marker: 'idle', text: () => 'Following the host...' },
+    paused: { marker: 'idle', text: () => 'The room is paused' },
+    loading: { marker: 'idle', text: () => 'Waiting for the video' },
+    unavailable: { marker: 'idle', text: () => 'Waiting for the video' }
+  };
+
+  // What the automatic correction is doing while the guest is out of sync.
+  const describeAutoCorrection = (video) => {
+    const seconds = state.outOfSyncSince ? Math.max(0, Math.round((Date.now() - state.outOfSyncSince) / 1000)) : 0;
+    const rate = video ? video.playbackRate : 1;
+    const since = seconds ? ` for ${seconds} s` : '';
+    if (rate && rate !== 1) return `Automatic correction: ${rate.toFixed(2)}× speed${since}.`;
+    return seconds ? `Automatic correction: out of sync for ${seconds} s.` : 'Automatic correction: starting.';
+  };
+
+  // Refreshes the drop-down's text while it is open. The button keeps its
+  // element (and keyboard focus); aria-disabled, unlike disabled, keeps it
+  // focusable when there is nothing to nudge.
+  const updateSyncSection = () => {
+    const section = document.getElementById('owp-sync-section');
+    if (!section || section.hidden || !OWP.playback?.nudgeState) return;
+    const current = OWP.playback.nudgeState();
+    const status = NUDGE_STATUS[current.kind] || NUDGE_STATUS.unavailable;
+    const outOfSync = current.kind === 'behind' || current.kind === 'ahead';
+    const dot = section.querySelector('.owp-nudge-state .owp-sync-dot');
+    if (dot) dot.className = `owp-sync-dot ${status.marker}`;
+    const text = document.getElementById('owp-nudge-text');
+    if (text) text.textContent = status.text(Math.abs(current.drift || 0));
+    const auto = document.getElementById('owp-nudge-auto');
+    if (auto) {
+      auto.hidden = !outOfSync;
+      if (outOfSync) auto.textContent = describeAutoCorrection(state.currentVideoElement || OWP.utils?.getVideo?.());
+    }
+    const button = document.getElementById('owp-btn-nudge');
+    if (button) {
+      const step = outOfSync ? String(current.step) : '0.5';
+      button.textContent = current.kind === 'ahead' ? `Move back ${step} s` : `Move ahead ${step} s`;
+      button.setAttribute('aria-disabled', String(!outOfSync));
+    }
+  };
+
+  const createSyncSection = () => {
+    const section = createElement('div');
+    section.id = 'owp-sync-section';
+    const row = createElement('div', 'owp-nudge-row');
+    const status = createElement('span', 'owp-nudge-state');
+    const text = createElement('span');
+    text.id = 'owp-nudge-text';
+    status.append(createElement('span', 'owp-sync-dot idle'), text);
+    const nudge = createElement('button', 'owp-pill-btn primary');
+    nudge.id = 'owp-btn-nudge';
+    nudge.type = 'button';
+    nudge.onclick = () => {
+      if (nudge.getAttribute('aria-disabled') !== 'true' && OWP.playback?.nudge) OWP.playback.nudge();
+      updateSyncSection();
+    };
+    row.append(status, nudge);
+    const auto = createElement('div', 'owp-nudge-sub');
+    auto.id = 'owp-nudge-auto';
+    const note = createElement('div', 'owp-nudge-sub', 'Only moves your video; the host stays in control.');
+    section.append(row, auto, note);
+    return section;
+  };
 
   const applyRoomSection = () => {
     const open = state.roomBarSection;
@@ -213,6 +287,7 @@
     });
     // Read only when it is on screen: a redraw while the panel is hidden must
     // not mark messages that nobody saw.
+    if (open === 'sync') updateSyncSection();
     if (open === 'chat' && OWP.chat && OWP.chat.isChatVisible()) {
       OWP.chat.markRead();
       const messages = document.getElementById('owp-chat-messages');
@@ -271,6 +346,13 @@
 
     // Invite links are minted by the host: guests get no button at all.
     const roomActions = [peopleBtn, chatBtn];
+    if (offersSyncNudge()) {
+      const syncBtn = createBarButton('owp-btn-sync', 'Sync adjustment', 'refresh', 'owp-sync-section');
+      syncBtn.onclick = () => toggleRoomSection('sync');
+      roomActions.push(syncBtn);
+    } else if (state.roomBarSection === 'sync') {
+      state.roomBarSection = '';
+    }
     if (state.isHost) {
       const inviteBtn = createBarButton('owp-btn-invite', 'Invite', 'share');
       inviteBtn.onclick = () => OWP.actions && OWP.actions.copyInviteLink && OWP.actions.copyInviteLink();
@@ -326,7 +408,9 @@
     confirmLeave.onclick = leaveRoom;
     const question = state.isHost ? 'Close the room for everyone?' : 'Leave the room?';
     confirm.append(createElement('span', 'owp-leave-question', question), cancel, confirmLeave);
-    drop.append(peopleSection, chatSection, confirm);
+    drop.append(peopleSection, chatSection);
+    if (offersSyncNudge()) drop.appendChild(createSyncSection());
+    drop.appendChild(confirm);
 
     panel.replaceChildren(bar, drop);
     applyRoomSection();
@@ -440,5 +524,5 @@
     }
   };
 
-  Object.assign(ui, { render, injectOsdButton, updateCreateRoomButton, updateParticipantList, focusPanelStart, isKeyboardClick, hidePanel });
+  Object.assign(ui, { render, injectOsdButton, updateCreateRoomButton, updateParticipantList, focusPanelStart, isKeyboardClick, hidePanel, updateSyncSection });
 })();
