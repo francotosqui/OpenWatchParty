@@ -41,7 +41,7 @@ async fn handle_jwt_auth(
     match jwt_config.validate_token(token) {
         Ok(claims) => {
             let Some(user_name) = sanitize_name(&claims.name) else {
-                warn!("Auth failed for {client_id}: JWT name is empty after sanitization");
+                warn!("Auth failed, JWT name is empty after sanitization client_id={client_id}");
                 return false;
             };
             let sender = {
@@ -53,7 +53,7 @@ async fn handle_jwt_auth(
                     client.user_name = user_name.clone();
                     client.session_expires_at = jwt_config.enabled.then_some(claims.exp as u64);
                     client.authentication_version = client.authentication_version.wrapping_add(1);
-                    info!("Client {client_id} authenticated as {user_name}");
+                    info!("Client authenticated client_id={client_id} user={user_name:?}");
                 }
                 sender
             };
@@ -79,7 +79,10 @@ async fn handle_jwt_auth(
             true
         }
         Err(e) => {
-            warn!("Auth failed for {client_id}: {e}");
+            warn!(
+                "Auth failed client_id={client_id} error={:?}",
+                e.to_string()
+            );
             false
         }
     }
@@ -98,7 +101,7 @@ async fn handle_identity(client_id: &str, payload: &serde_json::Value, state: &S
             if let Some(uid) = user_id {
                 client.user_id = uid.to_string();
             }
-            info!("Client {client_id} identified as {name}");
+            info!("Client identified client_id={client_id} user={name:?}");
         }
     }
 }
@@ -112,7 +115,7 @@ pub(in crate::ws) async fn handle_auth(
     let declared_version = match declared_protocol_version(parsed.payload.as_ref()) {
         Ok(version) => version,
         Err(()) => {
-            warn!("Client {client_id} sent a malformed protocol_version");
+            warn!("Malformed protocol_version client_id={client_id}");
             reject_unsupported_protocol_version(
                 client_id,
                 state,
@@ -126,7 +129,7 @@ pub(in crate::ws) async fn handle_auth(
     };
     if let Some(version) = declared_version {
         if version != PROTOCOL_VERSION {
-            warn!("Client {client_id} requested unsupported protocol version {version}");
+            warn!("Unsupported protocol version client_id={client_id} version={version}");
             reject_unsupported_protocol_version(
                 client_id,
                 state,
@@ -156,7 +159,7 @@ pub(in crate::ws) async fn handle_auth(
         if !jwt_config.enabled {
             handle_identity(client_id, payload, state).await;
         } else {
-            warn!("Client {client_id} sent auth without token but JWT is required");
+            warn!("Auth without token while JWT is required client_id={client_id}");
             send_error(
                 client_id,
                 state,
@@ -166,7 +169,7 @@ pub(in crate::ws) async fn handle_auth(
             .await;
         }
     } else if jwt_config.enabled {
-        warn!("Client {client_id} sent auth with no payload but JWT is required");
+        warn!("Auth with no payload while JWT is required client_id={client_id}");
         send_error(
             client_id,
             state,

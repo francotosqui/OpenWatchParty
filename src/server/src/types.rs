@@ -90,6 +90,26 @@ pub enum ClientMessageType {
     Unknown,
 }
 
+impl ClientMessageType {
+    /// The wire name, as serialized.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Auth => "auth",
+            Self::ListRooms => "list_rooms",
+            Self::CreateRoom => "create_room",
+            Self::JoinRoom => "join_room",
+            Self::Ready => "ready",
+            Self::LeaveRoom => "leave_room",
+            Self::PlayerEvent => "player_event",
+            Self::StateUpdate => "state_update",
+            Self::Ping => "ping",
+            Self::ClientLog => "client_log",
+            Self::ChatMessage => "chat_message",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
 /// Outgoing message types from server (reserved for future use)
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -184,6 +204,18 @@ mod tests {
 
         let json = serde_json::to_string(&ClientMessageType::CreateRoom).unwrap();
         assert_eq!(json, r#""create_room""#);
+    }
+
+    #[test]
+    fn client_message_type_names_match_the_wire_and_the_metric_labels() {
+        for name in crate::metrics::CLIENT_MESSAGE_TYPES {
+            let parsed: ClientMessageType =
+                serde_json::from_value(serde_json::json!(name)).unwrap();
+            assert_eq!(parsed.as_str(), name);
+            if parsed != ClientMessageType::Unknown {
+                assert_eq!(serde_json::to_value(&parsed).unwrap(), name);
+            }
+        }
     }
 
     #[test]
