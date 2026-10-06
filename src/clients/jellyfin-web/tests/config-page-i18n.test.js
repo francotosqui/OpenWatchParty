@@ -92,10 +92,26 @@ describe('configuration page localization', () => {
     assert.equal(context.configCheckSummary('Session destination is not configured'), 'Session destination is not configured');
   });
 
+  // The page without its <script> or <style> blocks, found by plain text
+  // search: only the markup is checked here.
+  const withoutBlocks = (html, tag) => {
+    const lower = html.toLowerCase();
+    let kept = '';
+    let index = 0;
+    for (;;) {
+      const start = lower.indexOf(`<${tag}`, index);
+      if (start === -1) return kept + html.slice(index);
+      kept += html.slice(index, start);
+      const end = lower.indexOf(`</${tag}>`, start);
+      if (end === -1) return kept;
+      index = end + tag.length + 3;
+    }
+  };
+
   it('marks every text and label of the page for translation', () => {
     // Product names and a Material icon glyph stay as they are.
     const untranslated = new Set(['OpenWatchParty', 'visibility']);
-    const markup = configPage.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '');
+    const markup = withoutBlocks(withoutBlocks(configPage, 'script'), 'style');
     const violations = [];
     for (const [, tag, attributes, text] of markup.matchAll(/<([a-zA-Z][\w-]*)([^>]*)>([^<]*[A-Za-z][^<]*)</g)) {
       if (!attributes.includes('data-i18n=') && !untranslated.has(text.trim())) violations.push(`<${tag}> ${text.trim()}`);
@@ -150,7 +166,7 @@ describe('configuration page localization', () => {
   });
 
   it('maps every fixed summary the plugin reports, and only those', () => {
-    const fixed = [...diagnostics.matchAll(/(?<!\$)"([A-Z][A-Za-z-]+(?: [^"]+)+)"/g)].map(match => match[1]).sort();
+    const fixed = [...diagnostics.matchAll(/(?<!\$)"([A-Z][A-Za-z-]+ [^"]+)"/g)].map(match => match[1]).sort();
     assert.deepEqual(Object.keys(context.configCheckSummaries).sort(), fixed);
   });
 
