@@ -68,6 +68,21 @@
     if (focusInside) restoreRoomListFocus(roomList, focusedRoomId);
   };
 
+  // The head count is a badge of its own in the image's corner, not Jellyfin's
+  // innerCardFooter: themes restyle that one for progress bars (ElegantFin
+  // stretches it over the whole image and lifts the text into the middle).
+  const fillCountBadge = (badge, count) => {
+    const icon = createElement('span', 'material-icons', 'groups');
+    icon.setAttribute('aria-hidden', 'true');
+    badge.replaceChildren(icon, createElement('span', 'owp-card-count-text', ` ${String(count)} watching`));
+  };
+
+  const updateRoomCardCount = (card, count) => {
+    card.dataset.count = String(count);
+    const badge = card.querySelector('.owp-card-count');
+    if (badge) fillCountBadge(badge, count);
+  };
+
   // Same markup and classes as Jellyfin's landscape home cards ("Continue
   // Watching"), with no colours of its own, so the row matches its neighbours
   // and follows the active theme.
@@ -80,13 +95,9 @@
     padder.appendChild(cardIcon);
 
     const image = createElement('div', `cardImageContainer coveredImage cardContent defaultCardBackground defaultCardBackground${(index % 5) + 1} owp-card-image-container`);
-    const footer = createElement('div', 'innerCardFooter');
-    const count = createElement('div', 'cardText');
-    const countIcon = createElement('span', 'material-icons', 'groups');
-    countIcon.style.cssText = 'font-size:14px;vertical-align:middle;';
-    count.append(countIcon, document.createTextNode(` ${String(room.count)} watching`));
-    footer.appendChild(count);
-    image.appendChild(footer);
+    const count = createElement('div', 'owp-card-count');
+    fillCountBadge(count, room.count);
+    image.appendChild(count);
 
     const overlay = createElement('div', 'cardOverlayContainer itemAction');
     const join = createElement('button', 'cardOverlayButton cardOverlayButton-hover cardOverlayFab-primary owp-join-btn paper-icon-button-light');
@@ -104,17 +115,17 @@
     return box;
   };
 
-  // Landscape art, as Jellyfin's "Continue Watching" picks it: an episode's own
-  // image is a 16:9 still; otherwise the thumb, then the backdrop (also from the
-  // series), and the poster last, cropped to fit.
+  // Landscape art, in the order Jellyfin's "Continue Watching" picks it by
+  // default: the item's thumb, then the series' thumb, then a backdrop (its own,
+  // then the series' one), and the item's own image last, cropped to fit. An
+  // episode's own image is a frame of it, often dark and hard to place.
   const landscapeImage = (item, mediaId) => {
     const tags = item.ImageTags || {};
-    if (item.Type === 'Episode' && tags.Primary) return { id: mediaId, type: 'Primary', tag: tags.Primary };
     if (tags.Thumb) return { id: mediaId, type: 'Thumb', tag: tags.Thumb };
-    if (item.BackdropImageTags?.length) return { id: mediaId, type: 'Backdrop', tag: item.BackdropImageTags[0] };
     if (item.ParentThumbItemId && item.ParentThumbImageTag) {
       return { id: item.ParentThumbItemId, type: 'Thumb', tag: item.ParentThumbImageTag };
     }
+    if (item.BackdropImageTags?.length) return { id: mediaId, type: 'Backdrop', tag: item.BackdropImageTags[0] };
     if (item.ParentBackdropItemId && item.ParentBackdropImageTags?.length) {
       return { id: item.ParentBackdropItemId, type: 'Backdrop', tag: item.ParentBackdropImageTags[0] };
     }
@@ -138,8 +149,19 @@
         const serverUrl = window.ApiClient._serverAddress || window.ApiClient.serverAddress?.() || '';
         const imageUrl = `${serverUrl}/Items/${encodeURIComponent(image.id)}/Images/${image.type}`
           + `?fillWidth=480&fillHeight=270&quality=96&tag=${encodeURIComponent(image.tag)}`;
-        containerEl.style.backgroundImage = `url("${imageUrl}")`;
-        if (iconEl) iconEl.style.display = 'none';
+        // Only once the art has loaded: until then, or if it never does, the
+        // card keeps its placeholder background and icon.
+        const art = new Image();
+        art.onload = () => {
+          containerEl.style.backgroundImage = `url("${imageUrl}")`;
+          // Jellyfin's cards with art carry no placeholder background. Keeping
+          // it lets a theme's `background` shorthand (ElegantFin) reset its
+          // size, and the art shows at full size from its top left corner.
+          containerEl.className = containerEl.className.split(/\s+/)
+            .filter(name => !/^defaultCardBackground\d*$/.test(name)).join(' ');
+          if (iconEl) iconEl.style.display = 'none';
+        };
+        art.src = imageUrl;
       }
     }).catch(() => {
       const titleEl = card.querySelector('.owp-media-title');
@@ -208,5 +230,5 @@
     return card;
   };
 
-  Object.assign(ui, { updateRoomListUI, createRoomCard });
+  Object.assign(ui, { updateRoomListUI, createRoomCard, updateRoomCardCount });
 })();
