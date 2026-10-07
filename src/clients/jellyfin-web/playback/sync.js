@@ -117,8 +117,10 @@
       state.initialSyncTargetPos = null;
       return true;
     }
+    // Past the cooldown, a drift under DRIFT_SOFT_MAX_SEC keeps closing at
+    // the catch-up rate, as it does after the initial sync; a larger one seeks.
     if (state.initialSyncTargetPos !== null
-        && abs > INITIAL_SYNC_DRIFT_THRESHOLD
+        && abs >= DRIFT_SOFT_MAX_SEC
         && !inCooldown) {
       utils.log('SYNC', { type: 'post_buffer_seek', drift, videoPos: video.currentTime, expected });
       video.currentTime = expected;

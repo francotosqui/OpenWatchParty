@@ -112,7 +112,7 @@ As a participant:
 | Host pauses | Video pauses automatically |
 | Host seeks | Video jumps to new position |
 | Host leaves | "Room closed" notification |
-| Drift detected | Playback speed adjusts (0.85x-2.0x) to catch up |
+| Drift detected | Playback speed adjusts (0.90x-1.15x) to catch up |
 
 ## The Panel Interface
 

@@ -113,9 +113,9 @@
     SYNC_LEAD_MS: 300,            // Compensates processing + initial HLS buffer
     DRIFT_DEADZONE_SEC: 0.04,
     DRIFT_SOFT_MAX_SEC: 2.0,      // Seek to correct if drift > 2s
-    PLAYBACK_RATE_MIN: 0.85,      // Allow slowdown if ahead
-    PLAYBACK_RATE_MAX: 2.0,       // Aggressive catch-up (browser pitch correction preserves audio)
-    DRIFT_GAIN: 0.50,             // For sqrt curve: 0.50 * sqrt(1s) = 0.50 → 1.50x at 1s drift
+    PLAYBACK_RATE_MIN: 0.90,      // Slowdown when ahead
+    PLAYBACK_RATE_MAX: 1.15,      // Catch-up when behind, gentle enough that voices stay natural
+    DRIFT_GAIN: 0.15,             // For sqrt curve: 0.15 * sqrt(1s) = 0.15 → 1.15x at 1s drift
     // Interval timings (P2 optimization)
     UI_CHECK_MS: 2000,            // UI button injection check
     PING_INIT_MS: 2000,            // Fast ping interval (clock convergence)
