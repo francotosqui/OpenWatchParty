@@ -104,6 +104,7 @@
     SYNCPLAY_HIDE_STYLE_ID: 'owp-hide-native-syncplay',
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
+    CLIENT_FEATURES: ['host_transfer'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -160,6 +161,7 @@
     reconnectTimer: null,
     connectionAttempt: 0,
     connectionPhase: 'disconnected', // disconnected | connecting | authenticating | authenticated
+    serverFeatures: [],
     desiredRoomId: '',
     rejoinPending: false,
     rejectedRejoinRoomIds: [],

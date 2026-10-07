@@ -22,6 +22,32 @@
     if (video && video.playbackRate !== 1) video.playbackRate = 1;
   };
 
+  const resetGuestSyncState = () => {
+    normalizePlaybackRate();
+    if (state.pendingActionTimer) OWP.timers.clear(state.pendingActionTimer);
+    state.pendingActionTimer = null;
+    if (state.mediaReadyCleanup) state.mediaReadyCleanup();
+    state.playbackActionAttempt++;
+    Object.assign(state, {
+      isBuffering: false,
+      wantsToPlay: false,
+      isSyncing: false,
+      syncCooldownUntil: 0,
+      isInitialSync: false,
+      initialSyncUntil: 0,
+      initialSyncTargetPos: null,
+      syncStatus: 'synced',
+      currentDrift: 0,
+      pendingPlayUntil: 0,
+      pendingMediaId: '',
+      lastSyncServerTs: 0,
+      lastSyncPosition: 0,
+      lastSyncPlayState: '',
+      suppressUntil: 0
+    });
+    if (OWP.ui?.updateSyncIndicator) OWP.ui.updateSyncIndicator();
+  };
+
   const resetRoomState = () => {
     normalizePlaybackRate();
     if (state.mediaReadyCleanup) state.mediaReadyCleanup();
@@ -114,12 +140,27 @@
     }
   };
 
+  const closeRoom = () => {
+    if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
+    const supportsHostTransfer = state.serverFeatures.includes('host_transfer');
+    send(supportsHostTransfer ? 'close_room' : 'leave_room');
+    resetRoomState();
+    if (OWP.ui && OWP.ui.hidePanel) {
+      OWP.ui.hidePanel();
+    } else {
+      const panel = document.getElementById(OWP.constants.PANEL_ID);
+      if (panel) panel.classList.add('hide');
+    }
+  };
+
   Object.assign(actions, {
     send,
     normalizePlaybackRate,
+    resetGuestSyncState,
     resetRoomState,
     createRoom,
     joinRoom,
-    leaveRoom
+    leaveRoom,
+    closeRoom
   });
 })();

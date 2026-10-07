@@ -238,7 +238,10 @@
     return true;
   };
 
-  const leaveRoom = () => OWP.actions && OWP.actions.leaveRoom && OWP.actions.leaveRoom();
+  const leaveRoom = () => {
+    const action = state.isHost ? OWP.actions?.closeRoom : OWP.actions?.leaveRoom;
+    if (action) action();
+  };
 
   const renderRoom = (panel) => {
     const bar = createElement('div', 'owp-room-bar');

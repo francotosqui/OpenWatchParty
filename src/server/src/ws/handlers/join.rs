@@ -3,7 +3,9 @@ use super::super::dispatch::{error_message, is_authenticated, send_error, ErrorC
 use super::super::validation::sanitize_name;
 use crate::auth::{InviteTicketError, JwtConfig};
 use crate::messaging::{collect_room_senders, send_message, send_to_senders, ClientSender};
-use crate::room::{handle_leave, participant_list_message, send_leave_notification};
+use crate::room::{
+    handle_leave_without_transfer, participant_list_message, send_leave_notification,
+};
 use crate::types::{Client, IncomingMessage, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
@@ -224,7 +226,7 @@ pub(in crate::ws) async fn handle_join_room(
                     .and_then(|client| client.room_id.as_deref());
                 let previous_leave = if previous_room.is_some_and(|previous| previous != room_id) {
                     let crate::types::ServerState { clients, rooms } = &mut *state;
-                    handle_leave(client_id, clients, rooms)
+                    handle_leave_without_transfer(client_id, clients, rooms)
                 } else {
                     None
                 };
@@ -703,6 +705,50 @@ mod tests {
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
             "room_closed"
         );
+    }
+
+    #[tokio::test]
+    async fn host_joining_another_room_closes_old_room_with_supporting_guest() {
+        let state = test_helpers::create_state();
+        let (mut host_a, _host_a_rx) =
+            test_helpers::create_client_with_rx("host-a", "Host A", true);
+        let (mut guest, mut guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        let (mut host_b, _host_b_rx) =
+            test_helpers::create_client_with_rx("host-b", "Host B", true);
+        host_a.room_id = Some("room-a".to_string());
+        guest.room_id = Some("room-a".to_string());
+        guest.supports_host_transfer = true;
+        host_b.room_id = Some("room-b".to_string());
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host-a".to_string(), host_a);
+            locked.clients.insert("guest".to_string(), guest);
+            locked.clients.insert("host-b".to_string(), host_b);
+            let mut room_a = test_helpers::create_room("room-a", "host-a");
+            room_a.clients.push("guest".to_string());
+            locked.rooms.insert("room-a".to_string(), room_a);
+            locked.rooms.insert(
+                "room-b".to_string(),
+                test_helpers::create_room("room-b", "host-b"),
+            );
+        }
+
+        handle_join_room(
+            "host-a",
+            &join_message("room-b"),
+            &state,
+            &test_jwt_config(),
+        )
+        .await;
+
+        let locked = state.read().await;
+        assert!(!locked.rooms.contains_key("room-a"));
+        assert!(locked.clients["guest"].room_id.is_none());
+        assert_eq!(locked.clients["host-a"].room_id.as_deref(), Some("room-b"));
+        drop(locked);
+        let message = test_helpers::recv_msg(&mut guest_rx).unwrap();
+        assert_eq!(message.msg_type, "room_closed");
+        assert_eq!(message.room.as_deref(), Some("room-a"));
     }
 
     async fn state_with_guest_in_previous_room() -> SharedState {

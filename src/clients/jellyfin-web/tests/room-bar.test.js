@@ -67,7 +67,10 @@ describe('room bar', () => {
     OWP.ui.updateRoomListUI = () => {};
     OWP.ui.stopPlayerCapture = () => {};
     OWP.ui.showChatToast = (username, text) => chatToasts.push(`${username}: ${text}`);
-    OWP.actions = { leaveRoom: () => { left++; } };
+    OWP.actions = {
+      leaveRoom: () => { left++; },
+      closeRoom: () => { left++; }
+    };
     OWP.chat.messages = [];
     OWP.chat.unreadCount = 0;
     OWP.state.roomBarSection = '';
@@ -279,6 +282,28 @@ describe('room bar', () => {
     assert.equal(byId('owp-btn-confirm-leave').textContent, 'Close room');
     byId('owp-btn-confirm-leave').click();
     assert.equal(left, 1);
+  });
+
+  it('dispatches the rendered confirmation to the current role action', () => {
+    let closes = 0;
+    let leaves = 0;
+    OWP.actions = {
+      closeRoom: () => { closes++; },
+      leaveRoom: () => { leaves++; }
+    };
+
+    renderRoom({ isHost: true });
+    byId('owp-btn-leave').click();
+    byId('owp-btn-confirm-leave').click();
+    assert.equal(closes, 1);
+    assert.equal(leaves, 0);
+
+    OWP.state.roomBarSection = '';
+    renderRoom({ isHost: false });
+    byId('owp-btn-leave').click();
+    byId('owp-btn-confirm-leave').click();
+    assert.equal(closes, 1);
+    assert.equal(leaves, 1);
   });
 
   it('words a reopened confirmation for the current role', () => {

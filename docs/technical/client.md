@@ -85,6 +85,7 @@ Defines global shared state and configuration constants.
 | `inRoom` | boolean | `true` if client is in a room |
 | `bound` | boolean | `true` if video events are bound |
 | `autoReconnect` | boolean | `true` for automatic reconnection |
+| `serverFeatures` | string[] | Features confirmed by `auth_success`; reset for every WebSocket connection |
 | `serverOffsetMs` | number | Client/server clock offset (ms) |
 | `lastSeekSentAt` | number | Timestamp of last seek sent |
 | `lastStateSentAt` | number | Timestamp of last state update sent |
@@ -253,6 +254,8 @@ Synchronization loop called every 500 ms (`SYNC_LOOP_MS`, non-hosts only).
 ### Description
 Manages WebSocket communication with the session server.
 
+Every new connection resets `serverFeatures` and advertises `features: ["host_transfer"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
+
 ### Functions
 
 #### `send(type: string, payload?: object, roomOverride?: string) -> void`
@@ -275,6 +278,9 @@ Joins an existing room.
 
 #### `leaveRoom() -> void`
 Leaves the current room.
+
+#### `closeRoom() -> void`
+Closes the room when invoked by the host. It sends `close_room` when the server confirmed `host_transfer`; with an older server it sends `leave_room`, which preserves the previous close-on-host-leave behavior. Exiting the player always calls `leaveRoom()`.
 
 #### `connect() -> void`
 Establishes WebSocket connection.
@@ -301,8 +307,11 @@ Updates participant counter and shows toast for new participant.
 #### `participant_list`
 Stores the participants' names for the current room and shows them instead of the count, one row per name with a separate **Host** badge. Lists for another room are ignored, and joining another room clears the previous names.
 
+#### `host_changed`
+Updates `isHost` for the current room, resets guest playback correction and pending synchronization when this client becomes host, re-renders host-only controls, and shows the new-host toast. All playback broadcasts, the host state heartbeat, and the invite button read `state.isHost` at use time.
+
 #### `room_closed`
-Resets state when room is closed (host disconnected).
+Resets state when the room is explicitly closed or host transfer is unavailable.
 
 #### `player_event`
 Playback command received from host:
