@@ -101,7 +101,8 @@ As the host, your actions control everyone:
 | Invite | Copies a short-lived room invite link |
 | Close panel | Room stays active |
 | Leave the player or disconnect | Host role passes to the earliest participant using a compatible client; the room stays open |
-| Close room | Room closes for everyone |
+| Leave room | When another participant can take over, leaves while the room stays open with that participant as host |
+| Close for everyone | Room closes for everyone |
 
 ## Participant Experience
 
@@ -135,7 +136,7 @@ In a room the panel becomes a single bar at the top right (below the header when
 - **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge on the host (older session servers show only the number of people)
 - **Chat** (chat icon) - Opens the chat; a red badge counts unread messages
 - **Invite** (share icon, host only) - Copies a short-lived invite link that joins people to this room automatically
-- **Leave** (exit icon) - Asks **Leave the room?** before leaving; for the host it becomes **Close room**, asks **Close the room for everyone?**, and ends the room for every participant
+- **Leave** (exit icon) - Guests confirm leaving normally. On a compatible server, a host with other participants can choose **Leave** to pass the room to the named next host or **Close for everyone** to end it. A host who is alone, or connected to an older server, sees the existing **Close room** confirmation.
 - **Close (X)** - Only hides the bar: you stay in the room
 
 Participants, chat and the leave confirmation open one at a time below the bar; select the same icon again to close it.

@@ -60,7 +60,8 @@
     if (becameHost && OWP.actions?.resetDriftCorrection) {
       OWP.actions.resetDriftCorrection();
     }
-    ui.render(true);
+    ui.render();
+    if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();
     ui.showToast(becameHost ? 'You are now the host' : `${msg.payload.host_name} is now the host`);
   };
 

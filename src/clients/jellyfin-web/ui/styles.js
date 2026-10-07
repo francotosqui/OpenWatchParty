@@ -85,8 +85,12 @@
       min-height: 0; overflow-y: auto; padding: 8px 10px; border-radius: 10px;
     }
     .owp-room-drop[hidden], .owp-room-drop > [hidden] { display: none !important; }
-    .owp-leave-confirm { display: flex; align-items: center; gap: 8px; }
+    .owp-leave-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .owp-leave-question { flex: 1; }
+    .owp-leave-hint {
+      flex-basis: 100%; width: 100%; font-size: 12px; line-height: 1.35;
+      color: rgba(255,255,255,.6); overflow-wrap: anywhere;
+    }
     .owp-pill-btn {
       height: 24px; padding: 0 8px; border-radius: 12px; cursor: pointer; font-family: inherit; font-size: 12px;
     }

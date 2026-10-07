@@ -35,6 +35,16 @@ class FakeNode {
     nodes.forEach(node => this.appendChild(typeof node === 'string' ? new FakeText(node) : node));
   }
 
+  insertBefore(node, referenceNode) {
+    if (!referenceNode) return this.appendChild(node);
+    const index = this.childNodes.indexOf(referenceNode);
+    if (index === -1) throw new Error('Reference node is not a child');
+    if (node.parentNode) node.remove();
+    node.parentNode = this;
+    this.childNodes.splice(index, 0, node);
+    return node;
+  }
+
   prepend(...nodes) {
     nodes.reverse().forEach(node => {
       const child = typeof node === 'string' ? new FakeText(node) : node;
