@@ -19,8 +19,12 @@
 
   const onVideoPlayerExit = () => {
     console.log('[OpenWatchParty] Video player closed, cleaning up...');
-    const panel = document.getElementById(OWP.constants.PANEL_ID);
-    if (panel) panel.classList.add('hide');
+    if (ui.hidePanel) {
+      ui.hidePanel();
+    } else {
+      const panel = document.getElementById(OWP.constants.PANEL_ID);
+      if (panel) panel.classList.add('hide');
+    }
     if ((state.inRoom || state.rejoinPending) && OWP.actions && OWP.actions.leaveRoom) {
       OWP.actions.leaveRoom();
     }
@@ -37,6 +41,9 @@
     const panel = document.createElement('div');
     panel.id = OWP.constants.PANEL_ID;
     panel.className = 'hide';
+    // A non-modal dialog: the page and the player stay usable while it is open.
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-label', 'Watch Party');
     document.body.appendChild(panel);
     panelStopPropagation = (e) => e.stopPropagation();
     panel.addEventListener('click', panelStopPropagation);
@@ -180,7 +187,8 @@
     get hadVideoElement() { return hadVideoElement; },
     set hadVideoElement(v) { hadVideoElement = v; },
     clearAllIntervals,
-    retryConnectionAfterLogin
+    retryConnectionAfterLogin,
+    onVideoPlayerExit
   };
 
   OWP.app = OWP.app || {};

@@ -163,8 +163,8 @@ for containerized proxies and other topologies.
 As the host, play **the same movie** your guest can access. For the local
 demo, choose *Wing It!* from **Blender Open Movies (Dev)**. Pause while
 your guest gets ready. Reveal the player controls (move the pointer over the
-video), then select the **Watch Party** film icon near the right end of the
-control bar.
+video), then select the **Watch Party** icon (a screen with two viewers)
+near the right end of the control bar.
 
 ![Jellyfin player showing the Watch Party button circled at the right end of the controls]({{ '/assets/images/tutorial-player-button.png' | relative_url }})
 

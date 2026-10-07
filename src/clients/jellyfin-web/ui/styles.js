@@ -66,6 +66,8 @@
       width: 15px; height: 15px; flex-shrink: 0;
       fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
     }
+    /* Watch Party icon of the header and player buttons: the size of a native icon */
+    .owp-watch-party-icon svg { display: block; width: 1em; height: 1em; }
     .owp-bar-btn {
       display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; height: 24px; padding: 0 6px;
       border: none; border-radius: 12px; background: transparent; color: #a6a59f;

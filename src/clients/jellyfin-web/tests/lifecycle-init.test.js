@@ -10,6 +10,8 @@ globalThis.document.getElementById = id => elements.get(id) || null;
 globalThis.document.createElement = () => ({
   id: '',
   className: '',
+  attributes: {},
+  setAttribute(name, value) { this.attributes[name] = String(value); },
   addEventListener: () => {}
 });
 globalThis.document.body = {
@@ -46,6 +48,25 @@ describe('application lifecycle initialization', () => {
     assert.equal(OWP.state.initialized, true);
     assert.equal(connectCalls, 1);
     assert.equal(headerInjections, 1);
+  });
+
+  it('hides the panel through ui.hidePanel when the player closes, so focus leaves it', () => {
+    let hidden = 0;
+    OWP.ui.hidePanel = () => { hidden++; };
+    try {
+      OWP._lifecycle.onVideoPlayerExit();
+    } finally {
+      delete OWP.ui.hidePanel;
+    }
+    assert.equal(hidden, 1);
+  });
+
+  it('creates the panel as a labelled non-modal dialog', () => {
+    const panel = elements.get(OWP.constants.PANEL_ID);
+    assert.ok(panel);
+    assert.equal(panel.attributes.role, 'dialog');
+    assert.equal(panel.attributes['aria-label'], 'Watch Party');
+    assert.equal(panel.attributes['aria-modal'], undefined);
   });
 
   it('loads the header module itself when an older cached loader skipped it', () => {

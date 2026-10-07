@@ -24,7 +24,7 @@ plugin:
     @for f in {{client_js_files}}; do mkdir -p "$(dirname {{plugin_dir}}/Web/$f)" && cp {{client_dir}}/$f {{plugin_dir}}/Web/$f; done
     @docker run --rm \
         -v "$(pwd)/src/plugins/jellyfin:/src" \
-        -v "$(pwd)/global.json:/global.json:ro" \
+        -v "$(pwd)/global.json:/src/global.json:ro" \
         -w /src \
         -u "$(id -u):$(id -g)" \
         -e HOME=/tmp \

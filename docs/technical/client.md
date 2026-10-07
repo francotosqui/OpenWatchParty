@@ -358,7 +358,7 @@ Main panel render:
 Injects "Watch Party" button into the OSD controls of the shown player page, and moves it there from a player page Jellyfin has hidden.
 
 #### `injectHeaderButtons() -> void`
-Puts a "Watch Party" button first in each Jellyfin 12 header: the legacy `.skinHeader .headerRight` and the MUI app bar box holding SyncPlay, Cast and Search. A `MutationObserver` coalesced per animation frame puts it back when Jellyfin rebuilds a header and keeps a panel opened from the header placed below it (falling back to the default placement while no header button is shown, as in the player).
+Puts a "Watch Party" button first in each Jellyfin 12 header: the legacy `.skinHeader .headerRight` and the MUI app bar box holding SyncPlay, Cast and Search. A `MutationObserver` coalesced per animation frame puts it back when Jellyfin rebuilds a header and keeps a panel opened from the header placed below it (falling back to the default placement while no header button is shown, as in the player). Unless such a panel is open, only changes inside a header or a newly added header trigger the lookup, so busy pages (the player, chat, library grids) don't; the periodic UI check catches anything else.
 
 #### `removeHeaderButtons() -> void`
 Removes the header buttons and stops their observers and listeners.
@@ -373,7 +373,7 @@ Enables "Create Room" only while something is playing; otherwise shows a hint.
 Shows the participants' names (`state.participants`) in the room view, or the count when no names were received, for example from an older session server, and updates the count on the bar's participants button.
 
 #### Room bar
-In a room, `render()` draws a single bar (sync dot, latency, room name, then the participants, chat, leave and close buttons) and a drop-down below it. Participants, chat and the leave confirmation ("Leave the room?", or "Close the room for everyone?" for the host) open one at a time (`state.roomBarSection`). The chat counts as read only while its drop-down is open (`chat.isChatVisible()`).
+In a room, `render()` draws a single bar (sync dot, latency, room name, then the participants, chat, leave and close buttons) and a drop-down below it. Participants, chat and the leave confirmation ("Leave the room?", or "Close the room for everyone?" for the host) open one at a time (`state.roomBarSection`). The chat counts as read only while its drop-down is open (`chat.isChatVisible()`). Keyboard: Escape closes the open drop-down and returns focus to its button. The panel is a non-modal `role="dialog"`, and every button that opens it (header and player) carries `aria-controls` and `aria-expanded`. Opened from the keyboard (a `click` with `detail` 0), the panel takes focus on its first control other than the close button; a mouse click leaves focus alone, so the player's shortcuts keep working. A full redraw with focus inside the panel (Create Room or Join changing the view, say) puts focus back on the same control or on the first one (a room list update does the same for the focused room's Join button), and `ui.hidePanel()` (the close button, leaving the room, closing the player) moves focus out of the hidden panel, to the button that opened it when that button is shown.
 
 #### `applyNativeSyncPlayVisibility() -> void`
 Adds or removes the stylesheet that hides Jellyfin's SyncPlay button, following `state.hideNativeSyncPlayButton` (from `hide_native_syncplay_button` in the token response).

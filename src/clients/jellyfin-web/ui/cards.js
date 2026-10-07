@@ -12,9 +12,7 @@
 
   const NO_MEDIA_JOIN_HINT = 'This room has no media. Start playing something, then join it from the player.';
 
-  const updateRoomListUI = () => {
-    const roomList = document.getElementById('owp-room-list');
-    if (!roomList) return;
+  const drawRoomList = (roomList) => {
     if (state.rooms.length === 0) {
       const empty = createElement('div', 'owp-room-empty', 'No active rooms.');
       roomList.replaceChildren(empty);
@@ -32,6 +30,7 @@
         details.appendChild(noMedia);
       }
       const join = createElement('button', 'owp-btn secondary', 'Join');
+      join.dataset.roomId = String(room.id);
       item.append(details, join);
       item.onclick = () => {
         // A room without media has nothing to start here. From the player,
@@ -44,6 +43,29 @@
       };
       roomList.appendChild(item);
     });
+  };
+
+  // The list is drawn again on every room list update. Keyboard focus on a
+  // Join button goes back to the same room's button, or to the panel's first
+  // control once that room is gone, instead of falling out of the panel.
+  const restoreRoomListFocus = (roomList, roomId) => {
+    const same = roomId && Array.from(roomList.querySelectorAll('button')).find(button => button.dataset.roomId === roomId);
+    if (same) {
+      same.focus({ preventScroll: true });
+      return;
+    }
+    const panel = document.getElementById(OWP.constants.PANEL_ID);
+    if (panel && panel.contains(roomList) && ui.focusPanelStart) ui.focusPanelStart(panel);
+  };
+
+  const updateRoomListUI = () => {
+    const roomList = document.getElementById('owp-room-list');
+    if (!roomList) return;
+    const active = document.activeElement;
+    const focusInside = !!active && active !== roomList && typeof roomList.contains === 'function' && roomList.contains(active);
+    const focusedRoomId = focusInside && active.dataset ? active.dataset.roomId || '' : '';
+    drawRoomList(roomList);
+    if (focusInside) restoreRoomListFocus(roomList, focusedRoomId);
   };
 
   // Same markup and classes as Jellyfin's landscape home cards ("Continue
@@ -151,9 +173,10 @@
             return;
           }
           attempts++;
-          const itemName = document.querySelector('.itemName bdi');
-          const playBtn = document.querySelector('.mainDetailButtons .btnPlay, .mainDetailButtons button[data-action="resume"], .mainDetailButtons button[data-action="play"]');
-          if (playBtn && itemName && itemName.textContent.trim()) {
+          // The play button of this item's own details page: a hidden page of
+          // an earlier item can come first in the document.
+          const playBtn = OWP.playback?.findDetailsPlayButton?.(room.media_id);
+          if (playBtn) {
             console.log('[OpenWatchParty] Play button found and page ready, clicking it');
             OWP.timers.clear(checkInterval);
             playBtn.click();

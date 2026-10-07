@@ -50,6 +50,13 @@ class FakeNode {
     this.append(...nodes);
   }
 
+  contains(node) {
+    for (let candidate = node; candidate; candidate = candidate.parentNode) {
+      if (candidate === this) return true;
+    }
+    return false;
+  }
+
   remove() {
     if (!this.parentNode) return;
     const index = this.parentNode.childNodes.indexOf(this);
