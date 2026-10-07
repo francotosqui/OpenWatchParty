@@ -15,6 +15,7 @@ require('../chat/input.js');
 require('../ui/toasts.js');
 require('../ui/home.js');
 require('../ui/render.js');
+require('../ws/handlers/room.js');
 OWP.actions = { schedulePing: () => {} };
 require('../ws/handlers/clock.js');
 
@@ -174,6 +175,34 @@ describe('room bar', () => {
     assert.equal(byId('owp-chat-messages').children.length, 1);
   });
 
+  it('keeps chat content, draft and scroll intent across a full room draw', () => {
+    renderRoom();
+    OWP.chat.receive({ client: 'client-other', payload: { username: 'Ana', text: 'pause' }, server_ts: 1 });
+    const originalMessages = byId('owp-chat-messages');
+    const oldMessage = originalMessages.children[0];
+    originalMessages.scrollTop = 20;
+    originalMessages.clientHeight = 100;
+    originalMessages.scrollHeight = 500;
+    byId('owp-chat-input').value = 'still typing';
+
+    OWP.ui.render(true);
+
+    const scrolledUpMessages = byId('owp-chat-messages');
+    assert.equal(scrolledUpMessages.children[0], oldMessage);
+    assert.equal(byId('owp-chat-input').value, 'still typing');
+    assert.equal(scrolledUpMessages.scrollTop, 20);
+
+    scrolledUpMessages.scrollTop = 400;
+    scrolledUpMessages.clientHeight = 100;
+    scrolledUpMessages.scrollHeight = 500;
+    OWP.ui.render(true);
+
+    const bottomMessages = byId('owp-chat-messages');
+    assert.equal(bottomMessages.children[0], oldMessage);
+    assert.equal(Object.hasOwn(bottomMessages, 'scrollTop'), true);
+    assert.equal(bottomMessages.scrollTop, bottomMessages.scrollHeight);
+  });
+
   it('does not mark the chat read while the panel is hidden', () => {
     renderRoom();
     byId('owp-btn-chat').click();
@@ -236,6 +265,34 @@ describe('room bar', () => {
   it('does not offer an invite button to guests', () => {
     renderRoom({ isHost: false });
 
+    assert.equal(byId('owp-btn-invite'), null);
+  });
+
+  it('redraws host controls when this client is promoted', () => {
+    renderRoom();
+
+    OWP._wsHandlers.handleHostChanged({
+      room: 'room-1',
+      payload: { host_id: 'client-a5be', host_name: 'FrancoTosky' }
+    });
+
+    assert.equal(byId('owp-btn-leave').getAttribute('aria-label'), 'Close room');
+    assert.equal(panel().querySelector('.owp-leave-question').textContent, 'Close the room for everyone?');
+    assert.equal(byId('owp-btn-confirm-leave').textContent, 'Close room');
+    assert.ok(byId('owp-btn-invite'));
+  });
+
+  it('keeps guest controls when another participant becomes host', () => {
+    renderRoom();
+
+    OWP._wsHandlers.handleHostChanged({
+      room: 'room-1',
+      payload: { host_id: 'client-other', host_name: 'Ana' }
+    });
+
+    assert.equal(byId('owp-btn-leave').getAttribute('aria-label'), 'Leave room');
+    assert.equal(panel().querySelector('.owp-leave-question').textContent, 'Leave the room?');
+    assert.equal(byId('owp-btn-confirm-leave').textContent, 'Leave');
     assert.equal(byId('owp-btn-invite'), null);
   });
 

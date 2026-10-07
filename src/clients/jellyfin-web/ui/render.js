@@ -374,6 +374,17 @@
       ui.renderHomeWatchParties();
       return;
     }
+    const redrawingRoom = state.inRoom
+      && panel.dataset.inRoom === 'true'
+      && panel.children.length > 0;
+    const oldMessages = redrawingRoom ? panel.querySelector('#owp-chat-messages') : null;
+    const messageNodes = oldMessages ? Array.from(oldMessages.childNodes) : null;
+    const oldScrollTop = oldMessages ? Number(oldMessages.scrollTop) || 0 : 0;
+    const wasChatAtBottom = oldMessages
+      ? oldScrollTop + (Number(oldMessages.clientHeight) || 0) >= (Number(oldMessages.scrollHeight) || 0) - 1
+      : true;
+    const oldInput = redrawingRoom ? panel.querySelector('#owp-chat-input') : null;
+    const chatDraft = oldInput ? oldInput.value : '';
     // A full draw replaces every control. Keyboard focus inside the panel
     // (on Create Room or Join, say) goes to the same control if it is drawn
     // again, or to the first one, instead of falling out of the dialog.
@@ -388,6 +399,15 @@
     } else {
       renderRoom(panel);
       setupChatInput(panel);
+      if (redrawingRoom) {
+        const messages = panel.querySelector('#owp-chat-messages');
+        if (messages && messageNodes) {
+          messages.replaceChildren(...messageNodes);
+          messages.scrollTop = wasChatAtBottom ? messages.scrollHeight : oldScrollTop;
+        }
+        const input = panel.querySelector('#owp-chat-input');
+        if (input) input.value = chatDraft;
+      }
     }
     ui.updateStatusIndicator();
     ui.renderHomeWatchParties();

@@ -308,7 +308,7 @@ Updates participant counter and shows toast for new participant.
 Stores the participants' names for the current room and shows them instead of the count, one row per name with a separate **Host** badge. Lists for another room are ignored, and joining another room clears the previous names.
 
 #### `host_changed`
-Updates `isHost` for the current room, resets guest playback correction and pending synchronization when this client becomes host, re-renders host-only controls, and shows the new-host toast. All playback broadcasts, the host state heartbeat, and the invite button read `state.isHost` at use time.
+Updates `isHost` for the current room and shows the new-host toast. When this client becomes host it only resets drift correction (playback rate, *catching up*); a room command or media load it accepted as a guest still completes, and it sends no host events or state heartbeat until then: until the scheduled time, or at most as long as a guest waits for the room's media. The panel is drawn again, keeping the chat, so the new host gets Invite and Close room. All playback broadcasts, the host state heartbeat, and the invite button read `state.isHost` at use time.
 
 #### `room_closed`
 Resets state when the room is explicitly closed or host transfer is unavailable.

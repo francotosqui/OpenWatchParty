@@ -22,29 +22,11 @@
     if (video && video.playbackRate !== 1) video.playbackRate = 1;
   };
 
-  const resetGuestSyncState = () => {
+  const resetDriftCorrection = () => {
     normalizePlaybackRate();
-    if (state.pendingActionTimer) OWP.timers.clear(state.pendingActionTimer);
-    state.pendingActionTimer = null;
-    if (state.mediaReadyCleanup) state.mediaReadyCleanup();
-    state.playbackActionAttempt++;
-    Object.assign(state, {
-      isBuffering: false,
-      wantsToPlay: false,
-      isSyncing: false,
-      syncCooldownUntil: 0,
-      isInitialSync: false,
-      initialSyncUntil: 0,
-      initialSyncTargetPos: null,
-      syncStatus: 'synced',
-      currentDrift: 0,
-      pendingPlayUntil: 0,
-      pendingMediaId: '',
-      lastSyncServerTs: 0,
-      lastSyncPosition: 0,
-      lastSyncPlayState: '',
-      suppressUntil: 0
-    });
+    if (state.syncStatus === 'syncing') state.syncStatus = 'synced';
+    state.currentDrift = 0;
+    state.syncCooldownUntil = 0;
     if (OWP.ui?.updateSyncIndicator) OWP.ui.updateSyncIndicator();
   };
 
@@ -80,6 +62,7 @@
       joiningItemId: '',
       pendingJoinRoomId: '',
       pendingMediaId: '',
+      pendingMediaUntil: 0,
       suppressUntil: 0,
       playbackBlocked: false,
       playbackFailureNotified: false,
@@ -156,7 +139,7 @@
   Object.assign(actions, {
     send,
     normalizePlaybackRate,
-    resetGuestSyncState,
+    resetDriftCorrection,
     resetRoomState,
     createRoom,
     joinRoom,

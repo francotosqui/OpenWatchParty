@@ -57,10 +57,10 @@
     if (!state.inRoom || msg.room !== state.roomId) return;
     const becameHost = msg.payload.host_id === state.clientId;
     state.isHost = becameHost;
-    if (becameHost && OWP.actions?.resetGuestSyncState) {
-      OWP.actions.resetGuestSyncState();
+    if (becameHost && OWP.actions?.resetDriftCorrection) {
+      OWP.actions.resetDriftCorrection();
     }
-    ui.render();
+    ui.render(true);
     ui.showToast(becameHost ? 'You are now the host' : `${msg.payload.host_name} is now the host`);
   };
 

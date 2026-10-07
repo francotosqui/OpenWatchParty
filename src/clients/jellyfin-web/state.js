@@ -191,6 +191,7 @@
     mediaSyncAttempt: 0,
     mediaReadyCleanup: null,
     pendingMediaId: '',
+    pendingMediaUntil: 0,
     pendingJoinRoomId: '',  // Room to join after navigating to video player
     roomName: '',
     participantCount: 0,
