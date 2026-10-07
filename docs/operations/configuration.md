@@ -203,6 +203,8 @@ Plugin settings:
 - JWT Secret: `your-secure-32-char-secret`
 - Session Server URL: `wss://jellyfin.example.com/ws` (via reverse proxy)
 
+The reverse proxy must send both `/ws` and `/invite` to the session server; see [Reverse Proxy Configuration](deployment.md#reverse-proxy-configuration).
+
 ### Multi-Instance Setup
 
 For high availability or multiple Jellyfin instances:
