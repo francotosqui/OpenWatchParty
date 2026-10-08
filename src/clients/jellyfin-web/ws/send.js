@@ -51,6 +51,8 @@
       lastSyncServerTs: 0,
       lastSyncPosition: 0,
       lastSyncPlayState: '',
+      roomWaiting: false,
+      guestPaused: false,
       joiningItemId: '',
       pendingJoinRoomId: '',
       pendingMediaId: '',
@@ -65,6 +67,7 @@
     state.cardPollAttempt++;
     state.mediaSyncAttempt++;
     state.playbackActionAttempt++;
+    if (OWP.ui?.updateGuestControls) OWP.ui.updateGuestControls();
     if (OWP.chat) OWP.chat.clear();
   };
 
@@ -90,6 +93,7 @@
 
   const joinRoom = (id, isReconnect = false, inviteTicket = '') => {
     if (!isReconnect && actions.cancelRoomRejoin) actions.cancelRoomRejoin();
+    state.guestPaused = false;
     state.desiredRoomId = id;
     state.rejectedRejoinRoomIds = state.rejectedRejoinRoomIds.filter(roomId => roomId !== id);
     state.rejoinPending = isReconnect;
