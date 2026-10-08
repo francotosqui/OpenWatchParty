@@ -10,6 +10,8 @@
   // volume slider, which uses the same container class.
   const POSITION_CONTAINER_CLASS = 'owp-position-slider-container';
   const TOAST_INTERVAL_MS = 2500;
+  const SEEK_LOCKED_TEXT = 'Only the host can seek';
+  const WAITING_TEXT = 'Waiting for the host…';
   const SEEK_BUTTON_SELECTOR = [
     '.btnPreviousTrack',
     '.btnNextTrack',
@@ -30,22 +32,24 @@
 
   const getVideo = () => OWP.utils?.getVideo?.() || null;
   const isGuestLocked = (video) => Boolean(video && state.inRoom && !state.isHost);
+  // Play and pause are everyone's; play only waits while the host's stream
+  // loads.
   const isPlayLocked = (video) => isGuestLocked(video)
     && video.paused
-    && state.lastSyncPlayState !== 'playing';
+    && state.roomWaiting;
 
-  const showBlockedToast = () => {
+  const showBlockedToast = (message) => {
     const now = Date.now();
     if (now - lastBlockedToastAt < TOAST_INTERVAL_MS) return;
     lastBlockedToastAt = now;
-    if (OWP.ui?.showToast) OWP.ui.showToast('Only the host can control playback');
+    if (OWP.ui?.showToast) OWP.ui.showToast(message);
   };
 
-  const blockEvent = (event) => {
+  const blockEvent = (event, message = SEEK_LOCKED_TEXT) => {
     event.preventDefault();
     event.stopImmediatePropagation();
     event.stopPropagation();
-    showBlockedToast();
+    showBlockedToast(message);
   };
 
   const isVideoSurface = (target) => target?.tagName === 'VIDEO'
@@ -69,7 +73,7 @@
     }
     if (isPlayLocked(video)
       && (event.target?.closest?.('.btnPause') || isVideoSurface(event.target))) {
-      blockEvent(event);
+      blockEvent(event, WAITING_TEXT);
     }
   };
 
@@ -129,7 +133,7 @@
       event.stopPropagation();
       return;
     }
-    blockEvent(event);
+    blockEvent(event, WAITING_TEXT);
   };
 
   const removeLabel = () => document.getElementById(LABEL_ID)?.remove();
@@ -161,8 +165,8 @@
       label.dataset.mode = mode;
       label.querySelector('.owp-guest-lock-icon').textContent = state.roomWaiting ? 'hourglass_empty' : 'lock';
       label.querySelector('.owp-guest-lock-text').textContent = state.roomWaiting
-        ? 'Waiting for the host…'
-        : 'The host controls playback';
+        ? WAITING_TEXT
+        : SEEK_LOCKED_TEXT;
     }
     // Below the slider row on screen: Jellyfin stacks the OSD rows with
     // `column-reverse`, where the element before the row is drawn under it.

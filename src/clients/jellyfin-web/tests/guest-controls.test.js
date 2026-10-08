@@ -133,7 +133,7 @@ describe('guest playback controls', () => {
   });
 
   it('locks only a guest with a video and unlocks after role, room, or player changes', () => {
-    h.setGuest();
+    h.setGuest({ waiting: true });
     assert.equal(h.document.documentElement.classList.contains('owp-guest-locked'), true);
     assert.equal(h.document.documentElement.classList.contains('owp-guest-play-locked'), true);
 
@@ -159,11 +159,11 @@ describe('guest playback controls', () => {
     let label = h.document.getElementById('owp-guest-lock-label');
     assert.equal(label.previousSibling, h.sliderRow);
     assert.equal(label.querySelector('.owp-guest-lock-icon').textContent, 'lock');
-    assert.equal(label.querySelector('.owp-guest-lock-text').textContent, 'The host controls playback');
+    assert.equal(label.querySelector('.owp-guest-lock-text').textContent, 'Only the host can seek');
 
     h.setGuest({ paused: true, playState: 'paused' });
     label = h.document.getElementById('owp-guest-lock-label');
-    assert.equal(label.querySelector('.owp-guest-lock-text').textContent, 'The host controls playback');
+    assert.equal(label.querySelector('.owp-guest-lock-text').textContent, 'Only the host can seek');
 
     h.OWP.state.roomWaiting = true;
     h.OWP.ui.updateGuestControls();
@@ -217,18 +217,25 @@ describe('guest playback controls', () => {
     }
     const subtitles = h.dispatch('click', h.buttons.btnSubtitles);
     assert.equal(Boolean(subtitles.defaultPrevented), false);
-    assert.deepEqual(h.toasts, ['Only the host can control playback']);
+    assert.deepEqual(h.toasts, ['Only the host can seek']);
   });
 
-  it('allows pause while playing and blocks play from the button or video surface', () => {
+  it('lets a guest play and pause, and blocks play only while the room waits for the host', () => {
     h.setGuest({ paused: false, playState: 'playing' });
     assert.equal(Boolean(h.dispatch('click', h.buttons.btnPause).defaultPrevented), false);
     assert.equal(Boolean(h.dispatch('click', h.video).defaultPrevented), false);
 
     h.setGuest({ paused: true, playState: 'paused' });
+    assert.equal(h.document.documentElement.classList.contains('owp-guest-play-locked'), false);
+    assert.equal(Boolean(h.dispatch('click', h.buttons.btnPause).defaultPrevented), false);
+    assert.equal(Boolean(h.dispatch('click', h.video).defaultPrevented), false);
+
+    h.setGuest({ paused: true, playState: 'paused', waiting: true });
+    assert.equal(h.document.documentElement.classList.contains('owp-guest-play-locked'), true);
     assert.equal(h.dispatch('click', h.buttons.btnPause).defaultPrevented, true);
     assert.equal(h.dispatch('click', h.video).defaultPrevented, true);
     assert.equal(h.dispatch('click', h.player).defaultPrevented, true);
+    assert.deepEqual(h.toasts, ['Waiting for the host…']);
   });
 
   it('always lets a playing guest pause, even when the room is paused or waiting', () => {
@@ -260,17 +267,18 @@ describe('guest playback controls', () => {
     }
   });
 
-  it('blocks Space and K only for a paused guest while the room is not playing', () => {
+  it('blocks Space and K only for a paused guest while the room waits for the host', () => {
     h.setGuest({ paused: false, playState: 'playing' });
     assert.equal(Boolean(h.dispatch('keydown', h.document.body, { key: ' ', code: 'Space', keyCode: 32 }).defaultPrevented), false);
     assert.equal(Boolean(h.dispatch('keydown', h.document.body, { code: 'KeyK' }).defaultPrevented), false);
 
     h.setGuest({ paused: true, playState: 'paused' });
+    assert.equal(Boolean(h.dispatch('keydown', h.document.body, { key: ' ', keyCode: 32 }).defaultPrevented), false);
+    assert.equal(Boolean(h.dispatch('keydown', h.document.body, { code: 'KeyK' }).defaultPrevented), false);
+
+    h.setGuest({ paused: true, playState: 'paused', waiting: true });
     assert.equal(h.dispatch('keydown', h.document.body, { key: ' ', keyCode: 32 }).defaultPrevented, true);
     assert.equal(h.dispatch('keydown', h.document.body, { code: 'KeyK' }).defaultPrevented, true);
-
-    h.setGuest({ paused: true, playState: 'playing' });
-    assert.equal(Boolean(h.dispatch('keydown', h.document.body, { code: 'KeyK' }).defaultPrevented), false);
   });
 
   it('allows shortcuts with modifiers and from editable targets', () => {
@@ -319,7 +327,7 @@ describe('guest playback controls', () => {
   });
 
   it('lets Space press another focused control while play is locked, without Jellyfin playing', () => {
-    h.setGuest({ paused: true, playState: 'paused' });
+    h.setGuest({ paused: true, playState: 'paused', waiting: true });
 
     const onSubtitles = h.dispatch('keydown', h.buttons.btnSubtitles, { key: ' ', code: 'Space', keyCode: 32 });
     assert.equal(Boolean(onSubtitles.defaultPrevented), false);

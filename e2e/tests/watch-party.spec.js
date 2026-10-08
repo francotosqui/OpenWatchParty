@@ -87,28 +87,26 @@ test('pause, play and seek propagate to the guest', async () => {
     .toBeLessThan(3);
 });
 
-test('a guest cannot press play while the room is paused', async () => {
+test('a guest pause pauses the host, and the host play resumes the guest', async () => {
+  await openRoomWithGuest('header');
+
+  await helpers.togglePlayback(guest);
+  await helpers.waitForPaused(host);
+  await expect(host.locator('.owp-toast-system', { hasText: 'A guest paused playback' })).toHaveCount(1);
+
+  await helpers.togglePlayback(host);
+  await helpers.waitForPlaying(guest);
+});
+
+test('a guest play resumes the paused room', async () => {
   await openRoomWithGuest('header');
 
   await helpers.togglePlayback(host);
   await helpers.waitForPaused(guest);
 
-  // Play is inert for the guest: the player never starts, so no `play` event
-  // fires (before, it played for a moment and was paused again).
-  await guest.evaluate(() => {
-    window.__owpPlayEvents = 0;
-    document.querySelector('video').addEventListener('play', () => { window.__owpPlayEvents += 1; });
-  });
-
   await helpers.togglePlayback(guest);
-
-  await expect(
-    guest.locator('.owp-toast-system', { hasText: 'Only the host can control playback' })
-  ).toHaveCount(1);
-  await expect(guest.locator('html')).toHaveClass(/owp-guest-play-locked/);
-  await expect(guest.locator('#owp-guest-lock-label')).toHaveCount(1);
-  expect(await guest.evaluate(() => window.__owpPlayEvents)).toBe(0);
-  expect((await helpers.videoState(guest)).paused).toBe(true);
+  await helpers.waitForPlaying(host);
+  await expect(host.locator('.owp-toast-system', { hasText: 'A guest resumed playback' })).toHaveCount(1);
 });
 
 test('the host leaving closes the room for the guest', async () => {

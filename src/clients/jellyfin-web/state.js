@@ -111,6 +111,7 @@
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
     SUPPRESS_MS: 2000,
     SEEK_THRESHOLD: 1.0,          // Reduced from 2.5s - smaller seeks now broadcast (UX-P2)
+    OWN_COMMAND_HOLD_MS: 1500,    // A guest's own play or pause holds against room updates already on their way
     STATE_UPDATE_MS: 1000,        // Reduced from 2000ms - more responsive state updates (UX-P1)
     SYNC_LEAD_MS: 300,            // Compensates processing + initial HLS buffer
     DRIFT_DEADZONE_SEC: 0.04,
@@ -215,7 +216,9 @@
     lastSyncPosition: 0,
     lastSyncPlayState: '',
     roomWaiting: false,
-    guestPaused: false,
+    roomHostId: '',
+    ownCommandUntil: 0,
+    ownCommandPlayState: '',
     readyRoomId: '',
     isBuffering: false,
     wantsToPlay: false,

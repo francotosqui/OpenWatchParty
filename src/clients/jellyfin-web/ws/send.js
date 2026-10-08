@@ -72,7 +72,9 @@
       lastSyncPosition: 0,
       lastSyncPlayState: '',
       roomWaiting: false,
-      guestPaused: false,
+      roomHostId: '',
+      ownCommandUntil: 0,
+      ownCommandPlayState: '',
       joiningItemId: '',
       pendingJoinRoomId: '',
       pendingMediaId: '',
@@ -114,7 +116,6 @@
 
   const joinRoom = (id, isReconnect = false, inviteTicket = '') => {
     if (!isReconnect && actions.cancelRoomRejoin) actions.cancelRoomRejoin();
-    state.guestPaused = false;
     state.desiredRoomId = id;
     state.rejectedRejoinRoomIds = state.rejectedRejoinRoomIds.filter(roomId => roomId !== id);
     state.rejoinPending = isReconnect;
