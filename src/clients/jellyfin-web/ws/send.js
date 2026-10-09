@@ -27,6 +27,8 @@
     if (state.syncStatus === 'syncing') state.syncStatus = 'synced';
     state.currentDrift = 0;
     state.syncCooldownUntil = 0;
+    state.outOfSyncSince = 0;
+    state.driftCheckedAt = 0;
     if (OWP.ui?.updateSyncIndicator) OWP.ui.updateSyncIndicator();
   };
 
@@ -59,6 +61,8 @@
       initialSyncTargetPos: null,
       syncStatus: 'synced',
       currentDrift: 0,
+      outOfSyncSince: 0,
+      driftCheckedAt: 0,
       pendingPlayUntil: 0,
       lastSyncServerTs: 0,
       lastSyncPosition: 0,

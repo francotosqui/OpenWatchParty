@@ -137,11 +137,12 @@ In a room the panel becomes a single bar at the top right (below the header when
 - **Room name** - Current watch party name; hover it if it is cut short
 - **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge on the host (older session servers show only the number of people)
 - **Chat** (chat icon) - Opens the chat; a red badge counts unread messages
+- **Sync adjustment** (circular arrows, guests only, when the administrator enables it) - Shows how far you are from the host and lets you nudge your video toward them; see [Sync adjustment](#sync-adjustment)
 - **Invite** (share icon, host only) - Copies a short-lived invite link that joins people to this room automatically
 - **Leave** (exit icon) - Guests confirm leaving normally. On a compatible server, a host with other participants can choose **Leave** to pass the room to the named next host or **Close for everyone** to end it. A host who is alone, or connected to an older server, sees the existing **Close room** confirmation.
 - **Close (X)** - Only hides the bar: you stay in the room
 
-Participants, chat and the leave confirmation open one at a time below the bar; select the same icon again to close it.
+Participants, chat, the sync adjustment and the leave confirmation open one at a time below the bar; select the same icon again to close it.
 
 ## Using Chat
 
@@ -175,6 +176,18 @@ Participants see a sync status dot in the room bar that shows how well their pla
 The "Out of sync" state is normal for a few seconds after joining or after the host seeks. The system automatically adjusts your playback speed to catch up.
 
 ![The participant room bar with the green In sync dot]({{ '/assets/images/watch-party-sync.png' | relative_url }})
+
+### Sync adjustment
+
+When the administrator enables **Show the sync adjustment button in rooms**, guests get a circular-arrows icon in the room bar. It opens a drop-down that shows:
+
+- how far you are from the host, for example **1.2 s behind the host**, or **In sync with the host**;
+- what the automatic correction is doing, for example **Automatic correction: 1.15× speed for 8 s.**;
+- a **Move ahead** or **Move back** button.
+
+The button moves your video up to 0.5 s toward the host, never past them. Use it when the automatic correction keeps you out of sync for a long time (a slow network, a background tab), instead of leaving and rejoining. It only moves your own video: the host still controls playback, and nobody else is affected.
+
+The button does nothing while you are in sync, while the room is paused or loading, or while a command from the host is being applied (the drop-down then says **Following the host...**). It also stays within the part of the video already loaded, so it never makes you wait for more video.
 
 ## Notifications
 
@@ -229,7 +242,7 @@ When the chat is closed, incoming messages appear as toasts in the bottom-right 
 
 ### "Out of sync with others"
 - This is normal for a few seconds after joining
-- If persistent, try leaving and rejoining the room
+- If persistent and your administrator enabled it, use the [sync adjustment](#sync-adjustment); otherwise try leaving and rejoining the room
 - Check your network connection quality
 
 ### "Room closed unexpectedly"

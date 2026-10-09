@@ -105,6 +105,17 @@
     }
     .owp-pill-btn.secondary { background: transparent; border: 1px solid rgba(255,255,255,0.25); color: #a6a59f; }
     .owp-pill-btn.danger { background: #791f1f; border: none; color: #f09595; }
+    .owp-pill-btn.primary { background: #0c447c; border: none; color: #85b7eb; }
+    .owp-pill-btn.primary:hover { background: #185fa5; color: #e6f1fb; }
+    .owp-pill-btn.primary[aria-disabled="true"] { background: rgba(255,255,255,0.06); color: #85847e; cursor: not-allowed; }
+    /* The sync adjustment drop-down: where the guest is, and the nudge */
+    .owp-nudge-row { display: flex; align-items: center; gap: 8px; }
+    .owp-nudge-state { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-weight: 500; }
+    .owp-nudge-state .owp-sync-dot { width: 7px; height: 7px; flex-shrink: 0; }
+    .owp-nudge-state .owp-sync-dot.synced { background: #97c459; }
+    .owp-nudge-state .owp-sync-dot.idle { background: #85847e; }
+    .owp-nudge-sub { margin-top: 5px; font-size: 11px; color: #9a9993; line-height: 1.45; }
+    .owp-nudge-sub[hidden] { display: none; }
     /* Same size as the MUI SVG icons next to it (MuiSvgIcon fontSizeMedium) */
     #${MODERN_HEADER_BTN_ID} .material-icons { font-size: 1.5rem; width: 1em; height: 1em; line-height: 1; }
     .owp-header {

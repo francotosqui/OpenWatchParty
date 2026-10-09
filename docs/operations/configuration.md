@@ -25,6 +25,7 @@ Access the plugin configuration page at **Dashboard** > **Plugins** > **OpenWatc
 | Session Server URL | (empty) | Absolute `ws://` or `wss://` URL. Empty requires explicit trust of same-host port 3000 auto-detection. |
 | Trust automatic session server | disabled | Allows tokens to be sent to `ws(s)://[host]:3000/ws` when URL is empty. |
 | Hide Jellyfin's SyncPlay button | disabled | Hides the built-in SyncPlay button in Jellyfin Web (both headers and the player), leaving the Watch Party button as the only group-watching control. Applies after Jellyfin Web is reloaded or refreshes its token. |
+| Show the sync adjustment button in rooms | disabled | Gives guests a sync adjustment drop-down in the room bar, to move their own video up to 0.5 s toward the host when the automatic correction cannot keep them in sync. It never changes the room's playback. Applies after Jellyfin Web is reloaded or refreshes its token. |
 
 ### JWT Secret Guidelines
 

@@ -118,6 +118,12 @@
     PLAYBACK_RATE_MIN: 0.90,      // Slowdown when ahead
     PLAYBACK_RATE_MAX: 1.15,      // Catch-up when behind, gentle enough that voices stay natural
     DRIFT_GAIN: 0.15,             // For sqrt curve: 0.15 * sqrt(1s) = 0.15 → 1.15x at 1s drift
+    // Manual sync adjustment (the room bar's nudge, for guests)
+    NUDGE_STEP_SEC: 0.5,          // Largest move toward the host per nudge
+    NUDGE_MIN_DRIFT_SEC: 0.15,    // Closer than this counts as in sync: nothing to nudge
+    NUDGE_MIN_MOVE_SEC: 0.05,     // A smaller move is not worth a seek
+    NUDGE_BUFFER_MARGIN_SEC: 0.1, // Kept inside the buffered range, so a nudge never waits for a segment
+    DRIFT_TRACK_GAP_MS: 2000,     // A longer pause in drift tracking starts a new out-of-sync count
     // Interval timings (P2 optimization)
     UI_CHECK_MS: 2000,            // UI button injection check
     PING_INIT_MS: 2000,            // Fast ping interval (clock convergence)
@@ -217,6 +223,8 @@
     initialSyncTargetPos: null, // Target position when joining; null means no pending target
     syncStatus: 'synced',  // 'synced' | 'syncing' | 'pending_play' - for UX indicator (UX-P3)
     currentDrift: 0,       // Current playback drift in seconds (positive = behind host)
+    outOfSyncSince: 0,     // Since when this guest is out of sync, shown by the sync adjustment
+    driftCheckedAt: 0,     // Last time trackDrift ran; a longer gap restarts the count
     pendingPlayUntil: 0,   // Timestamp when pending play ends (for spinner) (UX-P3)
     // Authentication
     authToken: null,
@@ -235,6 +243,7 @@
     tokenRefreshTimer: null,     // Timer for token refresh
     // Web client settings delivered with the token response
     hideNativeSyncPlayButton: false,
+    showSyncNudge: false,       // The plugin offers guests the sync adjustment in the room bar
     // Room invite links
     inviteTtlSeconds: 3600,      // Lifetime requested for new invite tickets
     pendingInviteTicket: '',     // Ticket parsed from the page URL, consumed after authentication

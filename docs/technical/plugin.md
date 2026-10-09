@@ -150,6 +150,7 @@ public ActionResult GetToken()
             user_name = userName,
             session_server_url = sessionServerUrl,
             hide_native_syncplay_button = config.HideNativeSyncPlayButton,
+            show_sync_nudge_button = config.ShowSyncNudgeButton,
             protocol_version = ProtocolVersion
         });
     }
@@ -164,6 +165,7 @@ public ActionResult GetToken()
         user_name = userName,
         session_server_url = sessionServerUrl,
         hide_native_syncplay_button = config.HideNativeSyncPlayButton,
+        show_sync_nudge_button = config.ShowSyncNudgeButton,
         protocol_version = ProtocolVersion
     });
 }

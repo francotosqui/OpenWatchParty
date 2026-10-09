@@ -153,6 +153,12 @@
       if (state.inRoom && !state.isHost) {
         playback.syncLoop();
       }
+      // Also outside a room and for the host, so that leaving, hosting or
+      // rejoining ends the guest's out-of-sync count right away.
+      if (state.showSyncNudge) {
+        if (playback.trackDrift) playback.trackDrift();
+        if (ui.updateSyncSection) ui.updateSyncSection();
+      }
     }, SYNC_LOOP_MS, 'lifecycle');
   };
 

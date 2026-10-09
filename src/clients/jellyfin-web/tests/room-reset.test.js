@@ -39,6 +39,8 @@ const makeDirtyRoomState = () => {
     initialSyncTargetPos: 42,
     syncStatus: 'pending_play',
     currentDrift: 3,
+    outOfSyncSince: Date.now() - 8000,
+    driftCheckedAt: Date.now(),
     pendingPlayUntil: Date.now() + 1000,
     lastSyncServerTs: Date.now(),
     lastSyncPosition: 42,
@@ -81,6 +83,8 @@ const assertRoomStateReset = (video) => {
   assert.equal(OWP.state.initialSyncTargetPos, null);
   assert.equal(OWP.state.syncStatus, 'synced');
   assert.equal(OWP.state.currentDrift, 0);
+  assert.equal(OWP.state.outOfSyncSince, 0);
+  assert.equal(OWP.state.driftCheckedAt, 0);
   assert.equal(OWP.state.pendingPlayUntil, 0);
   assert.equal(OWP.state.pendingMediaId, '');
   assert.equal(OWP.state.pendingMediaUntil, 0);
