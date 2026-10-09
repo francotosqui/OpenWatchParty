@@ -28,6 +28,10 @@ const makeDirtyRoomState = () => {
     readyRoomId: 'room-a',
     isBuffering: true,
     wantsToPlay: true,
+    streamReloadUntil: Date.now() + 1000,
+    lastPlayedPosition: 42,
+    lastPlayedPlaying: true,
+    streamReloadResume: true,
     isSyncing: true,
     syncCooldownUntil: Date.now() + 1000,
     isInitialSync: true,
@@ -68,6 +72,10 @@ const assertRoomStateReset = (video) => {
   assert.equal(OWP.state.readyRoomId, '');
   assert.equal(OWP.state.isBuffering, false);
   assert.equal(OWP.state.wantsToPlay, false);
+  assert.equal(OWP.state.streamReloadUntil, 0);
+  assert.equal(OWP.state.lastPlayedPosition, 0);
+  assert.equal(OWP.state.lastPlayedPlaying, false);
+  assert.equal(OWP.state.streamReloadResume, false);
   assert.equal(OWP.state.isSyncing, false);
   assert.equal(OWP.state.isInitialSync, false);
   assert.equal(OWP.state.initialSyncTargetPos, null);

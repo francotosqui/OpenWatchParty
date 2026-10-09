@@ -114,9 +114,9 @@
     SYNC_LEAD_MS: 300,            // Compensates processing + initial HLS buffer
     DRIFT_DEADZONE_SEC: 0.04,
     DRIFT_SOFT_MAX_SEC: 2.0,      // Seek to correct if drift > 2s
-    PLAYBACK_RATE_MIN: 0.85,      // Allow slowdown if ahead
-    PLAYBACK_RATE_MAX: 2.0,       // Aggressive catch-up (browser pitch correction preserves audio)
-    DRIFT_GAIN: 0.50,             // For sqrt curve: 0.50 * sqrt(1s) = 0.50 → 1.50x at 1s drift
+    PLAYBACK_RATE_MIN: 0.90,      // Slowdown when ahead
+    PLAYBACK_RATE_MAX: 1.15,      // Catch-up when behind, gentle enough that voices stay natural
+    DRIFT_GAIN: 0.15,             // For sqrt curve: 0.15 * sqrt(1s) = 0.15 → 1.15x at 1s drift
     // Interval timings (P2 optimization)
     UI_CHECK_MS: 2000,            // UI button injection check
     PING_INIT_MS: 2000,            // Fast ping interval (clock convergence)
@@ -132,6 +132,7 @@
     ROOM_REJOIN_TIMEOUT_MS: 5000,
     MEDIA_READY_POLL_MS: 100,
     MEDIA_READY_TIMEOUT_MS: 15000,
+    STREAM_RELOAD_MAX_MS: 30000,  // Longest the room waits for the host's stream to reload (track change)
     VIDEO_ACTION_RETRY_MS: 50,
     VIDEO_ACTION_MAX_WAIT_MS: 2000,
     INITIAL_SYNC_COOLDOWN_MS: 8000, // Cooldown after join to let playback rate catch up (not HARD_SEEK)
@@ -203,6 +204,10 @@
     readyRoomId: '',
     isBuffering: false,
     wantsToPlay: false,
+    streamReloadUntil: 0,  // While the host's stream reloads in place (audio or subtitle track change)
+    lastPlayedPosition: 0, // Where the video last played, and whether it was playing, before a reload empties it
+    lastPlayedPlaying: false,
+    streamReloadResume: false, // Whether the room was playing when the reload started
     isSyncing: false,
     syncCooldownUntil: 0,  // Timestamp until which position updates are ignored (after resume)
     isInitialSync: false,  // True during initial catch-up after joining (disables HARD_SEEK)

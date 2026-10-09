@@ -5,7 +5,7 @@ source "https://rubygems.org"
 # jekyll-remote-theme = 0.4.3, which in turn pins rubyzip < 3.0 and keeps
 # CVE-2026-85396 (path traversal in rubyzip < 3.4.0) in the lockfile.
 gem "jekyll", "~> 4.4"
-gem "jekyll-remote-theme", "~> 0.5.2"
+gem "jekyll-remote-theme", "~> 0.6.2"
 
 # Theme
 gem "just-the-docs"
