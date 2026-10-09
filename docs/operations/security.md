@@ -176,6 +176,8 @@ location /ws {
 }
 ```
 
+This rate-limit excerpt covers `/ws` only. The proxy must also route `/invite` to the session server; see [Reverse Proxy Configuration](deployment.md#reverse-proxy-configuration) for complete examples.
+
 ```yaml
 # Traefik example
 http:
