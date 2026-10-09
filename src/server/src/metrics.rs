@@ -11,23 +11,25 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::types::ServerState;
 
 /// Message types a client can send, as named on the wire.
-pub const CLIENT_MESSAGE_TYPES: [&str; 12] = [
+pub const CLIENT_MESSAGE_TYPES: [&str; 14] = [
     "auth",
     "list_rooms",
     "create_room",
     "join_room",
     "ready",
     "leave_room",
+    "close_room",
     "player_event",
     "state_update",
     "ping",
     "client_log",
     "chat_message",
+    "participant_status",
     "unknown",
 ];
 
 /// Message types the server sends, plus `other` for anything not listed.
-pub const SERVER_MESSAGE_TYPES: [&str; 14] = [
+pub const SERVER_MESSAGE_TYPES: [&str; 16] = [
     "client_hello",
     "auth_success",
     "error",
@@ -35,6 +37,8 @@ pub const SERVER_MESSAGE_TYPES: [&str; 14] = [
     "room_state",
     "participants_update",
     "participant_list",
+    "participant_statuses",
+    "host_changed",
     "player_event",
     "state_update",
     "pong",
@@ -200,8 +204,8 @@ pub struct Metrics {
     connections: AtomicU64,
     connections_rejected: LabeledCounter<2>,
     rooms: AtomicU64,
-    messages_received: LabeledCounter<12>,
-    messages_sent: LabeledCounter<14>,
+    messages_received: LabeledCounter<{ CLIENT_MESSAGE_TYPES.len() }>,
+    messages_sent: LabeledCounter<{ SERVER_MESSAGE_TYPES.len() }>,
     send_failures: AtomicU64,
     invalid_messages: LabeledCounter<3>,
     errors_sent: LabeledCounter<22>,

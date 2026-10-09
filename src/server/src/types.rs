@@ -314,6 +314,12 @@ mod tests {
         ] {
             let wire = serde_json::to_string(&message_type).unwrap();
             assert_eq!(wire, format!("\"{}\"", message_type.as_str()));
+            // The metrics count every client message type under its own label.
+            assert!(
+                crate::metrics::CLIENT_MESSAGE_TYPES.contains(&message_type.as_str()),
+                "{} has no metrics label",
+                message_type.as_str()
+            );
         }
         assert_eq!(Unknown.as_str(), "unknown");
     }
