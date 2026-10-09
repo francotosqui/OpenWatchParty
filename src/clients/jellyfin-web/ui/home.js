@@ -57,17 +57,7 @@
     rooms.forEach((room, index) => {
       const existing = existingCards.get(room.id);
       if (existing) {
-        if (existing.dataset.count !== String(room.count)) {
-          existing.dataset.count = String(room.count);
-          const countEl = existing.querySelector('.innerCardFooter .cardText');
-          if (countEl) {
-            const icon = document.createElement('span');
-            icon.className = 'material-icons';
-            icon.style.cssText = 'font-size:14px;vertical-align:middle;';
-            icon.textContent = 'groups';
-            countEl.replaceChildren(icon, document.createTextNode(` ${t('watching', { count: room.count })}`));
-          }
-        }
+        if (existing.dataset.count !== String(room.count)) ui.updateRoomCardCount(existing, room.count);
       } else {
         itemsContainer.appendChild(ui.createRoomCard(room, index));
       }

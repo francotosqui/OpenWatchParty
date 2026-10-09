@@ -23,8 +23,12 @@
     }
   };
 
-  const syncToRoom = (msg, video) => {
-    if (!video || state.isHost || !msg.payload?.state) return;
+  const syncToRoom = (msg, video, acceptedAsGuest = false) => {
+    if (state.isHost && !acceptedAsGuest) {
+      state.pendingPlayUntil = 0;
+      return;
+    }
+    if (!video || !msg.payload?.state) return;
     const basePos = msg.payload.state.position || 0;
     const hostPlaying = msg.payload.state.play_state === 'playing';
     const stateServerTs = msg.payload.state_server_ts || msg.server_ts || utils.getServerNow();
@@ -63,7 +67,11 @@
     }
   };
 
-  const scheduleRoomSync = (msg, fallbackVideo) => {
+  const scheduleRoomSync = (msg, fallbackVideo, acceptedAsGuest = false) => {
+    if (state.isHost && !acceptedAsGuest) {
+      state.pendingPlayUntil = 0;
+      return;
+    }
     const targetServerTs = msg.payload?.target_server_ts;
     const roomId = msg.room;
     const actionAttempt = ++state.playbackActionAttempt;
@@ -72,6 +80,10 @@
       + VIDEO_ACTION_MAX_WAIT_MS;
     const apply = () => {
       if (actionAttempt !== state.playbackActionAttempt || !state.inRoom || state.roomId !== roomId) return;
+      if (state.isHost && !acceptedAsGuest) {
+        syncToRoom(msg, null, acceptedAsGuest);
+        return;
+      }
       const activeVideo = utils.getVideo();
       const fallbackIsUsable = fallbackVideo
         && fallbackVideo.isConnected !== false
@@ -80,10 +92,15 @@
       if (!video) {
         if (utils.nowMs() < retryDeadline) {
           state.pendingActionTimer = OWP.timers.setTimeout(apply, VIDEO_ACTION_RETRY_MS, 'room');
+        } else {
+          state.pendingActionTimer = null;
+          state.pendingPlayUntil = 0;
+          if (state.syncStatus === 'pending_play') state.syncStatus = 'synced';
+          if (ui.updateSyncIndicator) ui.updateSyncIndicator();
         }
         return;
       }
-      syncToRoom(msg, video);
+      syncToRoom(msg, video, acceptedAsGuest);
     };
     if (typeof targetServerTs === 'number' && targetServerTs > utils.getServerNow()) {
       state.syncStatus = msg.payload?.state?.play_state === 'playing' ? 'pending_play' : 'syncing';
@@ -99,11 +116,13 @@
     if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) return;
     if (!state.rejoinPending && state.rejectedRejoinRoomIds.includes(msg.room)) return;
     applyRoomState(msg);
+    const acceptedAsGuest = !state.isHost;
     state.inviteJoinPending = false;
     if (OWP.actions?.completeRoomRejoin) OWP.actions.completeRoomRejoin(msg.room);
     ui.render();
-    if (!state.isHost && msg.payload?.media_id) {
+    if (acceptedAsGuest && msg.payload?.media_id) {
       state.pendingMediaId = msg.payload.media_id;
+      state.pendingMediaUntil = 0;
       if (OWP.playback && OWP.playback.ensurePlayback) {
         OWP.playback.ensurePlayback(msg.payload.media_id);
       }
@@ -111,13 +130,14 @@
         OWP.playback.watchReady({
           roomId: msg.room,
           mediaId: msg.payload.media_id,
-          onReady: readyVideo => scheduleRoomSync(msg, readyVideo)
+          onReady: readyVideo => scheduleRoomSync(msg, readyVideo, acceptedAsGuest)
         });
       }
       return;
     }
     state.pendingMediaId = '';
-    scheduleRoomSync(msg, video);
+    state.pendingMediaUntil = 0;
+    scheduleRoomSync(msg, video, acceptedAsGuest);
   };
 
   h.handleStateUpdate = (msg, video) => {

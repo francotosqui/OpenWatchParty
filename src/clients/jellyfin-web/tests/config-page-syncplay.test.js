@@ -137,3 +137,45 @@ describe('configuration page native SyncPlay setting', () => {
     assert.equal(form.saved[0].HideNativeSyncPlayButton, false);
   });
 });
+
+describe('configuration page sync adjustment setting', () => {
+  const baseConfig = {
+    JwtSecret: VALID_SECRET,
+    SessionServerUrl: 'wss://media.example/ws'
+  };
+
+  it('leaves the checkbox unchecked when the setting is missing or off', async () => {
+    const missing = loadConfigPage(baseConfig);
+    await missing.show();
+    assert.equal(missing.fields.get('ShowSyncNudgeButton').checked, false);
+
+    const off = loadConfigPage({ ...baseConfig, ShowSyncNudgeButton: false });
+    await off.show();
+    assert.equal(off.fields.get('ShowSyncNudgeButton').checked, false);
+  });
+
+  it('round-trips an enabled setting through load and save, apart from the SyncPlay one', async () => {
+    const form = loadConfigPage({ ...baseConfig, ShowSyncNudgeButton: true });
+    await form.show();
+    assert.equal(form.fields.get('ShowSyncNudgeButton').checked, true);
+    assert.equal(form.fields.get('HideNativeSyncPlayButton').checked, false);
+
+    await form.submit();
+
+    assert.equal(form.saved.length, 1);
+    assert.equal(form.saved[0].ShowSyncNudgeButton, true);
+    assert.equal(form.saved[0].HideNativeSyncPlayButton, false);
+  });
+
+  it('saves the setting as off once the checkbox is cleared', async () => {
+    const form = loadConfigPage({ ...baseConfig, ShowSyncNudgeButton: true, HideNativeSyncPlayButton: true });
+    await form.show();
+    form.fields.get('ShowSyncNudgeButton').checked = false;
+
+    await form.submit();
+
+    assert.equal(form.saved.length, 1);
+    assert.equal(form.saved[0].ShowSyncNudgeButton, false);
+    assert.equal(form.saved[0].HideNativeSyncPlayButton, true);
+  });
+});

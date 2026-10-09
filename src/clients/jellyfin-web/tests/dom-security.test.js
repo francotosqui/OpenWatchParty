@@ -65,7 +65,7 @@ describe('dynamic DOM rendering', () => {
     document.body.appendChild(card);
     await Promise.resolve();
     assert.equal(card.querySelector('.owp-card-name').textContent, IMG);
-    assert.equal(card.querySelector('.innerCardFooter .cardText').textContent, `groups ${SCRIPT} watching`);
+    assert.equal(card.querySelector('.owp-card-count').textContent, `groups ${SCRIPT} watching`);
     assert.equal(card.querySelector('.owp-media-title').textContent, SCRIPT);
     assertNoExecutableNodes();
   });
@@ -125,7 +125,7 @@ describe('dynamic DOM rendering', () => {
     assert.equal(itemsContainer.creationOptions, 'emby-itemscontainer');
     OWP.state.rooms[0].count = SCRIPT;
     OWP.ui.renderHomeWatchParties();
-    const count = document.querySelector('.innerCardFooter .cardText');
+    const count = document.querySelector('.owp-card-count');
     assert.equal(count.textContent, `groups ${SCRIPT} watching`);
     assertNoExecutableNodes();
   });

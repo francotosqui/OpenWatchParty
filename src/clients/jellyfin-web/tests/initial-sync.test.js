@@ -40,12 +40,22 @@ describe('initial synchronization hard-seek policy', () => {
   });
 
   it('preserves and applies a zero-position target after cooldown', () => {
-    video.currentTime = 0.6;
+    video.currentTime = 2.5;
 
     OWP.playback.syncLoop();
 
     assert.equal(video.currentTime, 0);
     assert.equal(OWP.state.initialSyncTargetPos, null);
+  });
+
+  it('keeps catching up a drift under 2 s after cooldown, without a seek', () => {
+    video.currentTime = 1.9;
+
+    OWP.playback.syncLoop();
+
+    assert.equal(video.currentTime, 1.9);
+    assert.equal(video.playbackRate, 0.9);
+    assert.equal(OWP.state.initialSyncTargetPos, 0);
   });
 
   it('does not hard seek an ordinary drift during cooldown', () => {

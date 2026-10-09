@@ -150,6 +150,13 @@ public class PluginConfigurationTests
     }
 
     [Fact]
+    public void ShowSyncNudgeButton_DefaultIsDisabled()
+    {
+        var config = new PluginConfiguration();
+        Assert.False(config.ShowSyncNudgeButton);
+    }
+
+    [Fact]
     public void ConfigurationPage_OffersNativeSyncPlayToggle()
     {
         var assembly = typeof(Plugin).Assembly;
@@ -160,6 +167,7 @@ public class PluginConfigurationTests
 
         // Loading and saving the checkbox is covered by tests/config-page-syncplay.test.js.
         Assert.Contains("id=\"HideNativeSyncPlayButton\"", page, StringComparison.Ordinal);
+        Assert.Contains("id=\"ShowSyncNudgeButton\"", page, StringComparison.Ordinal);
     }
 
 }

@@ -4,7 +4,7 @@
   const state = OWP.state;
   const utils = OWP.utils;
   const t = OWP.i18n.t;
-  const { PROTOCOL_VERSION } = OWP.constants;
+  const { PROTOCOL_VERSION, CLIENT_FEATURES } = OWP.constants;
   const TOKEN_REQUEST_TIMEOUT_MS = 10000;
 
   const getJellyfinUsername = () => {
@@ -99,7 +99,8 @@
               token: result.token,
               user_name: state.userName,
               user_id: state.userId,
-              protocol_version: PROTOCOL_VERSION
+              protocol_version: PROTOCOL_VERSION,
+              features: CLIENT_FEATURES
             },
             ts: utils.nowMs()
           }));
@@ -131,6 +132,14 @@
   const setNativeSyncPlayHidden = (hidden) => {
     state.hideNativeSyncPlayButton = hidden;
     if (OWP.ui?.applyNativeSyncPlayVisibility) OWP.ui.applyNativeSyncPlayVisibility();
+  };
+
+  // The room bar is drawn again if the setting changes while in a room.
+  const setSyncNudgeShown = (shown) => {
+    if (state.showSyncNudge === shown) return;
+    state.showSyncNudge = shown;
+    state.outOfSyncSince = 0;
+    if (state.inRoom && OWP.ui?.render) OWP.ui.render(true);
   };
 
   // The plugin tells the client how long host invite links should live. The
@@ -246,6 +255,7 @@
         state.authEnabled = true;
         state.authToken = data.token;
         setNativeSyncPlayHidden(data.hide_native_syncplay_button === true);
+        setSyncNudgeShown(data.show_sync_nudge_button === true);
         applyInviteTtl(data);
         const expiresIn = data.expires_in || 3600;
         state.tokenExpiresAt = Date.now() + (expiresIn * 1000);
@@ -263,6 +273,7 @@
         state.authToken = null;
         state.tokenExpiresAt = 0;
         setNativeSyncPlayHidden(data.hide_native_syncplay_button === true);
+        setSyncNudgeShown(data.show_sync_nudge_button === true);
         applyInviteTtl(data);
         console.log('[OpenWatchParty] Explicit insecure mode enabled, connecting without token');
         return { mode: 'insecure', token: null };

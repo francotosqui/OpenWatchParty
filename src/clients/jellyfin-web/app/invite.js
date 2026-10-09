@@ -138,8 +138,13 @@
     }
     if (!response.ok || typeof data?.ticket !== 'string' || !data.ticket) {
       // The session server's error text is English: show the known statuses
-      // in the viewer's language, the others with their HTTP status.
-      const key = { 403: 'inviteHostOnly', 404: 'errorRoomNotFound', 429: 'errorRateLimited', 503: 'inviteAuthRequired' }[response.status];
+      // in the viewer's language, the others with their HTTP status. A 404
+      // that did not come from the session server means the proxy does not
+      // route /invite.
+      const fromSessionServer = typeof data?.error === 'string';
+      const key = response.status === 404 && !fromSessionServer
+        ? 'inviteUnreachable'
+        : { 403: 'inviteHostOnly', 404: 'errorRoomNotFound', 429: 'errorRateLimited', 503: 'inviteAuthRequired' }[response.status];
       if (data?.error) console.warn('[OpenWatchParty] Invite link not created:', data.error);
       ui.showToast(key ? t(key) : t('inviteCreateHttp', { status: response.status }));
       return false;

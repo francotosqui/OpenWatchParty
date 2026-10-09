@@ -28,10 +28,21 @@ const cardFor = async (item, index = 0) => {
 };
 const imageOf = card => card.querySelector('.owp-card-image-container').style.backgroundImage || '';
 
+// The card waits for its art to load before showing it.
+let artLoads = true;
+globalThis.Image = class {
+  set src(value) {
+    this.url = value;
+    if (artLoads) this.onload?.();
+    else this.onerror?.();
+  }
+};
+
 describe('home Watch Parties card', () => {
   beforeEach(() => {
     globalThis.document = new FakeDocument();
     OWP.timers.setTimeout = () => 1;
+    artLoads = true;
   });
 
   it('uses the landscape card markup of the home rows, with no colours of its own', async () => {
@@ -43,18 +54,48 @@ describe('home Watch Parties card', () => {
     assert.ok(image.classList.contains('defaultCardBackground'));
     assert.ok(image.classList.contains('defaultCardBackground2'));
     assert.equal(image.style.backgroundColor, undefined);
-    const count = card.querySelector('.innerCardFooter .cardText');
+    const count = card.querySelector('.owp-card-count');
     assert.equal(count.textContent, 'groups 2 watching');
+    assert.equal(count.children[0].getAttribute('aria-hidden'), 'true');
     assert.equal(count.style.cssText, undefined);
+    assert.equal(card.querySelector('.innerCardFooter'), null);
     assert.equal(card.querySelector('.owp-card-name').textContent, "Ana's room");
     assert.equal(card.querySelector('.owp-media-title').textContent, 'Sprite Fright');
     assert.equal(imageOf(card), '');
   });
 
-  it('shows an episode with its own still', async () => {
-    const card = await cardFor({ Name: 'Pilot', Type: 'Episode', ImageTags: { Primary: 'p1' }, ParentThumbItemId: 'series', ParentThumbImageTag: 't1' });
-    assert.equal(imageOf(card), `url("https://jf.example/Items/${MEDIA_ID}/Images/Primary?fillWidth=480&fillHeight=270&quality=96&tag=p1")`);
+  it('shows an episode with its series art, as Continue Watching does', async () => {
+    const card = await cardFor({
+      Name: 'Pilot',
+      Type: 'Episode',
+      ImageTags: { Primary: 'p1' },
+      BackdropImageTags: ['own'],
+      ParentThumbItemId: 'series',
+      ParentThumbImageTag: 't1',
+      ParentBackdropItemId: 'series',
+      ParentBackdropImageTags: ['b1']
+    });
+    assert.equal(imageOf(card), 'url("https://jf.example/Items/series/Images/Thumb?fillWidth=480&fillHeight=270&quality=96&tag=t1")');
     assert.equal(card.querySelector('.owp-card-icon').style.display, 'none');
+  });
+
+  it('drops the placeholder background once the card has art', async () => {
+    const card = await cardFor({ Name: 'Movie', Type: 'Movie', BackdropImageTags: ['b'] }, 6);
+    const image = card.querySelector('.owp-card-image-container');
+    assert.equal(image.classList.contains('defaultCardBackground'), false);
+    assert.equal(image.classList.contains('defaultCardBackground2'), false);
+    assert.ok(image.classList.contains('coveredImage'));
+    assert.ok(image.classList.contains('owp-card-image-container'));
+  });
+
+  it('keeps the placeholder background and icon while the art does not load', async () => {
+    artLoads = false;
+    const card = await cardFor({ Name: 'Movie', Type: 'Movie', BackdropImageTags: ['b'] }, 6);
+    const image = card.querySelector('.owp-card-image-container');
+    assert.equal(imageOf(card), '');
+    assert.ok(image.classList.contains('defaultCardBackground'));
+    assert.ok(image.classList.contains('defaultCardBackground2'));
+    assert.equal(card.querySelector('.owp-card-icon').style.display, undefined);
   });
 
   it('prefers a thumb, then a backdrop, for a movie', async () => {
@@ -64,13 +105,18 @@ describe('home Watch Parties card', () => {
     assert.match(imageOf(card), new RegExp(`/Items/${MEDIA_ID}/Images/Backdrop\\?.*tag=b`));
   });
 
-  it('falls back to the series art, then to the poster', async () => {
-    let card = await cardFor({ Name: 'Episode', Type: 'Episode', ParentThumbItemId: 'series', ParentThumbImageTag: 't1' });
-    assert.match(imageOf(card), /\/Items\/series\/Images\/Thumb\?.*tag=t1/);
-    card = await cardFor({ Name: 'Episode', Type: 'Episode', ParentBackdropItemId: 'series', ParentBackdropImageTags: ['b1'] });
+  it('falls back to the series backdrop, then to the item image', async () => {
+    let card = await cardFor({ Name: 'Episode', Type: 'Episode', ImageTags: { Primary: 'p1' }, ParentBackdropItemId: 'series', ParentBackdropImageTags: ['b1'] });
     assert.match(imageOf(card), /\/Items\/series\/Images\/Backdrop\?.*tag=b1/);
-    card = await cardFor({ Name: 'Video', Type: 'Video', ImageTags: { Primary: 'p2' } });
-    assert.match(imageOf(card), new RegExp(`/Items/${MEDIA_ID}/Images/Primary\\?.*tag=p2`));
+    card = await cardFor({ Name: 'Episode', Type: 'Episode', ImageTags: { Primary: 'p1' } });
+    assert.match(imageOf(card), new RegExp(`/Items/${MEDIA_ID}/Images/Primary\\?.*tag=p1`));
+  });
+
+  it('updates the head count in place', async () => {
+    const card = await cardFor({ Name: 'Movie', Type: 'Movie' });
+    OWP.ui.updateRoomCardCount(card, 3);
+    assert.equal(card.dataset.count, '3');
+    assert.equal(card.querySelector('.owp-card-count').textContent, 'groups 3 watching');
   });
 });
 

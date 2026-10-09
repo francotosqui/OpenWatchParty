@@ -131,3 +131,44 @@ describe('native SyncPlay button setting', () => {
     assert.equal(hideStyles().length, 0);
   });
 });
+
+describe('sync adjustment setting', () => {
+  let redraws;
+
+  afterEach(() => {
+    OWP.timers.clearAll();
+    OWP.state.tokenRefreshTimer = null;
+    OWP.state.showSyncNudge = false;
+    OWP.state.inRoom = false;
+    delete OWP.ui.render;
+  });
+
+  for (const mode of ['authenticated', 'insecure']) {
+    it(`follows the ${mode} response, and only an explicit true turns it on`, async () => {
+      await fetchWith(responses[mode]({ show_sync_nudge_button: true }));
+      assert.equal(OWP.state.showSyncNudge, true);
+
+      for (const settings of [{ show_sync_nudge_button: false }, {}, { show_sync_nudge_button: 'true' }]) {
+        await fetchWith(responses[mode]({ show_sync_nudge_button: true }));
+        await fetchWith(responses[mode](settings));
+        assert.equal(OWP.state.showSyncNudge, false, JSON.stringify(settings));
+      }
+    });
+  }
+
+  it('redraws the room bar only when the setting changes during a room', async () => {
+    redraws = [];
+    OWP.ui.render = force => redraws.push(force);
+    await fetchWith(responses.authenticated({ show_sync_nudge_button: true }));
+    assert.deepEqual(redraws, []);
+
+    OWP.state.inRoom = true;
+    await fetchWith(responses.authenticated({ show_sync_nudge_button: true }));
+    assert.deepEqual(redraws, []);
+
+    OWP.state.outOfSyncSince = 1234;
+    await fetchWith(responses.authenticated({ show_sync_nudge_button: false }));
+    assert.deepEqual(redraws, [true]);
+    assert.equal(OWP.state.outOfSyncSince, 0);
+  });
+});
