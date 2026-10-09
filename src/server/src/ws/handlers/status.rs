@@ -1,3 +1,4 @@
+use super::super::dispatch::is_authenticated;
 use crate::messaging::{collect_room_senders, send_to_senders};
 use crate::room::participant_statuses_message;
 use crate::types::{Client, IncomingMessage, Room, ServerState, SharedState};
@@ -100,6 +101,9 @@ pub(in crate::ws) async fn handle_participant_status(
     parsed: &IncomingMessage,
     state: &SharedState,
 ) {
+    if !is_authenticated(client_id, state).await {
+        return;
+    }
     let Some(status) = valid_status(parsed.payload.as_ref()) else {
         debug!("Ignoring invalid participant status from {client_id}");
         return;

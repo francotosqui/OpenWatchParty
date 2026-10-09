@@ -4,7 +4,7 @@
   const state = OWP.state;
   const utils = OWP.utils;
   const ui = OWP.ui;
-  const { DEFAULT_WS_URL, RECONNECT_BASE_MS, RECONNECT_MAX_MS, ROOM_REJOIN_TIMEOUT_MS, PING_INIT_MS, PING_STABLE_MS, PING_STABLE_AFTER, AUTH_TOAST_SUPPRESS_MS, PROTOCOL_VERSION } = OWP.constants;
+  const { DEFAULT_WS_URL, RECONNECT_BASE_MS, RECONNECT_MAX_MS, ROOM_REJOIN_TIMEOUT_MS, PING_INIT_MS, PING_STABLE_MS, PING_STABLE_AFTER, AUTH_TOAST_SUPPRESS_MS, PROTOCOL_VERSION, CLIENT_FEATURES } = OWP.constants;
 
   const clearRoomRejoinTimer = () => {
     if (state.roomRejoinTimer) {
@@ -88,10 +88,11 @@
     state.authFailedToken = '';
     state.lastAuthToastMessage = '';
     state.lastAuthToastAt = 0;
+    state.serverFeatures = [];
     if (utils.flushLogBuffer) utils.flushLogBuffer();
     // The version is always declared: it is what lets the server negotiate
     // even when the client has no token or identity to authenticate with.
-    const authPayload = { protocol_version: PROTOCOL_VERSION };
+    const authPayload = { protocol_version: PROTOCOL_VERSION, features: CLIENT_FEATURES };
     if (token) authPayload.token = token;
     if (state.userName) authPayload.user_name = state.userName;
     if (state.userId) authPayload.user_id = state.userId;
@@ -116,22 +117,24 @@
     state.lastRttMs = null;
     state.clientId = '';
     clearRoomRejoinTimer();
-    if (state.inRoom) {
-      if (state.isHost) {
-        cancelRoomRejoin();
-        if (actions.resetRoomState) actions.resetRoomState();
-        if (ui.showToast) ui.showToast('The watch party closed when the host disconnected');
-      } else {
-        if (actions.normalizePlaybackRate) actions.normalizePlaybackRate();
-        state.desiredRoomId = state.roomId;
-        allowRoomState(state.desiredRoomId);
-        state.rejoinPending = Boolean(state.desiredRoomId);
-        state.inRoom = false;
-        state.roomId = '';
-        state.readyRoomId = '';
-        state.participants = [];
-        state.roomBarSection = '';
-      }
+    // An older server closes the room when its host disconnects, so there is
+    // nothing to rejoin; a newer one passes the role on and the old host
+    // comes back as a guest.
+    if (state.inRoom && state.isHost && !state.serverFeatures.includes('host_transfer')) {
+      cancelRoomRejoin();
+      if (actions.resetRoomState) actions.resetRoomState();
+      if (ui.showToast) ui.showToast('The watch party closed when the host disconnected');
+    } else if (state.inRoom) {
+      if (actions.normalizePlaybackRate) actions.normalizePlaybackRate();
+      state.desiredRoomId = state.roomId;
+      allowRoomState(state.desiredRoomId);
+      state.rejoinPending = Boolean(state.desiredRoomId);
+      state.inRoom = false;
+      state.roomId = '';
+      state.isHost = false;
+      state.readyRoomId = '';
+      state.participants = [];
+      state.roomBarSection = '';
     }
     ui.render();
     if (state.autoReconnect && !state.isConnecting) {
@@ -164,6 +167,7 @@
       case 'client_left': h.handleClientLeft(msg); break;
       case 'participant_list': h.handleParticipantList(msg); break;
       case 'participant_statuses': h.handleParticipantStatuses(msg); break;
+      case 'host_changed': h.handleHostChanged(msg); break;
       case 'room_closed': h.handleRoomClosed(msg); break;
       case 'player_event': h.handlePlayerEvent(msg, video); break;
       case 'state_update': h.handleStateUpdate(msg, video); break;
@@ -312,6 +316,7 @@
     state.successfulPings = 0;
     state.timeSyncSamples = [];
     state.lastRttMs = null;
+    state.serverFeatures = [];
     if (actions.resetRoomState) actions.resetRoomState();
     if (state.intervals.ping) {
       OWP.timers.clear(state.intervals.ping);

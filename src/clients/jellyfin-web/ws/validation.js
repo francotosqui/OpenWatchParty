@@ -18,6 +18,7 @@
     && Array.from(value).length <= max;
   const timestamp = value => Number.isSafeInteger(value) && value >= 0;
   const protocolVersion = value => Number.isSafeInteger(value) && value >= 1;
+  const features = value => Array.isArray(value) && value.every(feature => string(feature, 64));
   const position = value => typeof value === 'number' && Number.isFinite(value)
     && value >= 0 && value <= MAX_POSITION;
   const count = value => Number.isInteger(value) && value >= 0 && value <= MAX_PARTICIPANTS;
@@ -52,9 +53,10 @@
 
   const validateAuthSuccess = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
-    if (!onlyKeys(message.payload, ['user_name', 'protocol_version'])) return 'auth_success has unknown fields';
+    if (!onlyKeys(message.payload, ['user_name', 'protocol_version', 'features'])) return 'auth_success has unknown fields';
     if (!string(message.payload.user_name, MAX_NAME_LENGTH)) return 'user_name is invalid';
     if (!optional(message.payload.protocol_version, protocolVersion)) return 'protocol_version is invalid';
+    if (!optional(message.payload.features, features)) return 'features is invalid';
     return null;
   };
 
@@ -111,6 +113,13 @@
     return string(message.payload.reason, 500) ? null : 'reason is invalid';
   };
 
+  const validateHostChanged = (message) => {
+    if (!payloadObject(message)) return 'payload must be an object';
+    if (!onlyKeys(message.payload, ['host_id', 'host_name'])) return 'host_changed has unknown fields';
+    if (!string(message.payload.host_id, MAX_ID_LENGTH)) return 'host_id is invalid';
+    return string(message.payload.host_name, MAX_NAME_LENGTH) ? null : 'host_name is invalid';
+  };
+
   const validatePlayerEvent = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
     const payload = message.payload;
@@ -157,6 +166,7 @@
     client_left: validateParticipantCount,
     participant_list: validateParticipantList,
     participant_statuses: validateParticipantStatuses,
+    host_changed: validateHostChanged,
     room_closed: validateRoomClosed,
     player_event: validatePlayerEvent,
     state_update: validateStateUpdate,
@@ -170,6 +180,7 @@
     'client_left',
     'participant_list',
     'participant_statuses',
+    'host_changed',
     'room_closed',
     'player_event',
     'state_update',

@@ -17,8 +17,9 @@
     }
   };
 
-  h.handleAuthSuccess = () => {
-    if (OWP.actions?.handleAuthenticatedConnection) {
+  h.handleAuthSuccess = (msg) => {
+    state.serverFeatures = msg.payload?.features || [];
+    if (state.connectionPhase !== 'authenticated' && OWP.actions?.handleAuthenticatedConnection) {
       OWP.actions.handleAuthenticatedConnection();
     }
   };
@@ -65,6 +66,18 @@
     if (statuses.length !== state.participants.length) return;
     state.participants = state.participants.map((participant, index) => ({ ...participant, status: statuses[index] }));
     ui.updateParticipantList();
+  };
+
+  h.handleHostChanged = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId) return;
+    const becameHost = msg.payload.host_id === state.clientId;
+    state.isHost = becameHost;
+    if (becameHost && OWP.actions?.resetDriftCorrection) {
+      OWP.actions.resetDriftCorrection();
+    }
+    ui.render();
+    if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();
+    ui.showToast(becameHost ? 'You are now the host' : `${msg.payload.host_name} is now the host`);
   };
 
   h.handleRoomClosed = (msg) => {

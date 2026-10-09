@@ -54,6 +54,7 @@ const enterRoom = () => {
     isHost: false,
     participants: [],
     statusesRoomId: '',
+    serverFeatures: [],
     statusCandidate: '',
     statusCandidateSince: 0,
     statusSentKey: '',
@@ -199,6 +200,22 @@ describe('participant statuses', () => {
         now += PARTICIPANT_STATUS_HOLD_MS;
         OWP.playback.reportStatus();
       }
+      assert.deepEqual(sent, []);
+    });
+
+    it('is sent to a server that declared participant_status, even before one sent statuses', () => {
+      OWP.state.serverFeatures = ['participant_status'];
+      OWP.playback.reportStatus();
+      now += PARTICIPANT_STATUS_HOLD_MS;
+      OWP.playback.reportStatus();
+      assert.deepEqual(sent, [['participant_status', { status: 'in_sync' }]]);
+    });
+
+    it('is not sent to a server that neither declared the feature nor sent statuses', () => {
+      OWP.state.serverFeatures = ['host_transfer'];
+      OWP.playback.reportStatus();
+      now += PARTICIPANT_STATUS_HOLD_MS;
+      OWP.playback.reportStatus();
       assert.deepEqual(sent, []);
     });
 

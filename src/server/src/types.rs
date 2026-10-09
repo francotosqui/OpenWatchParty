@@ -23,6 +23,7 @@ pub struct Client {
     /// JWT `exp` as Unix seconds. `None` is reserved for insecure no-auth sessions.
     pub session_expires_at: Option<u64>,
     pub authentication_version: u64,
+    pub supports_host_transfer: bool,
     pub message_count: u32,
     pub last_reset: Instant,
     pub last_seen: Instant, // For zombie connection detection
@@ -94,6 +95,7 @@ pub enum ClientMessageType {
     JoinRoom,
     Ready,
     LeaveRoom,
+    CloseRoom,
     PlayerEvent,
     StateUpdate,
     Ping,
@@ -119,6 +121,7 @@ pub enum ServerMessageType {
     StateUpdate,
     Pong,
     ClientLeft,
+    HostChanged,
     RoomClosed,
     ChatMessage,
 }
@@ -198,6 +201,9 @@ mod tests {
 
         let json = serde_json::to_string(&ClientMessageType::CreateRoom).unwrap();
         assert_eq!(json, r#""create_room""#);
+
+        let json = serde_json::to_string(&ClientMessageType::CloseRoom).unwrap();
+        assert_eq!(json, r#""close_room""#);
     }
 
     #[test]
