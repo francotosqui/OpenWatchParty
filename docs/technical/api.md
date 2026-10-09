@@ -278,7 +278,7 @@ The `SessionServerUrl` field determines how clients connect to the session serve
 
 **When to set explicitly:**
 - Session server runs on a different host
-- Using a reverse proxy that routes `/ws` to the session server
+- Using a [reverse proxy](../operations/deployment.md#reverse-proxy-configuration) that routes both `/ws` and `/invite` to the session server
 - Port 3000 is not accessible from clients
 
 ## Session Server API

@@ -164,7 +164,7 @@ function syncLoop() {
     // drift < 0 = ahead = slow down
     const sign = drift > 0 ? 1 : -1;
     const correction = sign * Math.sqrt(absDrift) * DRIFT_GAIN;
-    const rate = clamp(1 + correction, 0.85, 2.0);
+    const rate = clamp(1 + correction, 0.90, 1.15);
     video.playbackRate = rate;
 }
 ```
@@ -177,10 +177,10 @@ function syncLoop() {
     ◄─────────────────────┼────────────────────►
     │         │           │           │        │
   SEEK     SLOW      DEADZONE     FAST      SEEK
- (<−2.0s) (−2.0s     (±0.04s)   (+0.04s   (>+2.0s)
+ (≤−2.0s) (−2.0s     (±0.04s)   (+0.04s   (≥+2.0s)
            to −0.04s)            to +2.0s)
     │         │                     │          │
-    │    rate = 0.85           rate = 2.0      │
+    │    rate ≥ 0.90           rate ≤ 1.15     │
     │     (min)                   (max)        │
     └─────────┴──────────┬──────────┴──────────┘
                          │
@@ -191,17 +191,17 @@ function syncLoop() {
 
 ```
 rate = 1 + sign(drift) * sqrt(|drift|) * DRIFT_GAIN
-     = 1 + sign(drift) * sqrt(|drift|) * 0.50
+     = 1 + sign(drift) * sqrt(|drift|) * 0.15
 
 Examples:
-- drift = +0.25s → rate = 1 + sqrt(0.25) * 0.50 = 1.25x
-- drift = +1.0s  → rate = 1 + sqrt(1.0) * 0.50 = 1.50x
-- drift = +2.0s  → rate = 1 + sqrt(2.0) * 0.50 = 1.71x
-- drift = +4.0s  → rate = 1 + sqrt(4.0) * 0.50 = 2.00x (capped)
-- drift = -0.5s  → rate = 1 - sqrt(0.5) * 0.50 = 0.65x (clamped to 0.85x)
+- drift = +0.25s → rate = 1 + sqrt(0.25) * 0.15 = 1.075x
+- drift = +1.0s  → rate = 1 + sqrt(1.0) * 0.15 = 1.15x
+- drift = +1.9s  → rate = 1 + sqrt(1.9) * 0.15 = 1.21x (capped to 1.15x)
+- drift = -0.1s  → rate = 1 - sqrt(0.1) * 0.15 = 0.95x
+- drift = -0.5s  → rate = 1 - sqrt(0.5) * 0.15 = 0.89x (clamped to 0.90x)
 ```
 
-The sqrt curve provides stronger correction for larger drifts while staying smooth. Browser pitch correction (`preservesPitch`) keeps audio natural even at 2.0x.
+The sqrt curve corrects small drifts gently and larger ones faster, within 0.90x-1.15x: voices still sound natural there (browsers also keep the pitch, `preservesPitch`), at the cost of a slower catch-up (about 10 s from 1.5 s behind to within 0.25 s). Drifts of 2 s or more seek instead, once the cooldown after joining (`INITIAL_SYNC_COOLDOWN_MS`) or after a host play or seek has passed (during the join cooldown only a drift over `INITIAL_SYNC_MAX_DRIFT`, 10 s, seeks); below 2 s, the guest keeps catching up, also when that cooldown ends.
 
 ### Paused Rooms
 
@@ -413,10 +413,10 @@ fn schedule_pending_play(room_id, created_at, rooms, clients) {
 | `SYNC_LEAD_MS` | 300ms | Client | Compensation advance |
 | `DRIFT_DEADZONE_SEC` | 0.04s | Client | No-correction zone |
 | `DRIFT_SOFT_MAX_SEC` | 2.0s | Client | Forced seek threshold |
-| `PLAYBACK_RATE_MIN` | 0.85 | Client | Min catchup speed |
-| `PLAYBACK_RATE_MAX` | 2.0 | Client | Max catchup speed |
-| `DRIFT_GAIN` | 0.50 | Client | Proportional gain (sqrt curve) |
-| `INITIAL_SYNC_COOLDOWN_MS` | 8000ms | Client | Cooldown after join (no HARD_SEEK) |
+| `PLAYBACK_RATE_MIN` | 0.90 | Client | Min catchup speed |
+| `PLAYBACK_RATE_MAX` | 1.15 | Client | Max catchup speed |
+| `DRIFT_GAIN` | 0.15 | Client | Proportional gain (sqrt curve) |
+| `INITIAL_SYNC_COOLDOWN_MS` | 8000ms | Client | Cooldown after join (no HARD_SEEK below `INITIAL_SYNC_MAX_DRIFT`; after it, only drifts of 2 s or more seek) |
 | `INITIAL_SYNC_MAX_MS` | 30000ms | Client | Max initial sync phase duration |
 | `INITIAL_SYNC_DRIFT_THRESHOLD` | 0.5s | Client | Exit initial sync when caught up |
 | `SYNC_LOOP_MS` | 500ms | Client | Sync loop interval |

@@ -320,7 +320,7 @@ describe('sync adjustment: the nudge', () => {
   it('leaves the automatic correction as it was', () => {
     guestAt(100, 101);
     playback.syncLoop();
-    assert.equal(video.playbackRate, 1.5);
+    assert.equal(video.playbackRate, 1.15);
     assert.equal(video.currentTime, 100);
 
     guestAt(100, 103);
@@ -383,6 +383,25 @@ describe('sync adjustment: the room bar', () => {
     assert.equal(byId('owp-sync-section').hidden, true);
   });
 
+  it('is withdrawn and offered again when the host role passes on', () => {
+    renderRoom();
+    assert.ok(byId('owp-btn-sync'));
+    assert.ok(byId('owp-sync-section'));
+
+    // A promoted guest: updateRoomRoleControls alone, as handleHostChanged does
+    // (the short-circuited render never redraws the room bar).
+    OWP.state.isHost = true;
+    OWP.ui.updateRoomRoleControls();
+    assert.equal(byId('owp-btn-sync'), null);
+    assert.equal(byId('owp-sync-section'), null);
+    assert.equal(OWP.state.roomBarSection, '');
+
+    OWP.state.isHost = false;
+    OWP.ui.updateRoomRoleControls();
+    assert.ok(byId('owp-btn-sync'));
+    assert.ok(byId('owp-sync-section'));
+  });
+
   it('is not offered when the plugin disables it, nor to the host', () => {
     renderRoom({ showSyncNudge: false });
     assert.equal(byId('owp-btn-sync'), null);
@@ -395,7 +414,7 @@ describe('sync adjustment: the room bar', () => {
 
   it('shows where the guest is, what the automatic correction does, and the nudge', () => {
     OWP.state.outOfSyncSince = Date.now() - 8000;
-    video.playbackRate = 1.25;
+    video.playbackRate = 1.15;
     renderRoom();
     byId('owp-btn-sync').click();
     assert.equal(byId('owp-btn-sync').getAttribute('aria-expanded'), 'true');
@@ -403,7 +422,7 @@ describe('sync adjustment: the room bar', () => {
     assert.equal(byId('owp-nudge-text').textContent, '1.2 s behind the host');
     assert.ok(document.querySelector('.owp-nudge-state .owp-sync-dot').classList.contains('syncing'));
     assert.equal(byId('owp-nudge-auto').hidden, false);
-    assert.equal(byId('owp-nudge-auto').textContent, 'Automatic correction: 1.25× speed for 8 s.');
+    assert.equal(byId('owp-nudge-auto').textContent, 'Automatic correction: 1.15× speed for 8 s.');
     assert.equal(byId('owp-btn-nudge').textContent, 'Move ahead 0.5 s');
     assert.equal(byId('owp-btn-nudge').getAttribute('aria-disabled'), 'false');
     assert.match(byId('owp-sync-section').textContent, /Only moves your video; the host stays in control\./);
@@ -420,10 +439,10 @@ describe('sync adjustment: the room bar', () => {
     OWP.ui.updateSyncSection();
     assert.equal(byId('owp-nudge-auto').textContent, 'Automatic correction: out of sync for 5 s.');
 
-    video.playbackRate = 0.85;
+    video.playbackRate = 0.90;
     OWP.state.outOfSyncSince = Date.now();
     OWP.ui.updateSyncSection();
-    assert.equal(byId('owp-nudge-auto').textContent, 'Automatic correction: 0.85× speed.');
+    assert.equal(byId('owp-nudge-auto').textContent, 'Automatic correction: 0.90× speed.');
   });
 
   it('nudges, then shows the new state, keeping the button focusable', () => {

@@ -104,6 +104,7 @@
     SYNCPLAY_HIDE_STYLE_ID: 'owp-hide-native-syncplay',
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
+    CLIENT_FEATURES: ['host_transfer'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -113,9 +114,9 @@
     SYNC_LEAD_MS: 300,            // Compensates processing + initial HLS buffer
     DRIFT_DEADZONE_SEC: 0.04,
     DRIFT_SOFT_MAX_SEC: 2.0,      // Seek to correct if drift > 2s
-    PLAYBACK_RATE_MIN: 0.85,      // Allow slowdown if ahead
-    PLAYBACK_RATE_MAX: 2.0,       // Aggressive catch-up (browser pitch correction preserves audio)
-    DRIFT_GAIN: 0.50,             // For sqrt curve: 0.50 * sqrt(1s) = 0.50 → 1.50x at 1s drift
+    PLAYBACK_RATE_MIN: 0.90,      // Slowdown when ahead
+    PLAYBACK_RATE_MAX: 1.15,      // Catch-up when behind, gentle enough that voices stay natural
+    DRIFT_GAIN: 0.15,             // For sqrt curve: 0.15 * sqrt(1s) = 0.15 → 1.15x at 1s drift
     // Manual sync adjustment (the room bar's nudge, for guests)
     NUDGE_STEP_SEC: 0.5,          // Largest move toward the host per nudge
     NUDGE_MIN_DRIFT_SEC: 0.15,    // Closer than this counts as in sync: nothing to nudge
@@ -137,6 +138,7 @@
     ROOM_REJOIN_TIMEOUT_MS: 5000,
     MEDIA_READY_POLL_MS: 100,
     MEDIA_READY_TIMEOUT_MS: 15000,
+    STREAM_RELOAD_MAX_MS: 30000,  // Longest the room waits for the host's stream to reload (track change)
     VIDEO_ACTION_RETRY_MS: 50,
     VIDEO_ACTION_MAX_WAIT_MS: 2000,
     INITIAL_SYNC_COOLDOWN_MS: 8000, // Cooldown after join to let playback rate catch up (not HARD_SEEK)
@@ -166,6 +168,7 @@
     reconnectTimer: null,
     connectionAttempt: 0,
     connectionPhase: 'disconnected', // disconnected | connecting | authenticating | authenticated
+    serverFeatures: [],
     desiredRoomId: '',
     rejoinPending: false,
     rejectedRejoinRoomIds: [],
@@ -195,6 +198,7 @@
     mediaSyncAttempt: 0,
     mediaReadyCleanup: null,
     pendingMediaId: '',
+    pendingMediaUntil: 0,
     pendingJoinRoomId: '',  // Room to join after navigating to video player
     roomName: '',
     participantCount: 0,
@@ -206,6 +210,10 @@
     readyRoomId: '',
     isBuffering: false,
     wantsToPlay: false,
+    streamReloadUntil: 0,  // While the host's stream reloads in place (audio or subtitle track change)
+    lastPlayedPosition: 0, // Where the video last played, and whether it was playing, before a reload empties it
+    lastPlayedPlaying: false,
+    streamReloadResume: false, // Whether the room was playing when the reload started
     isSyncing: false,
     syncCooldownUntil: 0,  // Timestamp until which position updates are ignored (after resume)
     isInitialSync: false,  // True during initial catch-up after joining (disables HARD_SEEK)
