@@ -26,6 +26,8 @@ Before using OpenWatchParty, ensure your Jellyfin administrator has:
 
 The Watch Party button in the Jellyfin header opens the same panel, but **Create Room** stays disabled, with a hint, until something is playing: a room always starts from the video you are watching.
 
+The **?** next to the panel's close button shows a short help. The first time Jellyfin Web runs in a browser, the panel opens by itself below the header button with this help; it is not shown again in that browser.
+
 As the host, you control playback for everyone. When you play, pause, or seek, all participants follow.
 
 ![The room bar during an active session]({{ '/assets/images/watch-party-panel.png' | relative_url }})
