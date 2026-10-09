@@ -131,6 +131,7 @@
     ROOM_REJOIN_TIMEOUT_MS: 5000,
     MEDIA_READY_POLL_MS: 100,
     MEDIA_READY_TIMEOUT_MS: 15000,
+    STREAM_RELOAD_MAX_MS: 30000,  // Longest the room waits for the host's stream to reload (track change)
     VIDEO_ACTION_RETRY_MS: 50,
     VIDEO_ACTION_MAX_WAIT_MS: 2000,
     INITIAL_SYNC_COOLDOWN_MS: 8000, // Cooldown after join to let playback rate catch up (not HARD_SEEK)
@@ -200,6 +201,10 @@
     readyRoomId: '',
     isBuffering: false,
     wantsToPlay: false,
+    streamReloadUntil: 0,  // While the host's stream reloads in place (audio or subtitle track change)
+    lastPlayedPosition: 0, // Where the video last played, and whether it was playing, before a reload empties it
+    lastPlayedPlaying: false,
+    streamReloadResume: false, // Whether the room was playing when the reload started
     isSyncing: false,
     syncCooldownUntil: 0,  // Timestamp until which position updates are ignored (after resume)
     isInitialSync: false,  // True during initial catch-up after joining (disables HARD_SEEK)
