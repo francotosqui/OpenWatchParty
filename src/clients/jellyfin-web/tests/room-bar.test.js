@@ -15,6 +15,12 @@ require('../chat/input.js');
 require('../ui/toasts.js');
 require('../ui/home.js');
 require('../ui/render.js');
+require('../ws/handlers/room.js');
+require('../ws/send.js');
+const realRoomActions = {
+  leaveRoom: OWP.actions.leaveRoom,
+  closeRoom: OWP.actions.closeRoom
+};
 OWP.actions = { schedulePing: () => {} };
 require('../ws/handlers/clock.js');
 
@@ -48,6 +54,7 @@ const renderRoom = (overrides = {}) => {
     isHost: false,
     participantCount: 2,
     participants: [{ name: 'FrancoTosky', isHost: true }, { name: 'Ana', isHost: false }],
+    serverFeatures: [],
     syncStatus: 'synced',
     ...overrides
   });
@@ -67,7 +74,10 @@ describe('room bar', () => {
     OWP.ui.updateRoomListUI = () => {};
     OWP.ui.stopPlayerCapture = () => {};
     OWP.ui.showChatToast = (username, text) => chatToasts.push(`${username}: ${text}`);
-    OWP.actions = { leaveRoom: () => { left++; } };
+    OWP.actions = {
+      leaveRoom: () => { left++; },
+      closeRoom: () => { left++; }
+    };
     OWP.chat.messages = [];
     OWP.chat.unreadCount = 0;
     OWP.state.roomBarSection = '';
@@ -171,6 +181,34 @@ describe('room bar', () => {
     assert.equal(byId('owp-chat-messages').children.length, 1);
   });
 
+  it('keeps chat content, draft and scroll intent across a full room draw', () => {
+    renderRoom();
+    OWP.chat.receive({ client: 'client-other', payload: { username: 'Ana', text: 'pause' }, server_ts: 1 });
+    const originalMessages = byId('owp-chat-messages');
+    const oldMessage = originalMessages.children[0];
+    originalMessages.scrollTop = 20;
+    originalMessages.clientHeight = 100;
+    originalMessages.scrollHeight = 500;
+    byId('owp-chat-input').value = 'still typing';
+
+    OWP.ui.render(true);
+
+    const scrolledUpMessages = byId('owp-chat-messages');
+    assert.equal(scrolledUpMessages.children[0], oldMessage);
+    assert.equal(byId('owp-chat-input').value, 'still typing');
+    assert.equal(scrolledUpMessages.scrollTop, 20);
+
+    scrolledUpMessages.scrollTop = 400;
+    scrolledUpMessages.clientHeight = 100;
+    scrolledUpMessages.scrollHeight = 500;
+    OWP.ui.render(true);
+
+    const bottomMessages = byId('owp-chat-messages');
+    assert.equal(bottomMessages.children[0], oldMessage);
+    assert.equal(Object.hasOwn(bottomMessages, 'scrollTop'), true);
+    assert.equal(bottomMessages.scrollTop, bottomMessages.scrollHeight);
+  });
+
   it('does not mark the chat read while the panel is hidden', () => {
     renderRoom();
     byId('owp-btn-chat').click();
@@ -236,6 +274,324 @@ describe('room bar', () => {
     assert.equal(byId('owp-btn-invite'), null);
   });
 
+  it('only offers Close room when the host is alone', () => {
+    renderRoom({
+      isHost: true,
+      serverFeatures: ['host_transfer'],
+      participantCount: 1,
+      participants: [{ name: 'FrancoTosky', isHost: true }]
+    });
+
+    assert.equal(byId('owp-btn-leave').getAttribute('aria-label'), 'Close room');
+    assert.equal(byId('owp-btn-leave').title, 'Close room');
+    assert.equal(panel().querySelector('.owp-leave-question').textContent, 'Close the room for everyone?');
+    assert.deepEqual(
+      byId('owp-leave-confirm').querySelectorAll('button').map(button => button.textContent),
+      ['Cancel', 'Close room']
+    );
+    assert.equal(panel().querySelector('.owp-leave-hint'), null);
+  });
+
+  it('offers Leave and Close for everyone when host transfer is available', () => {
+    renderRoom({
+      isHost: true,
+      serverFeatures: ['host_transfer'],
+      participants: [
+        { name: 'FrancoTosky', isHost: true },
+        { name: 'Ana', isHost: false },
+        { name: 'Bo', isHost: false }
+      ]
+    });
+
+    assert.equal(byId('owp-btn-leave').getAttribute('aria-label'), 'Leave room');
+    assert.equal(byId('owp-btn-leave').title, 'Leave room');
+    assert.equal(panel().querySelector('.owp-leave-question').textContent, 'Leave the room?');
+    const buttons = byId('owp-leave-confirm').querySelectorAll('button');
+    assert.deepEqual(buttons.map(button => button.textContent), ['Cancel', 'Leave', 'Close for everyone']);
+    assert.equal(buttons[0].className, 'owp-pill-btn secondary');
+    assert.equal(buttons[1].className, 'owp-pill-btn secondary');
+    assert.equal(buttons[2].className, 'owp-pill-btn danger');
+    assert.equal(
+      panel().querySelector('.owp-leave-hint').textContent,
+      'If you leave, Ana becomes the host and the room stays open.'
+    );
+  });
+
+  it('keeps the close-only host confirmation without host_transfer', () => {
+    renderRoom({
+      isHost: true,
+      serverFeatures: [],
+      participants: [
+        { name: 'FrancoTosky', isHost: true },
+        { name: 'Ana', isHost: false }
+      ]
+    });
+
+    assert.equal(byId('owp-btn-leave').getAttribute('aria-label'), 'Close room');
+    assert.deepEqual(
+      byId('owp-leave-confirm').querySelectorAll('button').map(button => button.textContent),
+      ['Cancel', 'Close room']
+    );
+  });
+
+  it('dispatches host Leave and Close for everyone through separate buttons', () => {
+    let leaves = 0;
+    let closes = 0;
+    OWP.actions.leaveRoom = () => { leaves++; };
+    OWP.actions.closeRoom = () => { closes++; };
+    renderRoom({
+      isHost: true,
+      serverFeatures: ['host_transfer'],
+      participants: [
+        { name: 'FrancoTosky', isHost: true },
+        { name: 'Ana', isHost: false }
+      ]
+    });
+
+    byId('owp-btn-leave-room').click();
+    assert.equal(leaves, 1);
+    assert.equal(closes, 0);
+    byId('owp-btn-confirm-leave').click();
+    assert.equal(leaves, 1);
+    assert.equal(closes, 1);
+  });
+
+  it('sends leave_room and close_room through the rendered host choices', () => {
+    const sent = [];
+    OWP.actions = { ...realRoomActions };
+    OWP.state.ws = { readyState: 1, send: data => sent.push(JSON.parse(data)) };
+    const hostRoom = {
+      isHost: true,
+      serverFeatures: ['host_transfer'],
+      participants: [
+        { name: 'FrancoTosky', isHost: true },
+        { name: 'Ana', isHost: false }
+      ]
+    };
+
+    renderRoom(hostRoom);
+    byId('owp-btn-leave-room').click();
+    assert.equal(sent[0].type, 'leave_room');
+
+    renderRoom(hostRoom);
+    byId('owp-btn-confirm-leave').click();
+    assert.equal(sent[1].type, 'close_room');
+  });
+
+  it('updates host leave choices and focus as participants change', () => {
+    renderRoom({
+      isHost: true,
+      serverFeatures: ['host_transfer'],
+      participantCount: 1,
+      participants: [{ name: 'FrancoTosky', isHost: true }]
+    });
+    byId('owp-btn-leave').click();
+    const confirm = byId('owp-leave-confirm');
+
+    OWP._wsHandlers.handleParticipantList({
+      room: 'room-1',
+      payload: { participants: [
+        { name: 'FrancoTosky', is_host: true },
+        { name: 'Ana', is_host: false },
+        { name: 'Bo', is_host: false }
+      ] }
+    });
+    assert.equal(byId('owp-leave-confirm'), confirm);
+    assert.equal(panel().querySelector('.owp-leave-hint').textContent.includes('Ana becomes the host'), true);
+
+    byId('owp-btn-leave-room').focus();
+    OWP._wsHandlers.handleParticipantList({
+      room: 'room-1',
+      payload: { participants: [
+        { name: 'FrancoTosky', is_host: true },
+        { name: 'Bo', is_host: false }
+      ] }
+    });
+    assert.equal(panel().querySelector('.owp-leave-hint').textContent.includes('Bo becomes the host'), true);
+    assert.equal(focused, byId('owp-btn-leave-room'));
+
+    byId('owp-btn-leave-room').focus();
+    OWP._wsHandlers.handleParticipantList({
+      room: 'room-1',
+      payload: { participants: [{ name: 'FrancoTosky', is_host: true }] }
+    });
+    assert.equal(byId('owp-btn-leave-room'), null);
+    assert.equal(focused, byId('owp-btn-cancel-leave'));
+    assert.deepEqual(openSections(), ['owp-leave-confirm']);
+  });
+
+  it('moves focus to Cancel when promotion changes Leave into a close action', () => {
+    renderRoom({
+      isHost: false,
+      serverFeatures: ['host_transfer'],
+      participantCount: 3,
+      participants: [
+        { name: 'Old Host', isHost: true },
+        { name: 'FrancoTosky', isHost: false },
+        { name: 'Ana', isHost: false }
+      ]
+    });
+    byId('owp-btn-leave').click();
+    const guestLeave = byId('owp-btn-confirm-leave');
+    assert.equal(guestLeave.dataset.action, 'leave');
+    guestLeave.focus();
+
+    OWP._wsHandlers.handleHostChanged({
+      room: 'room-1',
+      payload: { host_id: 'client-a5be', host_name: 'FrancoTosky' }
+    });
+
+    const closeForEveryone = byId('owp-btn-confirm-leave');
+    assert.equal(closeForEveryone.dataset.action, 'close');
+    assert.equal(closeForEveryone.textContent, 'Close for everyone');
+    assert.equal(focused, byId('owp-btn-cancel-leave'));
+    assert.notEqual(focused, closeForEveryone);
+  });
+
+  it('keeps focus when a rebuilt leave choice retains the same action', () => {
+    renderRoom({
+      isHost: true,
+      serverFeatures: ['host_transfer'],
+      participantCount: 1,
+      participants: [{ name: 'FrancoTosky', isHost: true }]
+    });
+    byId('owp-btn-leave').click();
+    const closeRoom = byId('owp-btn-confirm-leave');
+    assert.equal(closeRoom.dataset.action, 'close');
+    closeRoom.focus();
+
+    OWP._wsHandlers.handleParticipantList({
+      room: 'room-1',
+      payload: { participants: [
+        { name: 'FrancoTosky', is_host: true },
+        { name: 'Ana', is_host: false }
+      ] }
+    });
+
+    const closeForEveryone = byId('owp-btn-confirm-leave');
+    assert.equal(closeForEveryone.dataset.action, 'close');
+    assert.equal(closeForEveryone.textContent, 'Close for everyone');
+    assert.equal(focused, closeForEveryone);
+  });
+
+  it('updates a promoted host without redrawing the room bar', () => {
+    renderRoom({
+      isHost: false,
+      serverFeatures: ['host_transfer'],
+      participantCount: 3,
+      participants: [
+        { name: 'Old Host', isHost: true },
+        { name: 'FrancoTosky', isHost: false },
+        { name: 'Ana', isHost: false }
+      ]
+    });
+    const bar = panel().querySelector('.owp-room-bar');
+
+    OWP._wsHandlers.handleHostChanged({
+      room: 'room-1',
+      payload: { host_id: 'client-a5be', host_name: 'FrancoTosky' }
+    });
+
+    assert.equal(panel().querySelector('.owp-room-bar'), bar);
+    assert.equal(byId('owp-btn-leave').getAttribute('aria-label'), 'Leave room');
+    assert.ok(byId('owp-btn-invite'));
+    assert.deepEqual(OWP.state.participants, [
+      { name: 'Old Host', isHost: true },
+      { name: 'FrancoTosky', isHost: false },
+      { name: 'Ana', isHost: false }
+    ]);
+
+    OWP._wsHandlers.handleParticipantList({
+      room: 'room-1',
+      payload: { participants: [
+        { name: 'FrancoTosky', is_host: true },
+        { name: 'Ana', is_host: false }
+      ] }
+    });
+
+    assert.equal(panel().querySelector('.owp-leave-hint').textContent.includes('Ana becomes the host'), true);
+  });
+
+  it('does not guess the promoted participant when names are duplicated', () => {
+    const announcedParticipants = [
+      { name: 'Alex', isHost: true },
+      { name: 'Alex', isHost: false },
+      { name: 'Bo', isHost: false }
+    ];
+    renderRoom({
+      isHost: false,
+      serverFeatures: ['host_transfer'],
+      participantCount: 3,
+      participants: announcedParticipants
+    });
+
+    OWP._wsHandlers.handleHostChanged({
+      room: 'room-1',
+      payload: { host_id: 'client-a5be', host_name: 'Alex' }
+    });
+
+    assert.equal(OWP.state.isHost, true);
+    assert.deepEqual(OWP.state.participants, announcedParticipants);
+
+    OWP._wsHandlers.handleParticipantList({
+      room: 'room-1',
+      payload: { participants: [
+        { name: 'Alex', is_host: true },
+        { name: 'Bo', is_host: false }
+      ] }
+    });
+    assert.deepEqual(OWP.state.participants, [
+      { name: 'Alex', isHost: true },
+      { name: 'Bo', isHost: false }
+    ]);
+    assert.equal(panel().querySelector('.owp-leave-hint').textContent.includes('Bo becomes the host'), true);
+  });
+
+  it('keeps guest leave controls and Escape behavior unchanged', () => {
+    renderRoom({ isHost: false, serverFeatures: ['host_transfer'] });
+    assert.deepEqual(
+      byId('owp-leave-confirm').querySelectorAll('button').map(button => button.textContent),
+      ['Cancel', 'Leave']
+    );
+    byId('owp-btn-leave').click();
+    byId('owp-btn-confirm-leave').focus();
+    byId('owp-btn-confirm-leave').dispatchEvent({
+      type: 'keydown',
+      key: 'Escape',
+      preventDefault() {}
+    });
+    assert.deepEqual(openSections(), []);
+    assert.equal(focused, byId('owp-btn-leave'));
+  });
+
+  it('redraws host controls when this client is promoted', () => {
+    renderRoom();
+
+    OWP._wsHandlers.handleHostChanged({
+      room: 'room-1',
+      payload: { host_id: 'client-a5be', host_name: 'FrancoTosky' }
+    });
+
+    assert.equal(byId('owp-btn-leave').getAttribute('aria-label'), 'Close room');
+    assert.equal(panel().querySelector('.owp-leave-question').textContent, 'Close the room for everyone?');
+    assert.equal(byId('owp-btn-confirm-leave').textContent, 'Close room');
+    assert.ok(byId('owp-btn-invite'));
+  });
+
+  it('keeps guest controls when another participant becomes host', () => {
+    renderRoom();
+
+    OWP._wsHandlers.handleHostChanged({
+      room: 'room-1',
+      payload: { host_id: 'client-other', host_name: 'Ana' }
+    });
+
+    assert.equal(byId('owp-btn-leave').getAttribute('aria-label'), 'Leave room');
+    assert.equal(panel().querySelector('.owp-leave-question').textContent, 'Leave the room?');
+    assert.equal(byId('owp-btn-confirm-leave').textContent, 'Leave');
+    assert.equal(byId('owp-btn-invite'), null);
+  });
+
   it('asks a guest before leaving the room', () => {
     renderRoom();
     const leave = byId('owp-btn-leave');
@@ -279,6 +635,28 @@ describe('room bar', () => {
     assert.equal(byId('owp-btn-confirm-leave').textContent, 'Close room');
     byId('owp-btn-confirm-leave').click();
     assert.equal(left, 1);
+  });
+
+  it('dispatches the rendered confirmation to the current role action', () => {
+    let closes = 0;
+    let leaves = 0;
+    OWP.actions = {
+      closeRoom: () => { closes++; },
+      leaveRoom: () => { leaves++; }
+    };
+
+    renderRoom({ isHost: true });
+    byId('owp-btn-leave').click();
+    byId('owp-btn-confirm-leave').click();
+    assert.equal(closes, 1);
+    assert.equal(leaves, 0);
+
+    OWP.state.roomBarSection = '';
+    renderRoom({ isHost: false });
+    byId('owp-btn-leave').click();
+    byId('owp-btn-confirm-leave').click();
+    assert.equal(closes, 1);
+    assert.equal(leaves, 1);
   });
 
   it('words a reopened confirmation for the current role', () => {

@@ -4,6 +4,10 @@
   const state = OWP.state;
   const utils = OWP.utils;
   const { STATE_UPDATE_MS, SEEK_THRESHOLD, STREAM_RELOAD_MAX_MS } = OWP.constants;
+  const hasPendingRoomWork = () => Boolean(
+    (state.pendingPlayUntil && utils.getServerNow() < state.pendingPlayUntil)
+    || (state.pendingMediaId && state.pendingMediaUntil && utils.nowMs() < state.pendingMediaUntil)
+  );
 
   // Jellyfin switches an audio or subtitle track by reloading the stream in
   // place: the video empties (position 0), plays again and seeks back to where
@@ -19,7 +23,7 @@
   const sendStateUpdate = (video) => {
     const actions = OWP.actions;
     if (!state.isHost || !actions || !actions.send) return;
-    if (state.isSyncing || isReloadingStream()) return;
+    if (state.isSyncing || hasPendingRoomWork() || isReloadingStream()) return;
     if (utils.isSeeking()) return;
     if (state.isBuffering || !utils.isVideoReady()) return;
     const now = utils.nowMs();
@@ -31,7 +35,7 @@
   const onHostEvent = (action, video) => {
     const actions = OWP.actions;
     if (!state.isHost || !actions || !actions.send || !utils.shouldSend()) return;
-    if (state.isSyncing || isReloadingStream()) return;
+    if (state.isSyncing || hasPendingRoomWork() || isReloadingStream()) return;
     if (action === 'seek' && !utils.isVideoReady()) return;
     if (action === 'pause') {
       if (state.isBuffering) return;
@@ -65,7 +69,8 @@
       waiting: () => {
         state.isBuffering = true;
         utils.log('VIDEO', { event: 'buffering', pos: video.currentTime, readyState: video.readyState });
-        if (state.isHost && !isReloadingStream() && OWP.actions && OWP.actions.send) {
+        if (state.isHost && !state.isSyncing && !hasPendingRoomWork() && !isReloadingStream()
+            && utils.shouldSend() && OWP.actions && OWP.actions.send) {
           OWP.actions.send('player_event', { action: 'buffering', position: video.currentTime });
         }
       },
@@ -87,7 +92,8 @@
         if (wasReloading) endStreamReload(video);
         if (wasBuffering || wasReloading) {
           utils.log('VIDEO', { event: 'playing', pos: video.currentTime });
-          if (state.isHost && OWP.actions && OWP.actions.send) {
+          if (state.isHost && !state.isSyncing && !hasPendingRoomWork() && utils.shouldSend()
+              && OWP.actions && OWP.actions.send) {
             OWP.actions.send('player_event', { action: 'play', position: video.currentTime });
           }
         }
@@ -109,7 +115,8 @@
         if (!state.isHost || !state.inRoom || isReloadingStream()) return;
         state.streamReloadUntil = utils.nowMs() + STREAM_RELOAD_MAX_MS;
         state.streamReloadResume = state.lastPlayedPlaying;
-        if (!state.streamReloadResume || !OWP.actions || !OWP.actions.send) return;
+        if (!state.streamReloadResume || hasPendingRoomWork()
+            || !OWP.actions || !OWP.actions.send) return;
         utils.log('HOST', { action: 'stream_reload', pos: state.lastPlayedPosition });
         OWP.actions.send('player_event', { action: 'buffering', position: state.lastPlayedPosition });
       },

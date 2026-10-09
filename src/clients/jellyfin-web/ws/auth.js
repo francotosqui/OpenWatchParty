@@ -3,7 +3,7 @@
   const actions = OWP.actions = OWP.actions || {};
   const state = OWP.state;
   const utils = OWP.utils;
-  const { PROTOCOL_VERSION } = OWP.constants;
+  const { PROTOCOL_VERSION, CLIENT_FEATURES } = OWP.constants;
   const TOKEN_REQUEST_TIMEOUT_MS = 10000;
 
   const getJellyfinUsername = () => {
@@ -98,7 +98,8 @@
               token: result.token,
               user_name: state.userName,
               user_id: state.userId,
-              protocol_version: PROTOCOL_VERSION
+              protocol_version: PROTOCOL_VERSION,
+              features: CLIENT_FEATURES
             },
             ts: utils.nowMs()
           }));

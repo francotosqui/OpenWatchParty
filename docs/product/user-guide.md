@@ -100,7 +100,9 @@ As the host, your actions control everyone:
 | Seek | All clients jump to that position |
 | Invite | Copies a short-lived room invite link |
 | Close panel | Room stays active |
-| Leave room | Room closes, all participants disconnected |
+| Leave the player or disconnect | Host role passes to the earliest participant using a compatible client; the room stays open |
+| Leave room | When another participant can take over, leaves while the room stays open with that participant as host |
+| Close for everyone | Room closes for everyone |
 
 ## Participant Experience
 
@@ -111,7 +113,7 @@ As a participant:
 | Host plays | Video starts automatically |
 | Host pauses | Video pauses automatically |
 | Host seeks | Video jumps to new position |
-| Host leaves | "Room closed" notification |
+| Host leaves or reloads | A compatible participant becomes host; otherwise the room closes |
 | Drift detected | Playback speed adjusts (0.90x-1.15x) to catch up |
 
 ## The Panel Interface
@@ -134,7 +136,7 @@ In a room the panel becomes a single bar at the top right (below the header when
 - **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge on the host (older session servers show only the number of people)
 - **Chat** (chat icon) - Opens the chat; a red badge counts unread messages
 - **Invite** (share icon, host only) - Copies a short-lived invite link that joins people to this room automatically
-- **Leave** (exit icon) - Asks **Leave the room?** before leaving; for the host it asks **Close the room for everyone?**
+- **Leave** (exit icon) - Guests confirm leaving normally. On a compatible server, a host with other participants can choose **Leave** to pass the room to the named next host or **Close for everyone** to end it. A host who is alone, or connected to an older server, sees the existing **Close room** confirmation.
 - **Close (X)** - Only hides the bar: you stay in the room
 
 Participants, chat and the leave confirmation open one at a time below the bar; select the same icon again to close it.
@@ -183,7 +185,8 @@ These appear briefly in the center of the screen:
 - **"Host paused playback"** - The host paused
 - **"A participant joined the room"** - Someone joined
 - **"A participant left the room"** - Someone left
-- **"Room closed"** - The room was closed (host left)
+- **"You are now the host"** / **"<name> is now the host"** - Host control passed to another participant
+- **"Room closed"** - The host explicitly closed the room, or nobody with a compatible client could become host
 - **"Invite link copied to the clipboard"** - The host's invite link is ready to share
 
 ### Chat Notifications (Bottom-Right)
@@ -228,7 +231,7 @@ When the chat is closed, incoming messages appear as toasts in the bottom-right 
 - Check your network connection quality
 
 ### "Room closed unexpectedly"
-- The host left or disconnected
+- The host closed the room, or left when no participant had a compatible client for host transfer
 - Server may have restarted
 - Create a new room to continue
 

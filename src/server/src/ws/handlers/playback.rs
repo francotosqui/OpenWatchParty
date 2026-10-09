@@ -801,4 +801,45 @@ mod tests {
             "NOT_ROOM_MEMBER",
         );
     }
+
+    #[tokio::test]
+    async fn transferred_host_controls_playback_and_rejoined_old_host_cannot() {
+        let (state, mut old_host_rx, mut new_host_rx) = setup_room().await;
+        {
+            let mut locked = state.write().await;
+            locked
+                .clients
+                .get_mut("guest")
+                .unwrap()
+                .supports_host_transfer = true;
+            let crate::types::ServerState { clients, rooms } = &mut *locked;
+            let notification = crate::room::handle_leave("host", clients, rooms).unwrap();
+            crate::room::send_leave_notification(&notification, "test transfer");
+            clients.get_mut("host").unwrap().room_id = Some("r1".to_string());
+            rooms
+                .get_mut("r1")
+                .unwrap()
+                .clients
+                .push("host".to_string());
+        }
+        while test_helpers::recv_msg(&mut new_host_rx).is_some() {}
+
+        let pause = || {
+            incoming(
+                ClientMessageType::PlayerEvent,
+                Some(serde_json::json!({ "action": "pause" })),
+            )
+        };
+        handle_playback("guest", pause(), &state, &crate::tasks::AppTasks::new()).await;
+        assert_eq!(
+            test_helpers::recv_msg(&mut old_host_rx).unwrap().msg_type,
+            "player_event"
+        );
+
+        handle_playback("host", pause(), &state, &crate::tasks::AppTasks::new()).await;
+        assert_error_code(
+            test_helpers::recv_msg(&mut old_host_rx).unwrap(),
+            "HOST_PERMISSION_REQUIRED",
+        );
+    }
 }
