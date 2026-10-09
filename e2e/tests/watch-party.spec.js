@@ -102,7 +102,9 @@ test('a guest cannot press play while the room is paused', async () => {
 
   await helpers.togglePlayback(guest);
 
-  await expect(guest.locator('.owp-toast-system')).toContainText('Only the host can control playback');
+  await expect(
+    guest.locator('.owp-toast-system', { hasText: 'Only the host can control playback' })
+  ).toHaveCount(1);
   await expect(guest.locator('html')).toHaveClass(/owp-guest-play-locked/);
   await expect(guest.locator('#owp-guest-lock-label')).toHaveCount(1);
   expect(await guest.evaluate(() => window.__owpPlayEvents)).toBe(0);
