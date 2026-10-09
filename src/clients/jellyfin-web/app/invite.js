@@ -136,7 +136,10 @@
       data = null;
     }
     if (!response.ok || typeof data?.ticket !== 'string' || !data.ticket) {
-      ui.showToast(data?.error || `Could not create the invite link (HTTP ${response.status})`);
+      const error = response.status === 404 && typeof data?.error !== 'string'
+        ? 'Could not reach the invite service. Check that your reverse proxy sends /invite to the session server.'
+        : data?.error || `Could not create the invite link (HTTP ${response.status})`;
+      ui.showToast(error);
       return false;
     }
     const link = utils.buildInviteUrl(data.ticket);

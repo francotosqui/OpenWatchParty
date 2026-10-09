@@ -20,7 +20,7 @@ nav_order: 2
 - **Play/Pause sync** - Host controls playback state for all clients
 - **Seek sync** - Jumping to a position syncs everyone
 - **Position sync** - Continuous updates keep clients aligned
-- **Drift correction** - Automatic playback speed adjustment (0.85x-2.0x)
+- **Drift correction** - Automatic playback speed adjustment (0.90x-1.15x)
 - **HLS support** - Works with Jellyfin's adaptive streaming
 
 ### User Interface

@@ -94,6 +94,10 @@ ALLOW_INSECURE_NO_AUTH=false
 
 ## Reverse Proxy Configuration
 
+Whatever proxy you use, route both `/ws` (WebSocket) and `/invite` (HTTP `POST` for invite links) to the session server. The client derives `/invite` from the configured Session Server URL. If the session server has its own hostname and all paths on that hostname go to it, no extra route is needed.
+
+Check the route with `curl -X POST https://jellyfin.example.com/invite`: it must reach the session server and return a 4xx response about the request body, not Jellyfin's 404.
+
 ### Caddy (Recommended)
 
 ```caddyfile
@@ -104,6 +108,11 @@ jellyfin.example.com {
 
     # WebSocket for session server
     handle /ws {
+        reverse_proxy session-server:3000
+    }
+
+    # Invite links
+    handle /invite {
         reverse_proxy session-server:3000
     }
 }
@@ -152,8 +161,45 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_read_timeout 86400;
     }
+
+    # Session Server invite links
+    location = /invite {
+        proxy_pass http://session-server;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 }
 ```
+
+### Nginx Proxy Manager
+
+Open **Proxy Hosts**, edit the Jellyfin host, select **Advanced**, and add this to **Custom Nginx Configuration**:
+
+```nginx
+location = /ws {
+    set $owp_upstream http://session-server:3000;
+    proxy_pass $owp_upstream;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_read_timeout 86400s;
+    proxy_send_timeout 86400s;
+}
+location = /invite {
+    set $owp_upstream http://session-server:3000;
+    proxy_pass $owp_upstream;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+```
+
+`set $owp_upstream` makes nginx resolve the container name at request time, so Nginx Proxy Manager can start even when the session server is down. Press **Save**.
 
 ### Traefik
 
@@ -170,7 +216,7 @@ services:
   session-server:
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.owp-ws.rule=Host(`jellyfin.example.com`) && PathPrefix(`/ws`)"
+      - "traefik.http.routers.owp-ws.rule=Host(`jellyfin.example.com`) && (PathPrefix(`/ws`) || Path(`/invite`))"
       - "traefik.http.routers.owp-ws.tls.certresolver=letsencrypt"
       - "traefik.http.services.owp-ws.loadbalancer.server.port=3000"
 ```
@@ -211,6 +257,8 @@ services:
 
 Plugin settings:
 - **Session Server URL**: `wss://owp.example.com/ws`
+
+Because `owp.example.com` is dedicated to the session server and the tunnel forwards every path on that hostname, `/invite` already works and needs no additional ingress rule.
 
 If `cloudflared` runs on the Docker host (not in a container), use the host IP or `host.docker.internal` instead of the service name.
 

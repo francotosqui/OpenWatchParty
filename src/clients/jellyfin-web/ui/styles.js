@@ -94,8 +94,12 @@
       min-height: 0; overflow-y: auto; padding: 8px 10px; border-radius: 10px;
     }
     .owp-room-drop[hidden], .owp-room-drop > [hidden] { display: none !important; }
-    .owp-leave-confirm { display: flex; align-items: center; gap: 8px; }
+    .owp-leave-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .owp-leave-question { flex: 1; }
+    .owp-leave-hint {
+      flex-basis: 100%; width: 100%; font-size: 12px; line-height: 1.35;
+      color: rgba(255,255,255,.6); overflow-wrap: anywhere;
+    }
     .owp-pill-btn {
       height: 24px; padding: 0 8px; border-radius: 12px; cursor: pointer; font-family: inherit; font-size: 12px;
     }
@@ -126,6 +130,13 @@
     .owp-room-title { font-weight: 500; }
     .owp-room-count { font-size: 11px; color: #9a9993; }
     .owp-room-empty { padding: 8px; text-align: center; color: #9a9993; }
+    .owp-card-count {
+      position: absolute; left: 0.5em; bottom: 0.5em; z-index: 1; max-width: calc(100% - 1em); box-sizing: border-box;
+      display: inline-flex; align-items: center; gap: 0.3em; padding: 0.2em 0.55em; border-radius: 0.4em;
+      background: rgba(0,0,0,0.7); color: #fff; font-size: 0.8em; line-height: 1.3; white-space: nowrap;
+    }
+    .owp-card-count .material-icons { font-size: 1.25em; line-height: 1; }
+    .owp-card-count-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .owp-btn {
       height: 26px; padding: 0 12px; border: none; border-radius: 13px; cursor: pointer;
       background: #0c447c; color: #85b7eb; font-family: inherit; font-size: 12px; font-weight: 500;
@@ -139,6 +150,7 @@
     .owp-help {
       display: flow-root; margin-bottom: 10px; padding: 8px 10px; border-radius: 8px;
       background: rgba(255,255,255,0.04); line-height: 1.5; text-align: justify;
+      flex-shrink: 0;
     }
     .owp-help[hidden] { display: none; }
     /* Floats beside the last line, so it does not need a line of its own */

@@ -249,6 +249,7 @@
     if (count) count.textContent = String(participantTotal());
     const button = document.getElementById('owp-btn-people');
     if (button) button.setAttribute('aria-label', peopleLabel());
+    if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();
   };
 
   const createBarButton = (id, label, iconName, sectionId) => {
@@ -310,7 +311,90 @@
     return true;
   };
 
-  const leaveRoom = () => OWP.actions && OWP.actions.leaveRoom && OWP.actions.leaveRoom();
+  const nextHostParticipant = () => state.isHost
+    && state.serverFeatures.includes('host_transfer')
+    && state.participants.find(participant => !participant.isHost);
+
+  const updateLeaveConfirm = () => {
+    const confirm = document.getElementById('owp-leave-confirm');
+    const leaveBtn = document.getElementById('owp-btn-leave');
+    if (!confirm || !leaveBtn) return;
+    const nextHost = nextHostParticipant();
+    const canTransfer = Boolean(nextHost);
+    const label = state.isHost && !canTransfer ? 'Close room' : 'Leave room';
+    leaveBtn.title = label;
+    leaveBtn.setAttribute('aria-label', label);
+
+    const active = document.activeElement;
+    const hadFocus = Boolean(active && confirm.contains(active));
+    const focusedId = hadFocus ? active.id : '';
+    const focusedAction = hadFocus ? active.dataset.action || '' : '';
+    const cancel = createElement('button', 'owp-pill-btn secondary', 'Cancel');
+    cancel.id = 'owp-btn-cancel-leave';
+    cancel.dataset.action = 'cancel';
+    cancel.type = 'button';
+    cancel.onclick = () => {
+      toggleRoomSection('leave');
+      leaveBtn.focus();
+    };
+    const question = createElement(
+      'span',
+      'owp-leave-question',
+      state.isHost && !canTransfer ? 'Close the room for everyone?' : 'Leave the room?'
+    );
+    const buttons = [question, cancel];
+    if (canTransfer) {
+      const leave = createElement('button', 'owp-pill-btn secondary', 'Leave');
+      leave.id = 'owp-btn-leave-room';
+      leave.dataset.action = 'leave';
+      leave.type = 'button';
+      leave.onclick = () => OWP.actions?.leaveRoom?.();
+      buttons.push(leave);
+    }
+    const confirmLeave = createElement(
+      'button',
+      'owp-pill-btn danger',
+      state.isHost ? (canTransfer ? 'Close for everyone' : 'Close room') : 'Leave'
+    );
+    confirmLeave.id = 'owp-btn-confirm-leave';
+    confirmLeave.dataset.action = state.isHost ? 'close' : 'leave';
+    confirmLeave.type = 'button';
+    confirmLeave.onclick = () => {
+      const action = state.isHost ? OWP.actions?.closeRoom : OWP.actions?.leaveRoom;
+      if (action) action();
+    };
+    buttons.push(confirmLeave);
+    if (canTransfer) {
+      buttons.push(createElement(
+        'div',
+        'owp-leave-hint',
+        `If you leave, ${nextHost.name || 'Guest'} becomes the host and the room stays open.`
+      ));
+    }
+    confirm.replaceChildren(...buttons);
+    if (hadFocus) {
+      const replacement = focusedId && document.getElementById(focusedId);
+      const keepsAction = replacement
+        && confirm.contains(replacement)
+        && replacement.dataset.action === focusedAction;
+      (keepsAction ? replacement : cancel).focus({ preventScroll: true });
+    }
+  };
+
+  const updateRoomRoleControls = () => {
+    const leaveBtn = document.getElementById('owp-btn-leave');
+    if (!leaveBtn) return;
+    const bar = leaveBtn.parentNode;
+    let inviteBtn = document.getElementById('owp-btn-invite');
+    if (state.isHost && !inviteBtn) {
+      inviteBtn = createBarButton('owp-btn-invite', 'Invite', 'share');
+      inviteBtn.onclick = () => OWP.actions?.copyInviteLink?.();
+      bar.insertBefore(inviteBtn, leaveBtn);
+    } else if (!state.isHost && inviteBtn) {
+      inviteBtn.remove();
+    }
+    updateLeaveConfirm();
+  };
 
   const renderRoom = (panel) => {
     const bar = createElement('div', 'owp-room-bar');
@@ -336,8 +420,8 @@
     chatBtn.appendChild(badge);
     chatBtn.onclick = () => toggleRoomSection('chat');
 
-    // Leaving always asks first; for the host it ends the room for everyone.
-    const leaveBtn = createBarButton('owp-btn-leave', state.isHost ? 'Close room' : 'Leave room', 'logout', 'owp-leave-confirm');
+    // Leaving always asks first; compatible hosts can pass the room on or close it.
+    const leaveBtn = createBarButton('owp-btn-leave', 'Leave room', 'logout', 'owp-leave-confirm');
     leaveBtn.classList.add('danger');
     leaveBtn.onclick = () => toggleRoomSection('leave');
 
@@ -386,21 +470,10 @@
 
     const confirm = createElement('div', 'owp-leave-confirm');
     confirm.id = 'owp-leave-confirm';
-    const cancel = createElement('button', 'owp-pill-btn secondary', 'Cancel');
-    cancel.type = 'button';
-    cancel.onclick = () => {
-      toggleRoomSection('leave');
-      leaveBtn.focus();
-    };
-    const confirmLeave = createElement('button', 'owp-pill-btn danger', state.isHost ? 'Close room' : 'Leave');
-    confirmLeave.id = 'owp-btn-confirm-leave';
-    confirmLeave.type = 'button';
-    confirmLeave.onclick = leaveRoom;
-    const question = state.isHost ? 'Close the room for everyone?' : 'Leave the room?';
-    confirm.append(createElement('span', 'owp-leave-question', question), cancel, confirmLeave);
     drop.append(peopleSection, chatSection, confirm);
 
     panel.replaceChildren(bar, drop);
+    updateRoomRoleControls();
     applyRoomSection();
   };
 
@@ -443,6 +516,17 @@
       ui.renderHomeWatchParties();
       return;
     }
+    const redrawingRoom = state.inRoom
+      && panel.dataset.inRoom === 'true'
+      && panel.children.length > 0;
+    const oldMessages = redrawingRoom ? panel.querySelector('#owp-chat-messages') : null;
+    const messageNodes = oldMessages ? Array.from(oldMessages.childNodes) : null;
+    const oldScrollTop = oldMessages ? Number(oldMessages.scrollTop) || 0 : 0;
+    const wasChatAtBottom = oldMessages
+      ? oldScrollTop + (Number(oldMessages.clientHeight) || 0) >= (Number(oldMessages.scrollHeight) || 0) - 1
+      : true;
+    const oldInput = redrawingRoom ? panel.querySelector('#owp-chat-input') : null;
+    const chatDraft = oldInput ? oldInput.value : '';
     // A full draw replaces every control. Keyboard focus inside the panel
     // (on Create Room or Join, say) goes to the same control if it is drawn
     // again, or to the first one, instead of falling out of the dialog.
@@ -457,6 +541,15 @@
     } else {
       renderRoom(panel);
       setupChatInput(panel);
+      if (redrawingRoom) {
+        const messages = panel.querySelector('#owp-chat-messages');
+        if (messages && messageNodes) {
+          messages.replaceChildren(...messageNodes);
+          messages.scrollTop = wasChatAtBottom ? messages.scrollHeight : oldScrollTop;
+        }
+        const input = panel.querySelector('#owp-chat-input');
+        if (input) input.value = chatDraft;
+      }
     }
     // The lobby and the room bar sit differently below the header.
     if (ui.updatePanelPlacement) ui.updatePanelPlacement();
@@ -501,7 +594,7 @@
       if (!panel.classList.contains('hide')) {
         panel.dataset.opener = BTN_ID;
         if (ui.resetPanelPlacement) ui.resetPanelPlacement(panel);
-        state.lobbyHelpOpen = false;
+        setLobbyHelpOpen(false);
         render(true);
         if (isKeyboardClick(e)) focusPanelStart(panel);
       }
@@ -519,5 +612,17 @@
     }
   };
 
-  Object.assign(ui, { render, injectOsdButton, updateCreateRoomButton, updateParticipantList, focusPanelStart, isKeyboardClick, hidePanel, setLobbyHelpOpen, announceLobbyHelp });
+  Object.assign(ui, {
+    render,
+    injectOsdButton,
+    updateCreateRoomButton,
+    updateParticipantList,
+    updateLeaveConfirm,
+    updateRoomRoleControls,
+    focusPanelStart,
+    isKeyboardClick,
+    hidePanel,
+    setLobbyHelpOpen,
+    announceLobbyHelp
+  });
 })();

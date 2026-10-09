@@ -231,6 +231,41 @@ describe('room invite links', () => {
       assert.deepEqual(toasts, ['Only the room host can create invite links']);
     });
 
+    it('shows the session server error for a JSON 404 response', async () => {
+      fetchResponse = jsonResponse({ error: 'Room not found' }, { ok: false, status: 404 });
+
+      assert.equal(await OWP.actions.copyInviteLink(), false);
+      assert.deepEqual(toasts, ['Room not found']);
+    });
+
+    it('explains the proxy route for a non-JSON 404 response', async () => {
+      fetchResponse = {
+        ok: false,
+        status: 404,
+        json: async () => {
+          throw new SyntaxError('Unexpected token < in JSON');
+        }
+      };
+
+      assert.equal(await OWP.actions.copyInviteLink(), false);
+      assert.deepEqual(toasts, [
+        'Could not reach the invite service. Check that your reverse proxy sends /invite to the session server.'
+      ]);
+    });
+
+    it('keeps the existing fallback for other non-JSON errors', async () => {
+      fetchResponse = {
+        ok: false,
+        status: 502,
+        json: async () => {
+          throw new SyntaxError('Unexpected token < in JSON');
+        }
+      };
+
+      assert.equal(await OWP.actions.copyInviteLink(), false);
+      assert.deepEqual(toasts, ['Could not create the invite link (HTTP 502)']);
+    });
+
     it('shows the link when the clipboard is unavailable', async () => {
       Object.defineProperty(globalThis, 'navigator', { value: {}, configurable: true });
       fetchResponse = jsonResponse({ ticket: 'ticket.jwt.value' });

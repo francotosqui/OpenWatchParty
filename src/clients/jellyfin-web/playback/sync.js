@@ -27,7 +27,9 @@
   const watchReady = ({ roomId = state.roomId, mediaId = '', onReady = null } = {}) => {
     if (state.mediaReadyCleanup) state.mediaReadyCleanup();
     const attempt = ++state.mediaSyncAttempt;
-    let deadline = Date.now() + MEDIA_READY_TIMEOUT_MS;
+    const gateDeadline = Date.now() + MEDIA_READY_TIMEOUT_MS;
+    let deadline = gateDeadline;
+    state.pendingMediaUntil = gateDeadline;
     const initialMediaId = utils.getCurrentItemId();
     const initialVideo = utils.getVideo();
     const initialSource = initialVideo?.currentSrc || initialVideo?.src || '';
@@ -51,8 +53,10 @@
       if (Date.now() >= deadline) {
         deadline = Date.now() + MEDIA_READY_TIMEOUT_MS;
         if (mediaId && playback.ensurePlayback) playback.ensurePlayback(mediaId, 0, null, true);
-        if (!timeoutReported && OWP.ui?.showToast) {
-          OWP.ui.showToast('Still waiting for the watch party media');
+        if (!timeoutReported) {
+          if (state.pendingMediaId === mediaId) state.pendingMediaId = '';
+          if (state.pendingMediaUntil === gateDeadline) state.pendingMediaUntil = 0;
+          if (OWP.ui?.showToast) OWP.ui.showToast('Still waiting for the watch party media');
           timeoutReported = true;
         }
       }
@@ -96,6 +100,7 @@
         return;
       }
       state.pendingMediaId = '';
+      state.pendingMediaUntil = 0;
       if (typeof onReady === 'function') onReady(video);
       notifyReady(roomId, mediaId);
       cleanup();
@@ -117,8 +122,10 @@
       state.initialSyncTargetPos = null;
       return true;
     }
+    // Past the cooldown, a drift under DRIFT_SOFT_MAX_SEC keeps closing at
+    // the catch-up rate, as it does after the initial sync; a larger one seeks.
     if (state.initialSyncTargetPos !== null
-        && abs > INITIAL_SYNC_DRIFT_THRESHOLD
+        && abs >= DRIFT_SOFT_MAX_SEC
         && !inCooldown) {
       utils.log('SYNC', { type: 'post_buffer_seek', drift, videoPos: video.currentTime, expected });
       video.currentTime = expected;

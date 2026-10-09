@@ -22,6 +22,14 @@
     if (video && video.playbackRate !== 1) video.playbackRate = 1;
   };
 
+  const resetDriftCorrection = () => {
+    normalizePlaybackRate();
+    if (state.syncStatus === 'syncing') state.syncStatus = 'synced';
+    state.currentDrift = 0;
+    state.syncCooldownUntil = 0;
+    if (OWP.ui?.updateSyncIndicator) OWP.ui.updateSyncIndicator();
+  };
+
   const resetRoomState = () => {
     normalizePlaybackRate();
     if (state.mediaReadyCleanup) state.mediaReadyCleanup();
@@ -40,6 +48,10 @@
       readyRoomId: '',
       isBuffering: false,
       wantsToPlay: false,
+      streamReloadUntil: 0,
+      lastPlayedPosition: 0,
+      lastPlayedPlaying: false,
+      streamReloadResume: false,
       isSyncing: false,
       syncCooldownUntil: 0,
       isInitialSync: false,
@@ -54,6 +66,7 @@
       joiningItemId: '',
       pendingJoinRoomId: '',
       pendingMediaId: '',
+      pendingMediaUntil: 0,
       suppressUntil: 0,
       playbackBlocked: false,
       playbackFailureNotified: false,
@@ -114,12 +127,27 @@
     }
   };
 
+  const closeRoom = () => {
+    if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
+    const supportsHostTransfer = state.serverFeatures.includes('host_transfer');
+    send(supportsHostTransfer ? 'close_room' : 'leave_room');
+    resetRoomState();
+    if (OWP.ui && OWP.ui.hidePanel) {
+      OWP.ui.hidePanel();
+    } else {
+      const panel = document.getElementById(OWP.constants.PANEL_ID);
+      if (panel) panel.classList.add('hide');
+    }
+  };
+
   Object.assign(actions, {
     send,
     normalizePlaybackRate,
+    resetDriftCorrection,
     resetRoomState,
     createRoom,
     joinRoom,
-    leaveRoom
+    leaveRoom,
+    closeRoom
   });
 })();
