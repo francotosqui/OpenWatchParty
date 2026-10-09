@@ -54,6 +54,26 @@ public sealed class TokenResponseTests
         Assert.Equal(1, response.RootElement.GetProperty("protocol_version").GetInt32());
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Responses_CarryShowSyncNudgeButton(bool insecure, bool show)
+    {
+        var config = new PluginConfiguration
+        {
+            AllowInsecureNoAuth = insecure,
+            JwtSecret = insecure ? string.Empty : ValidSecret,
+            SessionServerUrl = "wss://session.example/ws",
+            ShowSyncNudgeButton = show
+        };
+
+        using var response = GetTokenResponse(config);
+
+        Assert.Equal(show, response.RootElement.GetProperty("show_sync_nudge_button").GetBoolean());
+    }
+
     [Fact]
     public void Responses_KeepNativeSyncPlayButtonByDefault()
     {
@@ -73,6 +93,8 @@ public sealed class TokenResponseTests
 
         Assert.False(insecureResponse.RootElement.GetProperty("hide_native_syncplay_button").GetBoolean());
         Assert.False(authenticatedResponse.RootElement.GetProperty("hide_native_syncplay_button").GetBoolean());
+        Assert.False(insecureResponse.RootElement.GetProperty("show_sync_nudge_button").GetBoolean());
+        Assert.False(authenticatedResponse.RootElement.GetProperty("show_sync_nudge_button").GetBoolean());
     }
 
     [Theory]

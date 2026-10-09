@@ -385,7 +385,7 @@ Based on GitHub issues:
 | Aspect | Jellyfin SyncPlay | OpenWatchParty |
 |--------|-------------------|----------------|
 | Strategy | SpeedToSync + SkipToSync | Continuous rate adjustment |
-| Rate range | 0.2x - 2.0x | 0.85x - 2.0x |
+| Rate range | 0.2x - 2.0x | 0.90x - 1.15x |
 | Deadzone | Configurable thresholds | 40ms |
 | Hard seek | Above threshold | Above 2s drift |
 

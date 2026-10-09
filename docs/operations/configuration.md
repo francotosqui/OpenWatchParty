@@ -25,6 +25,7 @@ Access the plugin configuration page at **Dashboard** > **Plugins** > **OpenWatc
 | Session Server URL | (empty) | Absolute `ws://` or `wss://` URL. Empty requires explicit trust of same-host port 3000 auto-detection. |
 | Trust automatic session server | disabled | Allows tokens to be sent to `ws(s)://[host]:3000/ws` when URL is empty. |
 | Hide Jellyfin's SyncPlay button | disabled | Hides the built-in SyncPlay button in Jellyfin Web (both headers and the player), leaving the Watch Party button as the only group-watching control. Applies after Jellyfin Web is reloaded or refreshes its token. |
+| Show the sync adjustment button in rooms | disabled | Gives guests a sync adjustment drop-down in the room bar, to move their own video up to 0.5 s toward the host when the automatic correction cannot keep them in sync. It never changes the room's playback. Applies after Jellyfin Web is reloaded or refreshes its token. |
 
 ### JWT Secret Guidelines
 
@@ -142,9 +143,9 @@ The client has built-in constants that control synchronization behavior. These a
 | `SYNC_LEAD_MS` | 300 | Latency compensation (ms) |
 | `DRIFT_DEADZONE_SEC` | 0.04 | No-correction zone (s) |
 | `DRIFT_SOFT_MAX_SEC` | 2.0 | Forced seek threshold (s) |
-| `PLAYBACK_RATE_MIN` | 0.85 | Minimum catchup speed |
-| `PLAYBACK_RATE_MAX` | 2.0 | Maximum catchup speed |
-| `DRIFT_GAIN` | 0.5 | Speed adjustment gain |
+| `PLAYBACK_RATE_MIN` | 0.90 | Minimum catchup speed |
+| `PLAYBACK_RATE_MAX` | 1.15 | Maximum catchup speed |
+| `DRIFT_GAIN` | 0.15 | Speed adjustment gain |
 
 ### Server Tuning
 
@@ -202,6 +203,8 @@ services:
 Plugin settings:
 - JWT Secret: `your-secure-32-char-secret`
 - Session Server URL: `wss://jellyfin.example.com/ws` (via reverse proxy)
+
+The reverse proxy must send both `/ws` and `/invite` to the session server; see [Reverse Proxy Configuration](deployment.md#reverse-proxy-configuration).
 
 ### Multi-Instance Setup
 

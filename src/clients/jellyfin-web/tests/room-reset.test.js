@@ -28,6 +28,10 @@ const makeDirtyRoomState = () => {
     readyRoomId: 'room-a',
     isBuffering: true,
     wantsToPlay: true,
+    streamReloadUntil: Date.now() + 1000,
+    lastPlayedPosition: 42,
+    lastPlayedPlaying: true,
+    streamReloadResume: true,
     isSyncing: true,
     syncCooldownUntil: Date.now() + 1000,
     isInitialSync: true,
@@ -35,6 +39,8 @@ const makeDirtyRoomState = () => {
     initialSyncTargetPos: 42,
     syncStatus: 'pending_play',
     currentDrift: 3,
+    outOfSyncSince: Date.now() - 8000,
+    driftCheckedAt: Date.now(),
     pendingPlayUntil: Date.now() + 1000,
     lastSyncServerTs: Date.now(),
     lastSyncPosition: 42,
@@ -43,6 +49,8 @@ const makeDirtyRoomState = () => {
     guestPaused: true,
     joiningItemId: 'item',
     pendingJoinRoomId: 'room-b',
+    pendingMediaId: 'item',
+    pendingMediaUntil: Date.now() + 1000,
     suppressUntil: Date.now() + 1000,
     currentVideoElement: video,
     playbackRequestAttempt: 4,
@@ -68,12 +76,20 @@ const assertRoomStateReset = (video) => {
   assert.equal(OWP.state.readyRoomId, '');
   assert.equal(OWP.state.isBuffering, false);
   assert.equal(OWP.state.wantsToPlay, false);
+  assert.equal(OWP.state.streamReloadUntil, 0);
+  assert.equal(OWP.state.lastPlayedPosition, 0);
+  assert.equal(OWP.state.lastPlayedPlaying, false);
+  assert.equal(OWP.state.streamReloadResume, false);
   assert.equal(OWP.state.isSyncing, false);
   assert.equal(OWP.state.isInitialSync, false);
   assert.equal(OWP.state.initialSyncTargetPos, null);
   assert.equal(OWP.state.syncStatus, 'synced');
   assert.equal(OWP.state.currentDrift, 0);
+  assert.equal(OWP.state.outOfSyncSince, 0);
+  assert.equal(OWP.state.driftCheckedAt, 0);
   assert.equal(OWP.state.pendingPlayUntil, 0);
+  assert.equal(OWP.state.pendingMediaId, '');
+  assert.equal(OWP.state.pendingMediaUntil, 0);
   assert.equal(OWP.state.lastSyncServerTs, 0);
   assert.equal(OWP.state.lastSyncPosition, 0);
   assert.equal(OWP.state.lastSyncPlayState, '');

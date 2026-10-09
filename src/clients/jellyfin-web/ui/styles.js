@@ -8,6 +8,7 @@
     HEADER_BTN_CLASS,
     MODERN_HEADER_BTN_ID,
     PANEL_HEADER_CLASS,
+    PANEL_BUBBLE_CLASS,
     ROOM_MODE_CLASS
   } = OWP.constants;
 
@@ -41,7 +42,7 @@
     #owp-guest-lock-label .owp-guest-lock-icon { font-size: 1.15em; }
     /* Same look as the room bar: dark grey, soft border, Jellyfin's font */
     #${PANEL_ID} {
-      position: fixed; top: 72px; right: 20px; width: 300px; max-height: min(450px, calc(100vh - 88px));
+      position: fixed; top: 72px; right: 20px; width: 360px; max-width: calc(100vw - 40px); max-height: min(450px, calc(100vh - 88px));
       padding: 10px 12px; border-radius: 12px; background: rgba(38, 38, 36, 0.97);
       color: #ecebe6; font-family: inherit; font-size: 12px; z-index: 20000;
       border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 4px 16px rgba(0,0,0,0.35);
@@ -52,6 +53,14 @@
     #${PANEL_ID}.${PANEL_HEADER_CLASS} { bottom: auto; }
     @media (max-width: 600px) {
       #${PANEL_ID}.${PANEL_HEADER_CLASS} { left: 8px; right: 8px; width: auto; }
+    }
+    /* The lobby opened from the header hangs from its button like a speech
+       bubble: left and the arrow position are set when it is placed */
+    #${PANEL_ID}.${PANEL_HEADER_CLASS}.${PANEL_BUBBLE_CLASS} { right: auto; width: 360px; max-width: calc(100vw - 16px); }
+    #${PANEL_ID}.${PANEL_BUBBLE_CLASS}::before {
+      content: ''; position: absolute; top: -6px; left: var(--owp-arrow-left, 50%); margin-left: -6px;
+      width: 10px; height: 10px; transform: rotate(45deg); background: rgb(38, 38, 36);
+      border-left: 1px solid rgba(255,255,255,0.14); border-top: 1px solid rgba(255,255,255,0.14);
     }
     /* The player has its own Watch Party button */
     .osdHeader .${HEADER_BTN_CLASS} { display: none !important; }
@@ -107,13 +116,28 @@
       min-height: 0; overflow-y: auto; padding: 8px 10px; border-radius: 10px;
     }
     .owp-room-drop[hidden], .owp-room-drop > [hidden] { display: none !important; }
-    .owp-leave-confirm { display: flex; align-items: center; gap: 8px; }
+    .owp-leave-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .owp-leave-question { flex: 1; }
+    .owp-leave-hint {
+      flex-basis: 100%; width: 100%; font-size: 12px; line-height: 1.35;
+      color: rgba(255,255,255,.6); overflow-wrap: anywhere;
+    }
     .owp-pill-btn {
       height: 24px; padding: 0 8px; border-radius: 12px; cursor: pointer; font-family: inherit; font-size: 12px;
     }
     .owp-pill-btn.secondary { background: transparent; border: 1px solid rgba(255,255,255,0.25); color: #a6a59f; }
     .owp-pill-btn.danger { background: #791f1f; border: none; color: #f09595; }
+    .owp-pill-btn.primary { background: #0c447c; border: none; color: #85b7eb; }
+    .owp-pill-btn.primary:hover { background: #185fa5; color: #e6f1fb; }
+    .owp-pill-btn.primary[aria-disabled="true"] { background: rgba(255,255,255,0.06); color: #85847e; cursor: not-allowed; }
+    /* The sync adjustment drop-down: where the guest is, and the nudge */
+    .owp-nudge-row { display: flex; align-items: center; gap: 8px; }
+    .owp-nudge-state { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-weight: 500; }
+    .owp-nudge-state .owp-sync-dot { width: 7px; height: 7px; flex-shrink: 0; }
+    .owp-nudge-state .owp-sync-dot.synced { background: #97c459; }
+    .owp-nudge-state .owp-sync-dot.idle { background: #85847e; }
+    .owp-nudge-sub { margin-top: 5px; font-size: 11px; color: #9a9993; line-height: 1.45; }
+    .owp-nudge-sub[hidden] { display: none; }
     /* Same size as the MUI SVG icons next to it (MuiSvgIcon fontSizeMedium) */
     #${MODERN_HEADER_BTN_ID} .material-icons { font-size: 1.5rem; width: 1em; height: 1em; line-height: 1; }
     .owp-header {
@@ -139,6 +163,13 @@
     .owp-room-title { font-weight: 500; }
     .owp-room-count { font-size: 11px; color: #9a9993; }
     .owp-room-empty { padding: 8px; text-align: center; color: #9a9993; }
+    .owp-card-count {
+      position: absolute; left: 0.5em; bottom: 0.5em; z-index: 1; max-width: calc(100% - 1em); box-sizing: border-box;
+      display: inline-flex; align-items: center; gap: 0.3em; padding: 0.2em 0.55em; border-radius: 0.4em;
+      background: rgba(0,0,0,0.7); color: #fff; font-size: 0.8em; line-height: 1.3; white-space: nowrap;
+    }
+    .owp-card-count .material-icons { font-size: 1.25em; line-height: 1; }
+    .owp-card-count-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .owp-btn {
       height: 26px; padding: 0 12px; border: none; border-radius: 13px; cursor: pointer;
       background: #0c447c; color: #85b7eb; font-family: inherit; font-size: 12px; font-weight: 500;
@@ -147,6 +178,16 @@
     .owp-btn.danger { background: #791f1f; color: #f09595; }
     .owp-btn:disabled { background: rgba(255,255,255,0.06); color: #85847e; cursor: not-allowed; }
     .owp-hint { font-size: 11px; color: #9a9993; margin-top: 6px; text-align: center; }
+    /* The lobby help and its "?" button; the button turns blue while it is open */
+    .owp-help-btn { width: 24px; padding: 0; justify-content: center; font-size: 13px; font-weight: 600; }
+    .owp-help {
+      display: flow-root; margin-bottom: 10px; padding: 8px 10px; border-radius: 8px;
+      background: rgba(255,255,255,0.04); line-height: 1.5; text-align: justify;
+      flex-shrink: 0;
+    }
+    .owp-help[hidden] { display: none; }
+    /* Floats beside the last line, so it does not need a line of its own */
+    .owp-help-ok { float: right; margin: 6px 0 0 8px; }
     .owp-room-note { font-size: 11px; color: #ef9f27; }
     .owp-participants { display: flex; flex-direction: column; }
     .owp-participant { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 0; }
@@ -193,7 +234,7 @@
     .owp-chat-meta, .owp-chat-text { display: inline; }
     .owp-chat-username { font-weight: 500; color: #85b7eb; margin-right: 4px; }
     /* Hidden on screen like the mockup, still read by screen readers */
-    .owp-chat-time {
+    .owp-chat-time, .owp-visually-hidden {
       position: absolute; width: 1px; height: 1px; overflow: hidden;
       clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
     }
