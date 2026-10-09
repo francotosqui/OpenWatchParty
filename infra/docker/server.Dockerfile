@@ -42,8 +42,10 @@ RUN touch src/main.rs && \
 # Runtime stage
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 
-# Install curl for healthcheck and ca-certificates for HTTPS
-RUN apk add --no-cache ca-certificates curl && \
+# Upgrade the base layer for Alpine security fixes (zlib, libssl, ...), then
+# install curl for healthcheck and ca-certificates for HTTPS
+RUN apk upgrade --no-cache && \
+    apk add --no-cache ca-certificates curl && \
     # Create non-root user for security
     adduser -D -u 1000 appuser
 
