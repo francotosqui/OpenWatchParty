@@ -317,15 +317,43 @@ describe('play and pause shared by the room', () => {
       assert.deepEqual(toasts, []);
     });
 
-    it('leaves its video alone while its own stream reloads', () => {
+    it('applies a guest pause that came during its stream reload once the reload ends', () => {
       OWP.state.streamReloadUntil = localNow + 10000;
+      OWP.state.streamReloadResume = true;
+      video.paused = true;
       h.handlePlayerEvent(playerEvent('pause', 12, { client: 'guest' }), video);
 
-      assert.equal(video.paused, false);
-      assert.equal(video.currentTime, 10);
       assert.equal(OWP.state.isSyncing, false);
       assert.deepEqual(toasts, []);
-      OWP.state.streamReloadUntil = 0;
+
+      // Jellyfin plays the reloaded stream again.
+      video.paused = false;
+      video.dispatch('playing');
+
+      assert.equal(OWP.state.streamReloadUntil, 0);
+      assert.equal(video.paused, true);
+      assert.equal(OWP.state.reloadGuestCommand, null);
+      assert.deepEqual(toasts, ['A guest paused playback']);
+      assert.deepEqual(playerEvents(), []);
+    });
+
+    it('drops a guest command from the reload if it left the room meanwhile', () => {
+      OWP.state.streamReloadUntil = localNow + 10000;
+      h.handlePlayerEvent(playerEvent('pause', 12, { client: 'guest' }), video);
+      OWP.state.roomId = 'room-b';
+
+      video.dispatch('playing');
+
+      assert.equal(video.paused, false);
+      assert.deepEqual(toasts, []);
+    });
+
+    it('plays its own pending play without a guest toast', () => {
+      video.paused = true;
+      h.handlePlayerEvent(playerEvent('play', 10), video);
+
+      assert.equal(video.paused, false);
+      assert.deepEqual(toasts, []);
     });
 
     it('ignores the commands only a host sends', () => {

@@ -226,6 +226,7 @@
     lastPlayedPosition: 0, // Where the video last played, and whether it was playing, before a reload empties it
     lastPlayedPlaying: false,
     streamReloadResume: false, // Whether the room was playing when the reload started
+    reloadGuestCommand: null, // A guest's play or pause that came during the host's stream reload
     isSyncing: false,
     syncCooldownUntil: 0,  // Timestamp until which position updates are ignored (after resume)
     isInitialSync: false,  // True during initial catch-up after joining (disables HARD_SEEK)

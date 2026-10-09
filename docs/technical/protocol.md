@@ -234,6 +234,8 @@ Send a playback event. Any room member may send `play` and `pause`; `seek` and `
 
 A guest's `play` or `pause` holds the room's play state: until its cooldown ends, a host `state_update` with the other play state is ignored, since the host sent it before applying the command. For a pending play the hold lasts until it starts, then for the same cooldown. Any host `player_event` ends the hold.
 
+Only the host seeks, so a guest's `play` or `pause` cannot move the room: its `position` is replaced by where the room is (the last position, moved on by the time since it took effect while playing).
+
 ### `state_update`
 
 Periodic playback state update (host only).

@@ -18,6 +18,9 @@
   const endStreamReload = (video) => {
     state.streamReloadUntil = 0;
     state.lastSentPosition = video.currentTime;
+    // A guest's play or pause that came during the reload goes first: it
+    // holds the sync, so the reload's own play is not sent to the room.
+    if (state.reloadGuestCommand) OWP._wsHandlers?.applyReloadGuestCommand?.(video);
   };
 
   const sendStateUpdate = (video) => {

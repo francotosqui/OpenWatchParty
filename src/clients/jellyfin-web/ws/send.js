@@ -58,6 +58,7 @@
       lastPlayedPosition: 0,
       lastPlayedPlaying: false,
       streamReloadResume: false,
+      reloadGuestCommand: null,
       isSyncing: false,
       syncCooldownUntil: 0,
       isInitialSync: false,

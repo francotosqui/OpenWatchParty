@@ -90,17 +90,32 @@
     const video = resolveVideo(fallbackVideo);
     if (!video || !msg.payload) return false;
     const playing = msg.payload.action === 'play';
+    // While the host's stream reloads, the latest guest command waits for the
+    // reload to end; otherwise the reload's own play would undo a pause.
+    if (state.streamReloadUntil) {
+      state.reloadGuestCommand = { msg, roomId: state.roomId, attempt: state.playbackActionAttempt };
+      return true;
+    }
     // Already there, as with the host's own pending play once everyone is ready.
     if (playing !== video.paused) return true;
-    // While the host's stream reloads, the reload's own play brings the room back.
-    if (state.streamReloadUntil) return true;
     utils.startSyncing();
     applyPosition(video, msg.payload.position, playing, msg.server_ts);
     state.wantsToPlay = playing;
     if (playing) OWP.playback.safePlay(video, 'guest play command');
     else video.pause();
-    if (ui.showToast) ui.showToast(playing ? 'A guest resumed playback' : 'A guest paused playback');
+    // The pending play the server starts comes under the host's id.
+    if (ui.showToast && fromGuest(msg)) ui.showToast(playing ? 'A guest resumed playback' : 'A guest paused playback');
     return true;
+  };
+
+  // Called when the host's stream reload ends: applies the guest command that
+  // came during it, unless the room, the role or a newer command changed.
+  h.applyReloadGuestCommand = (video) => {
+    const pending = state.reloadGuestCommand;
+    state.reloadGuestCommand = null;
+    if (!pending || !state.isHost || !state.inRoom || state.roomId !== pending.roomId) return;
+    if (state.playbackActionAttempt !== pending.attempt) return;
+    applyGuestCommand(pending.msg, video);
   };
 
   const handleHostPlayerEvent = (msg, video) => {

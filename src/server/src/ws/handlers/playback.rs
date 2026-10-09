@@ -121,6 +121,28 @@ impl PlaybackMessage {
             Some(PlaybackAction::Play | PlaybackAction::Pause)
         )
     }
+
+    /// Puts a guest's play or pause where the room is: only the host seeks,
+    /// so a guest's own position is never used.
+    fn set_room_position(&mut self, room_position: f64) {
+        if let Self::PlayerEvent(payload) = self {
+            payload.position = Some(room_position);
+        }
+    }
+}
+
+/// Where the room's video is now: its last known position, moved on by the
+/// time since it took effect while the room plays.
+fn room_position_now(room: &Room, current_ts: u64) -> f64 {
+    if room.state.play_state != "playing" {
+        return room.state.position;
+    }
+    let since = room
+        .target_server_ts
+        .map_or(room.state_server_ts, |target| {
+            target.max(room.state_server_ts)
+        });
+    room.state.position + current_ts.saturating_sub(since) as f64 / 1000.0
 }
 
 fn handle_play_not_ready(
@@ -277,7 +299,7 @@ pub(in crate::ws) async fn handle_playback(
         .await;
         return;
     };
-    let Some(message) = PlaybackMessage::parse(&parsed) else {
+    let Some(mut message) = PlaybackMessage::parse(&parsed) else {
         send_error(
             client_id,
             state,
@@ -308,6 +330,9 @@ pub(in crate::ws) async fn handle_playback(
                 let now = Instant::now();
                 let action = message.action();
                 let from_guest = room.host_id != client_id;
+                if from_guest {
+                    message.set_room_position(room_position_now(room, current_ts));
+                }
 
                 if action == Some(PlaybackAction::Pause) {
                     room.pending_play = None;
@@ -899,6 +924,72 @@ mod tests {
         let room = locked.rooms.get_mut("r1").unwrap();
         room.state.position = position;
         room.state.play_state = "playing".to_string();
+        room.state_server_ts = now_ms();
+        room.target_server_ts = None;
+    }
+
+    #[tokio::test]
+    async fn a_guest_cannot_move_the_room_with_its_play_or_pause() {
+        let (state, mut host_rx, _guest_rx) = setup_room().await;
+        set_room_playing(&state, 40.0).await;
+
+        handle_playback(
+            "guest",
+            player_event("pause", 3600.0),
+            &state,
+            &crate::tasks::AppTasks::new(),
+        )
+        .await;
+
+        let payload = test_helpers::recv_msg(&mut host_rx)
+            .unwrap()
+            .payload
+            .unwrap();
+        let position = payload["position"].as_f64().unwrap();
+        assert!((40.0..41.0).contains(&position), "paused at {position}");
+        assert_eq!(state.read().await.rooms["r1"].state.position, position);
+    }
+
+    #[tokio::test]
+    async fn a_guest_play_or_pause_without_a_position_uses_the_room_one() {
+        let (state, mut host_rx, _guest_rx) = setup_room().await;
+        {
+            let mut locked = state.write().await;
+            let room = locked.rooms.get_mut("r1").unwrap();
+            room.state.position = 25.0;
+            room.state.play_state = "paused".to_string();
+        }
+
+        handle_playback(
+            "guest",
+            incoming(
+                ClientMessageType::PlayerEvent,
+                Some(serde_json::json!({ "action": "play" })),
+            ),
+            &state,
+            &crate::tasks::AppTasks::new(),
+        )
+        .await;
+
+        let payload = test_helpers::recv_msg(&mut host_rx)
+            .unwrap()
+            .payload
+            .unwrap();
+        assert_eq!(payload["position"], 25.0);
+    }
+
+    #[test]
+    fn the_room_position_moves_on_from_when_it_took_effect() {
+        let mut room = crate::test_helpers::create_room("r1", "host");
+        room.state.position = 10.0;
+        room.state.play_state = "playing".to_string();
+        room.state_server_ts = 1_000;
+        room.target_server_ts = Some(1_500);
+        assert_eq!(room_position_now(&room, 4_500), 13.0);
+        room.target_server_ts = None;
+        assert_eq!(room_position_now(&room, 4_500), 13.5);
+        room.state.play_state = "paused".to_string();
+        assert_eq!(room_position_now(&room, 4_500), 10.0);
     }
 
     fn player_event(action: &str, position: f64) -> IncomingMessage {
@@ -926,12 +1017,14 @@ mod tests {
         assert_eq!(outgoing.client.as_deref(), Some("guest"));
         let payload = outgoing.payload.unwrap();
         assert_eq!(payload["action"], "pause");
-        assert_eq!(payload["position"], 42.0);
+        // Where the room is, not where the guest said (42): only the host seeks.
+        let position = payload["position"].as_f64().unwrap();
+        assert!((40.0..41.0).contains(&position), "paused at {position}");
         assert_eq!(payload["play_state"], "paused");
         assert!(test_helpers::recv_msg(&mut guest_rx).is_none());
         let locked = state.read().await;
         assert_eq!(locked.rooms["r1"].state.play_state, "paused");
-        assert_eq!(locked.rooms["r1"].state.position, 42.0);
+        assert_eq!(locked.rooms["r1"].state.position, position);
         assert!(locked.rooms["r1"].guest_command_until.is_some());
         assert_eq!(
             locked.rooms["r1"].guest_command_until,
