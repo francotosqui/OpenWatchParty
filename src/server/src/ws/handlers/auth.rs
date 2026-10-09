@@ -9,6 +9,7 @@ use log::{info, warn};
 use std::sync::Arc;
 
 const HOST_TRANSFER_FEATURE: &str = "host_transfer";
+const PARTICIPANT_STATUS_FEATURE: &str = "participant_status";
 
 /// Reads the protocol version declared in the auth payload.
 ///
@@ -25,16 +26,23 @@ fn declared_protocol_version(payload: Option<&serde_json::Value>) -> Result<Opti
 /// Returns `None` when the field was absent and the supported subset otherwise.
 fn declared_features(payload: Option<&serde_json::Value>) -> Option<Vec<String>> {
     let features = payload?.get("features")?;
-    let supports_host_transfer = features.as_array().is_some_and(|features| {
-        features
-            .iter()
-            .any(|feature| feature.as_str() == Some(HOST_TRANSFER_FEATURE))
-    });
-    Some(if supports_host_transfer {
-        vec![HOST_TRANSFER_FEATURE.to_string()]
-    } else {
-        Vec::new()
-    })
+    let declared: Vec<&str> = features
+        .as_array()
+        .map(|features| {
+            features
+                .iter()
+                .filter_map(|feature| feature.as_str())
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut supported = Vec::new();
+    if declared.contains(&HOST_TRANSFER_FEATURE) {
+        supported.push(HOST_TRANSFER_FEATURE.to_string());
+    }
+    if declared.contains(&PARTICIPANT_STATUS_FEATURE) {
+        supported.push(PARTICIPANT_STATUS_FEATURE.to_string());
+    }
+    Some(supported)
 }
 
 fn auth_success_message(
@@ -628,6 +636,46 @@ mod tests {
                 success.payload.unwrap()["protocol_version"].as_u64(),
                 declared
             );
+        }
+    }
+
+    #[tokio::test]
+    async fn participant_status_is_echoed_when_declared() {
+        for (declared, expected) in [
+            (
+                serde_json::json!(["participant_status"]),
+                serde_json::json!(["participant_status"]),
+            ),
+            (
+                serde_json::json!(["host_transfer", "participant_status"]),
+                serde_json::json!(["host_transfer", "participant_status"]),
+            ),
+            (
+                serde_json::json!(["host_transfer"]),
+                serde_json::json!(["host_transfer"]),
+            ),
+        ] {
+            let state = test_helpers::create_state();
+            let (client, mut rx) = test_helpers::create_client_with_rx("user", "Anonymous", true);
+            state
+                .write()
+                .await
+                .clients
+                .insert("client".to_string(), client);
+
+            handle_auth(
+                "client",
+                &auth_message(serde_json::json!({
+                    "user_name": "Bob",
+                    "features": declared,
+                })),
+                &state,
+                &insecure_jwt_config(),
+            )
+            .await;
+
+            let success = test_helpers::recv_msg(&mut rx).unwrap();
+            assert_eq!(success.payload.unwrap()["features"], expected);
         }
     }
 

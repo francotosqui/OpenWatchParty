@@ -78,10 +78,10 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
 |---------------|------|----------|-------------|
 | `token` | string | No | JWT issued by the `/OpenWatchParty/Token` endpoint |
 | `protocol_version` | number | No | Client protocol version; defaults to `1` when omitted |
-| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer` |
+| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer` and `participant_status` |
 
 On a protocol version mismatch the server answers with `error` (`PROTOCOL_VERSION_UNSUPPORTED`) and closes the connection.
-Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`.
+Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room.
 
 ### `list_rooms`
 
@@ -122,7 +122,7 @@ Create a new watch party room.
 
 **Effects:**
 - Client becomes host
-- Host receives `participant_list` with its own name, after `room_state`
+- Host receives `participant_list` with its own name, then `participant_statuses`, after `room_state`
 - Broadcast `room_list` to all clients
 
 ### `join_room`
@@ -143,7 +143,7 @@ Join an existing room.
 - Client added to `room.clients`
 - Client removed from `room.ready_clients`
 - Broadcast `participants_update` to other participants
-- Broadcast `participant_list` to everyone in the room, including the new client (after its `room_state`)
+- Broadcast `participant_list`, then `participant_statuses`, to everyone in the room, including the new client (after its `room_state`)
 
 ### `leave_room`
 
@@ -158,9 +158,9 @@ Leave the current room.
 ```
 
 **Effects:**
-- If the host leaves and another member declared `host_transfer`: promote the earliest-joined supporting member, preserve media and playback state, clear `pending_play`, and broadcast `client_left`, `host_changed`, then `participant_list`
+- If the host leaves and another member declared `host_transfer`: promote the earliest-joined supporting member, preserve media and playback state, clear `pending_play`, and broadcast `client_left`, `host_changed`, then `participant_list` and `participant_statuses`
 - If the host leaves and no remaining member supports transfer, or the room is empty: close the room and broadcast `room_closed` as before
-- Otherwise: broadcast `client_left`, then `participant_list`
+- Otherwise: broadcast `client_left`, then `participant_list` and `participant_statuses` (the leaving client's status is dropped)
 - Broadcast `room_list` to all
 
 A WebSocket disconnect has the same room behavior as `leave_room`.
@@ -303,6 +303,30 @@ Send a text message to the room.
 - `"Chat message cannot be empty"` - Empty or whitespace-only text
 - `"Chat message too long (max 500 characters)"` - Text exceeds limit
 - `"Room ID required for chat"` - Missing room ID
+
+### `participant_status`
+
+Report how this client is doing, for the room's participants list. Informational only: it never changes playback.
+
+```json
+{
+  "type": "participant_status",
+  "payload": {
+    "status": "in_sync"
+  },
+  "ts": 1678900000000
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `status` | string | One of `playing`, `paused` (the host), `in_sync`, `catching_up`, `buffering`, `loading`, `blocked` (autoplay blocked: needs to press Play), `not_watching` |
+
+**Effects:**
+- The status is stored for the client's current room; a change is sent to the room as `participant_statuses`
+- An unknown status, extra fields, an unchanged status, or a client outside a room are ignored silently (no error)
+- A room gets at most one `participant_statuses` every 250 ms for status changes: the first change is sent at once, and later changes within the 250 ms are sent together when they end, with the latest statuses
+- The web client sends it only to a server that sent `participant_statuses` for its room (an older server answers unknown types with an error), once a status has held for a second, and again after reconnecting
 
 ## Server → Client Messages
 
@@ -447,6 +471,28 @@ Sent to the remaining room members after `client_left` and before the updated `p
 ```
 
 Clients from 0.6.0 treat an unknown message type as an invalid schema and stop processing that message, so they safely ignore `host_changed`. They are never selected as the new host because they did not declare `host_transfer`.
+
+### `participant_statuses`
+
+Each participant's last reported `participant_status`, in the same order as the latest `participant_list`. Sent right after every `participant_list` and to the whole room whenever a status change.
+
+```json
+{
+  "type": "participant_statuses",
+  "room": "uuid-room-id",
+  "payload": {
+    "statuses": ["playing", null]
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `statuses[]` | string or null | The participant's status, or `null` if they have not reported one (an older client, say) |
+
+It is a separate message because `participant_list` rejects unknown fields: clients that do not know `participant_statuses` ignore it. The web client ignores a list of statuses whose length does not match its participants list.
 
 ### `player_event`
 

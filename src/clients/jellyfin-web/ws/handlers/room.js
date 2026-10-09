@@ -46,10 +46,25 @@
 
   h.handleParticipantList = (msg) => {
     if (!state.inRoom || msg.room !== state.roomId) return;
+    // The statuses for this list follow in participant_statuses.
     state.participants = msg.payload.participants.map(participant => ({
       name: participant.name,
-      isHost: participant.is_host
+      isHost: participant.is_host,
+      status: null
     }));
+    ui.updateParticipantList();
+  };
+
+  // Statuses in participant_list order; a list of another length belongs to
+  // another version of the list and is ignored. Receiving it also tells that
+  // this server accepts participant_status (an older one would answer with an
+  // error).
+  h.handleParticipantStatuses = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId) return;
+    state.statusesRoomId = msg.room;
+    const { statuses } = msg.payload;
+    if (statuses.length !== state.participants.length) return;
+    state.participants = state.participants.map((participant, index) => ({ ...participant, status: statuses[index] }));
     ui.updateParticipantList();
   };
 

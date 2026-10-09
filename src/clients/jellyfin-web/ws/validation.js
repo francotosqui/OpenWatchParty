@@ -9,6 +9,7 @@
   const MAX_ID_LENGTH = 128;
   const PLAY_STATES = new Set(['playing', 'paused']);
   const PLAYER_ACTIONS = new Set(['play', 'pause', 'seek', 'buffering']);
+  const PARTICIPANT_STATUSES = new Set(['playing', 'paused', 'in_sync', 'catching_up', 'buffering', 'loading', 'blocked', 'not_watching']);
 
   const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
   const string = (value, max, allowEmpty = false) =>
@@ -96,6 +97,16 @@
     return null;
   };
 
+  // One entry per participant, in participant_list order: a known status, or
+  // null for someone who has not reported one (an older client, say).
+  const validateParticipantStatuses = (message) => {
+    if (!payloadObject(message)) return 'payload must be an object';
+    if (!onlyKeys(message.payload, ['statuses'])) return 'participant_statuses has unknown fields';
+    const { statuses } = message.payload;
+    if (!Array.isArray(statuses) || statuses.length > MAX_PARTICIPANTS) return 'statuses is invalid';
+    return statuses.every(status => status === null || PARTICIPANT_STATUSES.has(status)) ? null : 'status is invalid';
+  };
+
   const validateRoomClosed = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
     if (!onlyKeys(message.payload, ['reason'])) return 'room_closed has unknown fields';
@@ -154,6 +165,7 @@
     participants_update: validateParticipantCount,
     client_left: validateParticipantCount,
     participant_list: validateParticipantList,
+    participant_statuses: validateParticipantStatuses,
     host_changed: validateHostChanged,
     room_closed: validateRoomClosed,
     player_event: validatePlayerEvent,
@@ -167,6 +179,7 @@
     'participants_update',
     'client_left',
     'participant_list',
+    'participant_statuses',
     'host_changed',
     'room_closed',
     'player_event',

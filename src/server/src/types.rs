@@ -49,6 +49,19 @@ pub struct Room {
     pub last_state_at: Option<Instant>,
     #[serde(skip)]
     pub command_cooldown_until: Option<Instant>,
+    /// Each member's last reported status (`participant_status`), by client id.
+    #[serde(skip)]
+    pub statuses: HashMap<String, &'static str>,
+    #[serde(skip)]
+    pub status_broadcast: StatusBroadcast,
+}
+
+/// When the room last got `participant_statuses` for a status change, and the
+/// ticket of the one scheduled after it, if any (see `ws::handlers::status`).
+#[derive(Debug, Clone, Default)]
+pub struct StatusBroadcast {
+    pub last_sent_at: Option<Instant>,
+    pub scheduled_flush: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,6 +101,7 @@ pub enum ClientMessageType {
     Ping,
     ClientLog,
     ChatMessage,
+    ParticipantStatus,
     #[serde(other)]
     Unknown,
 }
