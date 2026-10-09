@@ -109,6 +109,7 @@ describe('protocol version negotiation', () => {
 
     const auth = socket.sent.find(message => message.type === 'auth');
     assert.equal(auth.payload.protocol_version, OWP.constants.PROTOCOL_VERSION);
+    assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status']);
     assert.equal(auth.payload.token, 'jwt-token');
   });
 

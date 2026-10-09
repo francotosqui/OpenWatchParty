@@ -43,6 +43,7 @@ fn register_client(
         authenticated,
         session_expires_at: None,
         authentication_version: 0,
+        supports_host_transfer: false,
         message_count: 0,
         last_reset: now,
         last_seen: now,

@@ -2,11 +2,13 @@ use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
 use super::super::validation::{is_valid_media_id, is_valid_position, sanitize_name};
 use crate::messaging::{broadcast_room_list, send_message, send_to_senders, ClientSender};
 use crate::room::close_room_in_state;
-use crate::room::{handle_leave, participant_list_message, send_leave_notification};
+use crate::room::{
+    handle_leave, participant_list_message, participant_statuses_message, send_leave_notification,
+};
 use crate::types::{IncomingMessage, PlaybackState, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use tokio::time::Instant;
 
 fn resolve_host_name(
@@ -66,6 +68,8 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         target_at: None,
         last_state_at: Some(Instant::now()),
         command_cooldown_until: None,
+        statuses: HashMap::new(),
+        status_broadcast: Default::default(),
     }
 }
 
@@ -155,7 +159,12 @@ pub(in crate::ws) async fn handle_create_room(
             .room
             .as_ref()
             .and_then(|room_id| rooms.get(room_id))
-            .map(|room| participant_list_message(room, clients));
+            .map(|room| {
+                (
+                    participant_list_message(room, clients),
+                    participant_statuses_message(room),
+                )
+            });
         if let Some(notification) = previous_leave {
             send_leave_notification(&notification, "previous room leave");
         }
@@ -174,8 +183,9 @@ pub(in crate::ws) async fn handle_create_room(
             );
         }
         send_message(sender.clone(), &room_msg, Some(client_id));
-        if let Some(msg) = participant_list {
-            send_message(sender, &msg, Some(client_id));
+        if let Some((list, statuses)) = participant_list {
+            send_message(sender.clone(), &list, Some(client_id));
+            send_message(sender, &statuses, Some(client_id));
         }
     }
 
@@ -292,6 +302,12 @@ mod tests {
         assert_eq!(
             list.payload.unwrap()["participants"],
             serde_json::json!([{ "name": "Franco", "is_host": true }])
+        );
+        let statuses = test_helpers::recv_msg(&mut host_rx).unwrap();
+        assert_eq!(statuses.msg_type, "participant_statuses");
+        assert_eq!(
+            statuses.payload.unwrap()["statuses"],
+            serde_json::json!([null])
         );
     }
 

@@ -25,6 +25,7 @@ pub fn create_client_with_rx(
         authenticated,
         session_expires_at: None,
         authentication_version: 0,
+        supports_host_transfer: false,
         message_count: 0,
         last_reset: now,
         last_seen: now,
@@ -50,6 +51,8 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
         target_at: None,
         last_state_at: None,
         command_cooldown_until: None,
+        statuses: HashMap::new(),
+        status_broadcast: Default::default(),
     }
 }
 

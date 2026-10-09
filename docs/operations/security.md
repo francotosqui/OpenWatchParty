@@ -176,6 +176,8 @@ location /ws {
 }
 ```
 
+This rate-limit excerpt covers `/ws` only. The proxy must also route `/invite` to the session server; see [Reverse Proxy Configuration](deployment.md#reverse-proxy-configuration) for complete examples.
+
 ```yaml
 # Traefik example
 http:
@@ -443,29 +445,43 @@ The session server uses **Alpine Linux** as its base image for minimal attack su
 | Image | Size | CVEs |
 |-------|------|------|
 | `debian:bookworm-slim` | ~100MB | 30+ |
-| `alpine:3.21` | ~26MB | ~6 (low severity) |
+| `alpine:3.24` | ~26MB | ~0 (see posture below) |
+
+The runtime stage is pinned by digest (`alpine:3.24@sha256:…`) and Dependabot
+re-pins it weekly (docker ecosystem, `infra/docker`). The builder stage
+(`rust:*-alpine`) is not part of the shipped image and is not scanned.
 
 ### Security Scanning
 
-Container images are automatically scanned on every push:
+Container images are automatically scanned on every push and weekly:
 
 - **Trivy**: Scans for CVEs in OS packages and dependencies
 - **Results**: Uploaded to GitHub Security tab
 - **Severity filter**: CRITICAL and HIGH vulnerabilities are flagged
+- **`ignore-unfixed`**: only findings with a published fix are blocking
+
+### CVE Policy
+
+The build runs `apk upgrade --no-cache` in the runtime stage before installing
+`ca-certificates` and `curl`. Every build therefore ships the latest security
+fixes published in the Alpine 3.24 repositories, even when the pinned base
+digest still contains older packages (for example a vulnerable `zlib`).
+
+Together with `ignore-unfixed: true`, this makes the gate self-healing: once
+Alpine publishes a fixed package, the next build picks it up and Trivy passes
+without waiting for a digest bump. A PR is blocked only when a fixable HIGH or
+CRITICAL vulnerability is still present in the built image — that is a real
+actionable finding, not database drift.
+
+Consequence: two builds of the same commit can produce slightly different
+package versions. The digest pin fixes the base layer; `apk upgrade` floats
+the installed packages to the latest security state of the branch.
 
 ### Current Security Posture
 
-The Alpine-based image has minimal remaining vulnerabilities:
-
-| CVE | Component | Severity | Impact |
-|-----|-----------|----------|--------|
-| CVE-2024-58251 | BusyBox netstat | Warning | Not used by application |
-| CVE-2025-46394 | BusyBox tar | Note | Not used by application |
-
-These vulnerabilities:
-- Affect tools not used by the application (tar, netstat)
-- Require local access to exploit
-- Are low severity (warning/note, not critical/high)
+Last verified against Trivy 0.70 (CI-equivalent flags: `--severity
+CRITICAL,HIGH --ignore-unfixed`): **0 findings**, and 0 findings at any
+severity with `--ignore-unfixed`.
 
 ### Hardening Recommendations
 

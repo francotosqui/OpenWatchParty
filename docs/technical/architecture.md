@@ -272,7 +272,7 @@ See [Security Guide](../operations/security.md) for detailed security configurat
 |--------|---------------|-------|
 | Sync accuracy | ±50ms | Under normal network conditions |
 | Clock sync precision | ±20ms | After EMA smoothing stabilizes |
-| Drift correction range | 0.85x - 2.0x | Playback rate adjustment |
+| Drift correction range | 0.90x - 1.15x | Playback rate adjustment |
 | State update interval | 1000ms | From host to server |
 | Sync loop interval | 500ms | Client-side drift check |
 
