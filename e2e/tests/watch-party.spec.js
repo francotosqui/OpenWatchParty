@@ -89,6 +89,7 @@ test('pause, play and seek propagate to the guest', async () => {
 
 test('a guest pause pauses the host, and the host play resumes the guest', async () => {
   await openRoomWithGuest('header');
+  await helpers.waitForSettled(guest);
 
   await helpers.togglePlayback(guest);
   await helpers.waitForPaused(host);
@@ -103,6 +104,7 @@ test('a guest play resumes the paused room', async () => {
 
   await helpers.togglePlayback(host);
   await helpers.waitForPaused(guest);
+  await helpers.waitForSettled(guest);
 
   await helpers.togglePlayback(guest);
   await helpers.waitForPlaying(host);
