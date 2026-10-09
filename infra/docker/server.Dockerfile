@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.98-alpine@sha256:7cc1c22d77d9432f7fe012a70e6d3e555af54c2a6832700ed7d553f1769ae89f AS builder
+FROM rust:1.99-alpine@sha256:0cce0a5e0e8ba67b455257a3a02a1d99005f382748789d6464460028810f1627 AS builder
 
 # Build mode: "dev" (fast compile, debug) or "release" (optimized)
 ARG BUILD_MODE=dev
@@ -42,8 +42,10 @@ RUN touch src/main.rs && \
 # Runtime stage
 FROM alpine:3.24@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 
-# Install curl for healthcheck and ca-certificates for HTTPS
-RUN apk add --no-cache ca-certificates curl && \
+# Upgrade the base layer for Alpine security fixes (zlib, libssl, ...), then
+# install curl for healthcheck and ca-certificates for HTTPS
+RUN apk upgrade --no-cache && \
+    apk add --no-cache ca-certificates curl && \
     # Create non-root user for security
     adduser -D -u 1000 appuser
 

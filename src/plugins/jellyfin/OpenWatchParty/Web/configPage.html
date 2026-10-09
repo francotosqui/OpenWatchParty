@@ -91,6 +91,13 @@
                             </label>
                             <div class="fieldDescription checkboxFieldDescription">Hides the built-in SyncPlay button in Jellyfin Web, leaving the Watch Party button as the only group-watching control. Applies after Jellyfin Web is reloaded.</div>
                         </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input is="emby-checkbox" type="checkbox" id="ShowSyncNudgeButton" />
+                                <span>Show the sync adjustment button in rooms</span>
+                            </label>
+                            <div class="fieldDescription checkboxFieldDescription">Lets guests move their own video 0.5 s toward the host when automatic correction cannot keep them in sync. It only moves their video; the host keeps control of playback. Off by default. Applies after Jellyfin Web is reloaded.</div>
+                        </div>
                     </div>
 
                     <div>
@@ -416,6 +423,7 @@
 
                     // Web client settings
                     $('#HideNativeSyncPlayButton', page).prop('checked', config.HideNativeSyncPlayButton === true);
+                    $('#ShowSyncNudgeButton', page).prop('checked', config.ShowSyncNudgeButton === true);
                     OpenWatchPartyConfigurationPage.updateAuthStatus(page, config);
                     OpenWatchPartyConfigurationPage.runDiagnostics(false);
 
@@ -468,6 +476,7 @@
                 }
                 $('#SessionServerUrl', page).val(sessionServerUrl.url);
                 var hideNativeSyncPlayButton = $('#HideNativeSyncPlayButton', page).prop('checked') === true;
+                var showSyncNudgeButton = $('#ShowSyncNudgeButton', page).prop('checked') === true;
                 Dashboard.showLoadingMsg();
 
                 ApiClient.getPluginConfiguration(OpenWatchPartyConfigurationPage.pluginId).then(function (config) {
@@ -484,6 +493,7 @@
 
                     // Web client settings
                     config.HideNativeSyncPlayButton = hideNativeSyncPlayButton;
+                    config.ShowSyncNudgeButton = showSyncNudgeButton;
 
                     return ApiClient.updatePluginConfiguration(OpenWatchPartyConfigurationPage.pluginId, config);
                 }).then(function () {

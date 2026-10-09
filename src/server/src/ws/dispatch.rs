@@ -1,7 +1,8 @@
 use super::constants::MAX_MESSAGE_SIZE;
 use super::handlers::{
-    handle_auth, handle_chat_message, handle_client_log, handle_create_room, handle_join_room,
-    handle_leave_room, handle_ping, handle_playback, handle_ready, handle_unknown,
+    handle_auth, handle_chat_message, handle_client_log, handle_close_room, handle_create_room,
+    handle_join_room, handle_leave_room, handle_participant_status, handle_ping, handle_playback,
+    handle_ready, handle_unknown,
 };
 use crate::auth::JwtConfig;
 use crate::messaging::{send_room_list, send_to_client};
@@ -258,12 +259,16 @@ pub(super) async fn client_msg(
         }
         ClientMessageType::Ready => handle_ready(client_id, &parsed, state).await,
         ClientMessageType::LeaveRoom => handle_leave_room(client_id, state).await,
+        ClientMessageType::CloseRoom => handle_close_room(client_id, state).await,
         ClientMessageType::PlayerEvent | ClientMessageType::StateUpdate => {
             handle_playback(client_id, parsed, state, tasks).await
         }
         ClientMessageType::Ping => handle_ping(client_id, &parsed, state).await,
         ClientMessageType::ClientLog => handle_client_log(client_id, &parsed),
         ClientMessageType::ChatMessage => handle_chat_message(client_id, &parsed, state).await,
+        ClientMessageType::ParticipantStatus => {
+            handle_participant_status(client_id, &parsed, state).await
+        }
         ClientMessageType::Unknown => handle_unknown(client_id, state).await,
     }
     false

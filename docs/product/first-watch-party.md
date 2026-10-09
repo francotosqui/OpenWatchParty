@@ -158,6 +158,16 @@ Only the two HTTPS hostnames need to be public. The Jellyfin and session
 server ports remain local to the host. See [Deployment]({{ '/operations/deployment/' | relative_url }})
 for containerized proxies and other topologies.
 
+## The first time Jellyfin opens
+
+The first time Jellyfin Web runs in a browser after the installation, the
+Watch Party panel opens by itself below the **Watch Party** button of the
+header, with a short help. It does not block anything: select **Got it** to
+close the help, or close the panel. It is shown once per browser; the **?**
+in the panel brings the help back.
+
+![OpenWatchParty panel open below the header button, with its help and the Got it button]({{ '/assets/images/tutorial-first-run.png' | relative_url }})
+
 ## Host: create a room
 
 As the host, play **the same movie** your guest can access. For the local

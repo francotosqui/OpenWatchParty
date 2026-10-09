@@ -100,6 +100,10 @@ nav_order: 5
    - Session server logs show CORS errors
    - Set `ALLOWED_ORIGINS` to include your Jellyfin URL
 
+### Invite button says Room not found (or 404)
+
+The reverse proxy is not routing `/invite` to the session server. Configure both the WebSocket and invite routes as shown in [Reverse Proxy Configuration](deployment.md#reverse-proxy-configuration).
+
 ### Sync Issues
 
 **Symptoms:**

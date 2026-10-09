@@ -164,7 +164,7 @@ function syncLoop() {
     // drift < 0 = ahead = slow down
     const sign = drift > 0 ? 1 : -1;
     const correction = sign * Math.sqrt(absDrift) * DRIFT_GAIN;
-    const rate = clamp(1 + correction, 0.85, 2.0);
+    const rate = clamp(1 + correction, 0.90, 1.15);
     video.playbackRate = rate;
 }
 ```
@@ -177,10 +177,10 @@ function syncLoop() {
     ◄─────────────────────┼────────────────────►
     │         │           │           │        │
   SEEK     SLOW      DEADZONE     FAST      SEEK
- (<−2.0s) (−2.0s     (±0.04s)   (+0.04s   (>+2.0s)
+ (≤−2.0s) (−2.0s     (±0.04s)   (+0.04s   (≥+2.0s)
            to −0.04s)            to +2.0s)
     │         │                     │          │
-    │    rate = 0.85           rate = 2.0      │
+    │    rate ≥ 0.90           rate ≤ 1.15     │
     │     (min)                   (max)        │
     └─────────┴──────────┬──────────┴──────────┘
                          │
@@ -191,21 +191,39 @@ function syncLoop() {
 
 ```
 rate = 1 + sign(drift) * sqrt(|drift|) * DRIFT_GAIN
-     = 1 + sign(drift) * sqrt(|drift|) * 0.50
+     = 1 + sign(drift) * sqrt(|drift|) * 0.15
 
 Examples:
-- drift = +0.25s → rate = 1 + sqrt(0.25) * 0.50 = 1.25x
-- drift = +1.0s  → rate = 1 + sqrt(1.0) * 0.50 = 1.50x
-- drift = +2.0s  → rate = 1 + sqrt(2.0) * 0.50 = 1.71x
-- drift = +4.0s  → rate = 1 + sqrt(4.0) * 0.50 = 2.00x (capped)
-- drift = -0.5s  → rate = 1 - sqrt(0.5) * 0.50 = 0.65x (clamped to 0.85x)
+- drift = +0.25s → rate = 1 + sqrt(0.25) * 0.15 = 1.075x
+- drift = +1.0s  → rate = 1 + sqrt(1.0) * 0.15 = 1.15x
+- drift = +1.9s  → rate = 1 + sqrt(1.9) * 0.15 = 1.21x (capped to 1.15x)
+- drift = -0.1s  → rate = 1 - sqrt(0.1) * 0.15 = 0.95x
+- drift = -0.5s  → rate = 1 - sqrt(0.5) * 0.15 = 0.89x (clamped to 0.90x)
 ```
 
-The sqrt curve provides stronger correction for larger drifts while staying smooth. Browser pitch correction (`preservesPitch`) keeps audio natural even at 2.0x.
+The sqrt curve corrects small drifts gently and larger ones faster, within 0.90x-1.15x: voices still sound natural there (browsers also keep the pitch, `preservesPitch`), at the cost of a slower catch-up (about 10 s from 1.5 s behind to within 0.25 s). Drifts of 2 s or more seek instead, once the cooldown after joining (`INITIAL_SYNC_COOLDOWN_MS`) or after a host play or seek has passed (during the join cooldown only a drift over `INITIAL_SYNC_MAX_DRIFT`, 10 s, seeks); below 2 s, the guest keeps catching up, also when that cooldown ends.
 
 ### Paused Rooms
 
 While the room plays, the host's periodic `state_update` resumes a guest who paused. A paused room sends none (the server drops state updates that change nothing), so the loop pauses a guest whose video plays while the room is paused. It waits while a room command is being applied or a host play is scheduled.
+
+### Manual Nudge (Sync Adjustment)
+
+When the plugin's **Show the sync adjustment button in rooms** setting is on, guests get a sync adjustment drop-down in the room bar (`playback.nudgeState()` and `playback.nudge()` in `playback/sync.js`). It uses the same expected position as `syncLoop`:
+
+```
+drift = expected - video.currentTime     (positive = behind the host)
+step  = min(NUDGE_STEP_SEC, |drift|, room left in the buffered range)
+video.currentTime += sign(drift) * step
+```
+
+- **Local only.** Guests never send seeks, so the room state does not change; the next host command or state update applies as usual, and the automatic correction keeps running.
+- **No overshoot.** A nudge moves at most to the host's position.
+- **In sync below `NUDGE_MIN_DRIFT_SEC`.** Nothing to nudge.
+- **HLS segments.** The target stays inside the buffered range around the current position, `NUDGE_BUFFER_MARGIN_SEC` away from its edges, so a nudge never triggers a new segment fetch and the buffering that comes with it. If less than `NUDGE_MIN_MOVE_SEC` is left, the nudge waits.
+- **Ignored while a room command is applied.** Nothing happens while `isSyncing`, a scheduled action or a scheduled play is pending, during the initial sync or its cooldown, or while the video is seeking. The same applies when the room is paused, the video is buffering, or the room's media is still loading.
+
+`playback.trackDrift()` runs after `syncLoop` (only when the setting is on) and keeps `outOfSyncSince`, which the drop-down shows next to the current playback rate.
 
 ## 5. HLS Handling and Feedback Loop Prevention
 
@@ -395,13 +413,17 @@ fn schedule_pending_play(room_id, created_at, rooms, clients) {
 | `SYNC_LEAD_MS` | 300ms | Client | Compensation advance |
 | `DRIFT_DEADZONE_SEC` | 0.04s | Client | No-correction zone |
 | `DRIFT_SOFT_MAX_SEC` | 2.0s | Client | Forced seek threshold |
-| `PLAYBACK_RATE_MIN` | 0.85 | Client | Min catchup speed |
-| `PLAYBACK_RATE_MAX` | 2.0 | Client | Max catchup speed |
-| `DRIFT_GAIN` | 0.50 | Client | Proportional gain (sqrt curve) |
-| `INITIAL_SYNC_COOLDOWN_MS` | 8000ms | Client | Cooldown after join (no HARD_SEEK) |
+| `PLAYBACK_RATE_MIN` | 0.90 | Client | Min catchup speed |
+| `PLAYBACK_RATE_MAX` | 1.15 | Client | Max catchup speed |
+| `DRIFT_GAIN` | 0.15 | Client | Proportional gain (sqrt curve) |
+| `INITIAL_SYNC_COOLDOWN_MS` | 8000ms | Client | Cooldown after join (no HARD_SEEK below `INITIAL_SYNC_MAX_DRIFT`; after it, only drifts of 2 s or more seek) |
 | `INITIAL_SYNC_MAX_MS` | 30000ms | Client | Max initial sync phase duration |
 | `INITIAL_SYNC_DRIFT_THRESHOLD` | 0.5s | Client | Exit initial sync when caught up |
 | `SYNC_LOOP_MS` | 500ms | Client | Sync loop interval |
+| `NUDGE_STEP_SEC` | 0.5s | Client | Largest manual nudge toward the host |
+| `NUDGE_MIN_DRIFT_SEC` | 0.15s | Client | Drift below which there is nothing to nudge |
+| `NUDGE_MIN_MOVE_SEC` | 0.05s | Client | Smallest nudge worth a seek |
+| `NUDGE_BUFFER_MARGIN_SEC` | 0.1s | Client | Distance kept from the buffered range's edges |
 | `PLAY_SCHEDULE_MS` | 1000ms | Server | Delay before play |
 | `CONTROL_SCHEDULE_MS` | 300ms | Server | Delay before pause/seek |
 | `MAX_READY_WAIT_MS` | 2000ms | Server | Ready timeout |
