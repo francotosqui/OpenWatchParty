@@ -131,7 +131,12 @@ class FakeElement extends FakeNode {
     this.id = '';
     this.className = '';
     this.dataset = {};
-    this.style = {};
+    // Custom properties go through setProperty, like in a browser; the methods
+    // are not enumerable, so a style still compares as its plain properties.
+    this.style = Object.defineProperties({}, {
+      setProperty: { value(name, value) { this[name] = String(value); } },
+      removeProperty: { value(name) { delete this[name]; } }
+    });
     this.attributes = {};
     this.listeners = {};
     this.creationOptions = creationOptions;

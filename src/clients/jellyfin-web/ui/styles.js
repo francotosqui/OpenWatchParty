@@ -8,6 +8,7 @@
     HEADER_BTN_CLASS,
     MODERN_HEADER_BTN_ID,
     PANEL_HEADER_CLASS,
+    PANEL_BUBBLE_CLASS,
     ROOM_MODE_CLASS
   } = OWP.constants;
 
@@ -19,7 +20,7 @@
   const CSS_STYLES = `
     /* Same look as the room bar: dark grey, soft border, Jellyfin's font */
     #${PANEL_ID} {
-      position: fixed; top: 72px; right: 20px; width: 300px; max-height: min(450px, calc(100vh - 88px));
+      position: fixed; top: 72px; right: 20px; width: 360px; max-width: calc(100vw - 40px); max-height: min(450px, calc(100vh - 88px));
       padding: 10px 12px; border-radius: 12px; background: rgba(38, 38, 36, 0.97);
       color: #ecebe6; font-family: inherit; font-size: 12px; z-index: 20000;
       border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 4px 16px rgba(0,0,0,0.35);
@@ -30,6 +31,14 @@
     #${PANEL_ID}.${PANEL_HEADER_CLASS} { bottom: auto; }
     @media (max-width: 600px) {
       #${PANEL_ID}.${PANEL_HEADER_CLASS} { left: 8px; right: 8px; width: auto; }
+    }
+    /* The lobby opened from the header hangs from its button like a speech
+       bubble: left and the arrow position are set when it is placed */
+    #${PANEL_ID}.${PANEL_HEADER_CLASS}.${PANEL_BUBBLE_CLASS} { right: auto; width: 360px; max-width: calc(100vw - 16px); }
+    #${PANEL_ID}.${PANEL_BUBBLE_CLASS}::before {
+      content: ''; position: absolute; top: -6px; left: var(--owp-arrow-left, 50%); margin-left: -6px;
+      width: 10px; height: 10px; transform: rotate(45deg); background: rgb(38, 38, 36);
+      border-left: 1px solid rgba(255,255,255,0.14); border-top: 1px solid rgba(255,255,255,0.14);
     }
     /* The player has its own Watch Party button */
     .osdHeader .${HEADER_BTN_CLASS} { display: none !important; }
@@ -136,6 +145,16 @@
     .owp-btn.danger { background: #791f1f; color: #f09595; }
     .owp-btn:disabled { background: rgba(255,255,255,0.06); color: #85847e; cursor: not-allowed; }
     .owp-hint { font-size: 11px; color: #9a9993; margin-top: 6px; text-align: center; }
+    /* The lobby help and its "?" button; the button turns blue while it is open */
+    .owp-help-btn { width: 24px; padding: 0; justify-content: center; font-size: 13px; font-weight: 600; }
+    .owp-help {
+      display: flow-root; margin-bottom: 10px; padding: 8px 10px; border-radius: 8px;
+      background: rgba(255,255,255,0.04); line-height: 1.5; text-align: justify;
+      flex-shrink: 0;
+    }
+    .owp-help[hidden] { display: none; }
+    /* Floats beside the last line, so it does not need a line of its own */
+    .owp-help-ok { float: right; margin: 6px 0 0 8px; }
     .owp-room-note { font-size: 11px; color: #ef9f27; }
     .owp-participants { display: flex; flex-direction: column; }
     .owp-participant { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 0; }
@@ -182,7 +201,7 @@
     .owp-chat-meta, .owp-chat-text { display: inline; }
     .owp-chat-username { font-weight: 500; color: #85b7eb; margin-right: 4px; }
     /* Hidden on screen like the mockup, still read by screen readers */
-    .owp-chat-time {
+    .owp-chat-time, .owp-visually-hidden {
       position: absolute; width: 1px; height: 1px; overflow: hidden;
       clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
     }

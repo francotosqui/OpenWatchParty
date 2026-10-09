@@ -112,13 +112,84 @@
     if (hint) hint.hidden = enabled;
   };
 
+  const HELP_ID = 'owp-help';
+  const HELP_BUTTON_ID = 'owp-btn-help';
+  const HELP_TEXT = 'Watch movies and shows together, in sync. This panel opens from the Watch Party button, at the top of Jellyfin or in the player.';
+
+  const applyLobbyHelp = () => {
+    const help = document.getElementById(HELP_ID);
+    if (help) help.hidden = !state.lobbyHelpOpen;
+    const button = document.getElementById(HELP_BUTTON_ID);
+    if (button) button.setAttribute('aria-expanded', String(state.lobbyHelpOpen));
+  };
+
+  const setLobbyHelpOpen = (open) => {
+    state.lobbyHelpOpen = open;
+    applyLobbyHelp();
+  };
+
+  // Its button disappears with the help, so focus goes back to the "?".
+  const closeLobbyHelp = () => {
+    setLobbyHelpOpen(false);
+    const button = document.getElementById(HELP_BUTTON_ID);
+    if (button) button.focus();
+  };
+
+  const ANNOUNCER_ID = 'owp-announcer';
+  const ANNOUNCE_DELAY_MS = 100;
+
+  // A polite live region, so that screen readers read out what appears without
+  // taking focus. It is added empty and filled a moment later: a region added
+  // with its text already in place is often not read.
+  const announce = (text) => {
+    let region = document.getElementById(ANNOUNCER_ID);
+    if (!region) {
+      region = createElement('div', 'owp-visually-hidden');
+      region.id = ANNOUNCER_ID;
+      region.setAttribute('role', 'status');
+      region.setAttribute('aria-live', 'polite');
+      document.body.appendChild(region);
+    }
+    region.textContent = '';
+    OWP.timers.setTimeout(() => { region.textContent = text; }, ANNOUNCE_DELAY_MS);
+  };
+
+  // The first-run help opens the panel by itself, without moving focus.
+  const announceLobbyHelp = () => announce(`Watch Party: ${HELP_TEXT}`);
+
+  const createLobbyHelp = () => {
+    const help = createElement('div', 'owp-help');
+    help.id = HELP_ID;
+    const ok = createElement('button', 'owp-pill-btn secondary owp-help-ok', 'Got it');
+    ok.type = 'button';
+    ok.onclick = closeLobbyHelp;
+    help.append(createElement('span', '', HELP_TEXT), ok);
+    help.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeLobbyHelp();
+    });
+    return help;
+  };
+
+  const createHelpButton = () => {
+    const button = createElement('button', 'owp-bar-btn owp-help-btn', '?');
+    button.id = HELP_BUTTON_ID;
+    button.type = 'button';
+    button.title = 'Help';
+    button.setAttribute('aria-label', 'Help');
+    button.setAttribute('aria-controls', HELP_ID);
+    button.onclick = () => setLobbyHelpOpen(!state.lobbyHelpOpen);
+    return button;
+  };
+
   const renderLobby = (panel) => {
     const header = createElement('div', 'owp-header');
     header.append(createElement('span', 'owp-panel-title', 'OpenWatchParty'), document.createTextNode(' '));
     const status = createElement('span');
     status.id = 'owp-ws-indicator';
     const actions = createElement('span', 'owp-header-actions');
-    actions.append(status, createCloseButton());
+    actions.append(status, createHelpButton(), createCloseButton());
     header.appendChild(actions);
 
     const lobby = createElement('div', 'owp-lobby-container');
@@ -140,7 +211,8 @@
 
     const footer = createElement('div', 'owp-footer');
     footer.append(document.createTextNode('Server: '), document.createTextNode(String(DEFAULT_WS_URL.replace(/^wss?:\/\//, '').replace('/ws', ''))));
-    panel.replaceChildren(header, lobby, footer);
+    panel.replaceChildren(header, createLobbyHelp(), lobby, footer);
+    applyLobbyHelp();
     ui.updateRoomListUI();
     updateCreateRoomButton();
   };
@@ -479,6 +551,8 @@
         if (input) input.value = chatDraft;
       }
     }
+    // The lobby and the room bar sit differently below the header.
+    if (ui.updatePanelPlacement) ui.updatePanelPlacement();
     ui.updateStatusIndicator();
     ui.renderHomeWatchParties();
     if (focusInside && !panel.classList.contains('hide')) {
@@ -488,12 +562,16 @@
     }
   };
 
+  // The panel's own controls: the help, its "?" and the close button.
+  const PANEL_FRAME_CONTROLS = ['owp-close-btn', 'owp-help-btn', 'owp-help-ok'];
+
   // A panel opened from the keyboard takes focus, as a dialog should: its first
-  // control other than the close button, or the close button. A mouse click
-  // leaves focus alone, so the player's keyboard shortcuts keep working.
+  // control other than its own, or the close button. A mouse click leaves
+  // focus alone, so the player's keyboard shortcuts keep working.
   const focusPanelStart = (panel) => {
     const buttons = Array.from(panel.querySelectorAll('button')).filter(button => !button.disabled);
-    const target = buttons.find(button => !button.classList.contains('owp-close-btn')) || buttons[0];
+    const target = buttons.find(button => !PANEL_FRAME_CONTROLS.some(name => button.classList.contains(name)))
+      || buttons.find(button => button.classList.contains('owp-close-btn'));
     if (target) target.focus({ preventScroll: true });
   };
 
@@ -516,6 +594,7 @@
       if (!panel.classList.contains('hide')) {
         panel.dataset.opener = BTN_ID;
         if (ui.resetPanelPlacement) ui.resetPanelPlacement(panel);
+        setLobbyHelpOpen(false);
         render(true);
         if (isKeyboardClick(e)) focusPanelStart(panel);
       }
@@ -542,6 +621,8 @@
     updateRoomRoleControls,
     focusPanelStart,
     isKeyboardClick,
-    hidePanel
+    hidePanel,
+    setLobbyHelpOpen,
+    announceLobbyHelp
   });
 })();
