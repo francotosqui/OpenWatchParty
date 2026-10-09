@@ -23,6 +23,7 @@ pub struct Client {
     /// JWT `exp` as Unix seconds. `None` is reserved for insecure no-auth sessions.
     pub session_expires_at: Option<u64>,
     pub authentication_version: u64,
+    pub supports_host_transfer: bool,
     pub message_count: u32,
     pub last_reset: Instant,
     pub last_seen: Instant, // For zombie connection detection
@@ -48,6 +49,19 @@ pub struct Room {
     pub last_state_at: Option<Instant>,
     #[serde(skip)]
     pub command_cooldown_until: Option<Instant>,
+    /// Each member's last reported status (`participant_status`), by client id.
+    #[serde(skip)]
+    pub statuses: HashMap<String, &'static str>,
+    #[serde(skip)]
+    pub status_broadcast: StatusBroadcast,
+}
+
+/// When the room last got `participant_statuses` for a status change, and the
+/// ticket of the one scheduled after it, if any (see `ws::handlers::status`).
+#[derive(Debug, Clone, Default)]
+pub struct StatusBroadcast {
+    pub last_sent_at: Option<Instant>,
+    pub scheduled_flush: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,11 +95,13 @@ pub enum ClientMessageType {
     JoinRoom,
     Ready,
     LeaveRoom,
+    CloseRoom,
     PlayerEvent,
     StateUpdate,
     Ping,
     ClientLog,
     ChatMessage,
+    ParticipantStatus,
     #[serde(other)]
     Unknown,
 }
@@ -105,6 +121,7 @@ pub enum ServerMessageType {
     StateUpdate,
     Pong,
     ClientLeft,
+    HostChanged,
     RoomClosed,
     ChatMessage,
 }
@@ -184,6 +201,9 @@ mod tests {
 
         let json = serde_json::to_string(&ClientMessageType::CreateRoom).unwrap();
         assert_eq!(json, r#""create_room""#);
+
+        let json = serde_json::to_string(&ClientMessageType::CloseRoom).unwrap();
+        assert_eq!(json, r#""close_room""#);
     }
 
     #[test]

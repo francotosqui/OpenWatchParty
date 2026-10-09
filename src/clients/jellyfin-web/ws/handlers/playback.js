@@ -87,8 +87,16 @@
     if (ui.updateSyncIndicator) ui.updateSyncIndicator();
     const applyScheduledEvent = () => {
       if (actionAttempt !== state.playbackActionAttempt || !state.inRoom || state.roomId !== roomId) return;
-      if (!applyPlayerEvent(msg, video) && utils.nowMs() < retryDeadline) {
-        state.pendingActionTimer = OWP.timers.setTimeout(applyScheduledEvent, VIDEO_ACTION_RETRY_MS, 'room');
+      utils.startSyncing();
+      if (!applyPlayerEvent(msg, video)) {
+        if (utils.nowMs() < retryDeadline) {
+          state.pendingActionTimer = OWP.timers.setTimeout(applyScheduledEvent, VIDEO_ACTION_RETRY_MS, 'room');
+        } else {
+          state.pendingActionTimer = null;
+          state.pendingPlayUntil = 0;
+          if (state.syncStatus === 'pending_play') state.syncStatus = 'synced';
+          if (ui.updateSyncIndicator) ui.updateSyncIndicator();
+        }
       }
     };
     utils.scheduleAt(targetTs, applyScheduledEvent);

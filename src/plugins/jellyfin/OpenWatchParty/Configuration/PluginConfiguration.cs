@@ -77,4 +77,10 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public bool HideNativeSyncPlayButton { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether guests get the sync adjustment button in the room bar.
+    /// Disabled by default; it only moves the guest's own video, never the room's playback.
+    /// </summary>
+    public bool ShowSyncNudgeButton { get; set; }
+
 }

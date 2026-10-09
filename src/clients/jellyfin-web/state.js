@@ -99,11 +99,13 @@
     LEGACY_HEADER_BTN_ID: 'owp-header-btn-legacy',
     MODERN_HEADER_BTN_ID: 'owp-header-btn-modern',
     PANEL_HEADER_CLASS: 'owp-panel-header',
+    PANEL_BUBBLE_CLASS: 'owp-panel-bubble',
     ROOM_MODE_CLASS: 'owp-room-mode',
     STYLE_ID: 'owp-style',
     SYNCPLAY_HIDE_STYLE_ID: 'owp-hide-native-syncplay',
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
+    CLIENT_FEATURES: ['host_transfer', 'participant_status'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -113,9 +115,15 @@
     SYNC_LEAD_MS: 300,            // Compensates processing + initial HLS buffer
     DRIFT_DEADZONE_SEC: 0.04,
     DRIFT_SOFT_MAX_SEC: 2.0,      // Seek to correct if drift > 2s
-    PLAYBACK_RATE_MIN: 0.85,      // Allow slowdown if ahead
-    PLAYBACK_RATE_MAX: 2.0,       // Aggressive catch-up (browser pitch correction preserves audio)
-    DRIFT_GAIN: 0.50,             // For sqrt curve: 0.50 * sqrt(1s) = 0.50 → 1.50x at 1s drift
+    PLAYBACK_RATE_MIN: 0.90,      // Slowdown when ahead
+    PLAYBACK_RATE_MAX: 1.15,      // Catch-up when behind, gentle enough that voices stay natural
+    DRIFT_GAIN: 0.15,             // For sqrt curve: 0.15 * sqrt(1s) = 0.15 → 1.15x at 1s drift
+    // Manual sync adjustment (the room bar's nudge, for guests)
+    NUDGE_STEP_SEC: 0.5,          // Largest move toward the host per nudge
+    NUDGE_MIN_DRIFT_SEC: 0.15,    // Closer than this counts as in sync: nothing to nudge
+    NUDGE_MIN_MOVE_SEC: 0.05,     // A smaller move is not worth a seek
+    NUDGE_BUFFER_MARGIN_SEC: 0.1, // Kept inside the buffered range, so a nudge never waits for a segment
+    DRIFT_TRACK_GAP_MS: 2000,     // A longer pause in drift tracking starts a new out-of-sync count
     // Interval timings (P2 optimization)
     UI_CHECK_MS: 2000,            // UI button injection check
     PING_INIT_MS: 2000,            // Fast ping interval (clock convergence)
@@ -123,6 +131,7 @@
     PING_STABLE_AFTER: 5,          // Pongs before switching to stable interval
     HOME_REFRESH_MS: 5000,        // Home watch parties refresh (increased from 2s)
     SYNC_LOOP_MS: 500,            // Sync loop for playback rate correction
+    PARTICIPANT_STATUS_HOLD_MS: 1000, // A status must hold this long before it is sent to the room
     RECONNECT_BASE_MS: 1000,      // Base reconnect delay (1s)
     RECONNECT_MAX_MS: 30000,      // Max reconnect delay (30s)
     AUTH_RETRY_BASE_MS: 5000,     // First retry delay after a blocked authentication (5s)
@@ -132,6 +141,7 @@
     MEDIA_READY_POLL_MS: 100,
     MEDIA_READY_TIMEOUT_MS: 15000,
     MEDIA_SWITCH_GRACE_MS: 20000, // Player closed by OWP to open the room media (> MEDIA_READY_TIMEOUT_MS)
+    STREAM_RELOAD_MAX_MS: 30000,  // Longest the room waits for the host's stream to reload (track change)
     VIDEO_ACTION_RETRY_MS: 50,
     VIDEO_ACTION_MAX_WAIT_MS: 2000,
     INITIAL_SYNC_COOLDOWN_MS: 8000, // Cooldown after join to let playback rate catch up (not HARD_SEEK)
@@ -161,6 +171,7 @@
     reconnectTimer: null,
     connectionAttempt: 0,
     connectionPhase: 'disconnected', // disconnected | connecting | authenticating | authenticated
+    serverFeatures: [],
     desiredRoomId: '',
     rejoinPending: false,
     rejectedRejoinRoomIds: [],
@@ -191,17 +202,27 @@
     mediaReadyCleanup: null,
     pendingMediaId: '',
     mediaSwitchUntil: 0,   // Until then, a closed player is OWP opening the room media
+    pendingMediaUntil: 0,
     pendingJoinRoomId: '',  // Room to join after navigating to video player
     roomName: '',
     participantCount: 0,
-    participants: [],      // [{ name, isHost }] from participant_list; empty until the server sends one
+    participants: [],      // [{ name, isHost, status }] from participant_list and participant_statuses
+    statusesRoomId: '',    // The room whose server sent participant_statuses: it accepts participant_status
+    statusCandidate: '',   // This client's status, and since when, until it holds long enough to send
+    statusCandidateSince: 0,
+    statusSentKey: '',     // room|client|status last sent, so a status is sent once per room and connection
     roomBarSection: '',    // Drop-down open under the room bar: 'people', 'chat', 'leave' or ''
+    lobbyHelpOpen: false,  // The help at the top of the lobby, opened with its "?" button
     lastSyncServerTs: 0,
     lastSyncPosition: 0,
     lastSyncPlayState: '',
     readyRoomId: '',
     isBuffering: false,
     wantsToPlay: false,
+    streamReloadUntil: 0,  // While the host's stream reloads in place (audio or subtitle track change)
+    lastPlayedPosition: 0, // Where the video last played, and whether it was playing, before a reload empties it
+    lastPlayedPlaying: false,
+    streamReloadResume: false, // Whether the room was playing when the reload started
     isSyncing: false,
     syncCooldownUntil: 0,  // Timestamp until which position updates are ignored (after resume)
     isInitialSync: false,  // True during initial catch-up after joining (disables HARD_SEEK)
@@ -209,6 +230,8 @@
     initialSyncTargetPos: null, // Target position when joining; null means no pending target
     syncStatus: 'synced',  // 'synced' | 'syncing' | 'pending_play' - for UX indicator (UX-P3)
     currentDrift: 0,       // Current playback drift in seconds (positive = behind host)
+    outOfSyncSince: 0,     // Since when this guest is out of sync, shown by the sync adjustment
+    driftCheckedAt: 0,     // Last time trackDrift ran; a longer gap restarts the count
     pendingPlayUntil: 0,   // Timestamp when pending play ends (for spinner) (UX-P3)
     // Authentication
     authToken: null,
@@ -227,6 +250,7 @@
     tokenRefreshTimer: null,     // Timer for token refresh
     // Web client settings delivered with the token response
     hideNativeSyncPlayButton: false,
+    showSyncNudge: false,       // The plugin offers guests the sync adjustment in the room bar
     // Room invite links
     inviteTtlSeconds: 3600,      // Lifetime requested for new invite tickets
     pendingInviteTicket: '',     // Ticket parsed from the page URL, consumed after authentication

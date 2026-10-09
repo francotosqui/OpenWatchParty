@@ -20,14 +20,15 @@ nav_order: 2
 - **Play/Pause sync** - Host controls playback state for all clients
 - **Seek sync** - Jumping to a position syncs everyone
 - **Position sync** - Continuous updates keep clients aligned
-- **Drift correction** - Automatic playback speed adjustment (0.85x-2.0x)
+- **Drift correction** - Automatic playback speed adjustment (0.90x-1.15x)
 - **HLS support** - Works with Jellyfin's adaptive streaming
 
 ### User Interface
 - **OSD button** - Watch Party button in the video player controls
 - **Header button** - Watch Party button in both Jellyfin 12 headers (MUI and legacy), on the pages that show the header (the player keeps its OSD button); joining from it starts the room's media
 - **Hide native SyncPlay** - Optional admin setting that hides Jellyfin's SyncPlay button
-- **Slide-out panel** - Room list and controls
+- **Slide-out panel** - Room list and controls; opened from the header, it hangs from the button like a speech bubble
+- **First-run help** - The panel opens by itself once per browser, with a short help that its **?** button brings back
 - **Home section** - Watch parties shown on Jellyfin homepage
 - **System notifications** - Centered toasts for play/pause, join/leave events
 - **Chat notifications** - Stacking toasts for incoming messages (top-right)
