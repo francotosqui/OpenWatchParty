@@ -166,6 +166,7 @@
       case 'participants_update': h.handleParticipantsUpdate(msg); break;
       case 'client_left': h.handleClientLeft(msg); break;
       case 'participant_list': h.handleParticipantList(msg); break;
+      case 'participant_statuses': h.handleParticipantStatuses(msg); break;
       case 'host_changed': h.handleHostChanged(msg); break;
       case 'room_closed': h.handleRoomClosed(msg); break;
       case 'player_event': h.handlePlayerEvent(msg, video); break;

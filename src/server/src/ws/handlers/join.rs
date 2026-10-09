@@ -4,7 +4,8 @@ use super::super::validation::sanitize_name;
 use crate::auth::{InviteTicketError, JwtConfig};
 use crate::messaging::{collect_room_senders, send_message, send_to_senders, ClientSender};
 use crate::room::{
-    handle_leave_without_transfer, participant_list_message, send_leave_notification,
+    handle_leave_without_transfer, participant_list_message, participant_statuses_message,
+    send_leave_notification,
 };
 use crate::types::{Client, IncomingMessage, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
@@ -237,6 +238,7 @@ pub(in crate::ws) async fn handle_join_room(
                 let participants = (
                     collect_room_senders(room, clients, None),
                     participant_list_message(room, clients),
+                    participant_statuses_message(room),
                 );
                 (notifications, previous_leave, Some(participants))
             }
@@ -245,8 +247,9 @@ pub(in crate::ws) async fn handle_join_room(
             send_leave_notification(&notification, "previous room leave");
         }
         enqueue_join_notifications(client_id, notifications);
-        if let Some((senders, msg)) = participants {
-            send_to_senders(&senders, &msg, "participant list");
+        if let Some((senders, list, statuses)) = participants {
+            send_to_senders(&senders, &list, "participant list");
+            send_to_senders(&senders, &statuses, "participant statuses");
         }
     }
 }
@@ -572,6 +575,14 @@ mod tests {
         let host_list = test_helpers::recv_msg(&mut host_rx).unwrap();
         assert_eq!(host_list.msg_type, "participant_list");
         assert_eq!(host_list.payload.unwrap(), expected);
+        for rx in [&mut guest_rx, &mut host_rx] {
+            let statuses = test_helpers::recv_msg(rx).unwrap();
+            assert_eq!(statuses.msg_type, "participant_statuses");
+            assert_eq!(
+                statuses.payload.unwrap()["statuses"],
+                serde_json::json!([null, null])
+            );
+        }
     }
 
     #[tokio::test]

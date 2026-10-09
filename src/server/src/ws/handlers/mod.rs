@@ -4,6 +4,7 @@ mod create;
 mod join;
 mod misc;
 mod playback;
+mod status;
 
 pub(in crate::ws) use auth::handle_auth;
 pub(in crate::ws) use chat::handle_chat_message;
@@ -14,3 +15,4 @@ pub(in crate::ws) use misc::{
     handle_unknown,
 };
 pub(in crate::ws) use playback::handle_playback;
+pub(in crate::ws) use status::handle_participant_status;

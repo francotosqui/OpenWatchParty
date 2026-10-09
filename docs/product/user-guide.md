@@ -135,7 +135,7 @@ In a room the panel becomes a single bar at the top right (below the header when
 - **Sync dot** - Your sync status; hover it for the details (the host's is always green)
 - **Latency** - Round-trip time from you to the session server, in milliseconds
 - **Room name** - Current watch party name; hover it if it is cut short
-- **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge on the host (older session servers show only the number of people)
+- **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge on the host and each person's status under their name (older session servers show only the number of people)
 - **Chat** (chat icon) - Opens the chat; a red badge counts unread messages
 - **Sync adjustment** (circular arrows, guests only, when the administrator enables it) - Shows how far you are from the host and lets you nudge your video toward them; see [Sync adjustment](#sync-adjustment)
 - **Invite** (share icon, host only) - Copies a short-lived invite link that joins people to this room automatically
@@ -143,6 +143,20 @@ In a room the panel becomes a single bar at the top right (below the header when
 - **Close (X)** - Only hides the bar: you stay in the room
 
 Participants, chat, the sync adjustment and the leave confirmation open one at a time below the bar; select the same icon again to close it.
+
+The participants list shows how each person is doing, with a colored dot:
+
+| Status | Color | Meaning |
+|--------|-------|---------|
+| Playing / Paused | green / grey | The host, with the room's playback |
+| In sync | green | A guest following the host |
+| Catching up | amber | A guest adjusting their speed to catch up |
+| Buffering | amber | Waiting for the video to load |
+| Loading | blue | Joining, or waiting for the room's media |
+| Needs to press Play | red | The browser blocked autoplay: tell them to press Play |
+| Not watching | grey | In the room without the video open |
+
+A status changes after it has held for about a second. People on an older version of OpenWatchParty show no status.
 
 ## Using Chat
 

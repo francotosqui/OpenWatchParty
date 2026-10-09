@@ -541,8 +541,8 @@ describe('room bar', () => {
       ] }
     });
     assert.deepEqual(OWP.state.participants, [
-      { name: 'Alex', isHost: true },
-      { name: 'Bo', isHost: false }
+      { name: 'Alex', isHost: true, status: null },
+      { name: 'Bo', isHost: false, status: null }
     ]);
     assert.equal(panel().querySelector('.owp-leave-hint').textContent.includes('Bo becomes the host'), true);
   });
