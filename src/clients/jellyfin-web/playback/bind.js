@@ -78,7 +78,9 @@
     // Not while the room waits for the host, nor for the pause that ends an
     // episode or comes with leaving the player (the stream is gone by then).
     if (playing && state.roomWaiting) return;
-    if (video.ended || video.readyState < 2 || video.isConnected === false) return;
+    // Without a stream (HAVE_NOTHING) it is the player closing; a video that
+    // is still loading or buffering is the user's.
+    if (video.ended || video.readyState === 0 || video.isConnected === false) return;
     const now = utils.nowMs();
     const playState = playing ? 'playing' : 'paused';
     state.lastSyncPlayState = playState;

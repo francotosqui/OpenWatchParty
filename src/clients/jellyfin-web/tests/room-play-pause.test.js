@@ -253,6 +253,13 @@ describe('play and pause shared by the room', () => {
       assert.deepEqual(playerEvents(), []);
     });
 
+    it('shares a pause while its video is still loading', () => {
+      video.readyState = 1;
+      video.pause();
+
+      assert.deepEqual(playerEvents().map(message => message.payload.action), ['pause']);
+    });
+
     it('does not play the room while it waits for the host', () => {
       joinAs('guest', { playing: false });
       OWP.state.roomWaiting = true;
