@@ -96,6 +96,11 @@ pub fn configure(
         .as_ref()
         .map(JellyfinClient::plugin_configuration)
         .transpose()?;
+    // Validate before local mutations or rollback: a corrupt root must never
+    // be posted back to Jellyfin, even as the rollback payload.
+    if let Some(plugin) = &original_plugin {
+        crate::installer::configuration_object(plugin)?;
+    }
 
     let operation = (|| -> anyhow::Result<()> {
         crate::storage::write_toml(&paths.config_file, &config)?;
@@ -201,6 +206,85 @@ pub fn uninstall(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn malformed_plugin_configuration_aborts_before_mutation_or_rollback_post() {
+        use std::{
+            io::{BufRead, BufReader, Write},
+            net::TcpListener,
+            sync::{
+                atomic::{AtomicBool, Ordering},
+                Arc,
+            },
+            thread,
+            time::Duration,
+        };
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let finished = Arc::new(AtomicBool::new(false));
+        let server_finished = finished.clone();
+        let server = thread::spawn(move || {
+            let mut requests = Vec::new();
+            while !server_finished.load(Ordering::SeqCst) {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        stream
+                            .set_read_timeout(Some(Duration::from_secs(2)))
+                            .unwrap();
+                        let mut request = String::new();
+                        BufReader::new(&mut stream).read_line(&mut request).unwrap();
+                        requests.push(request);
+                        stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 4\r\nConnection: close\r\n\r\nnull").unwrap();
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(error) => panic!("mock server failed: {error}"),
+                }
+            }
+            requests
+        });
+
+        let root = tempfile::tempdir().unwrap();
+        let paths = Paths::resolve(crate::cli::ScopeArg::User, Some(root.path())).unwrap();
+        let config =
+            DesiredConfig::local(url::Url::parse(&format!("http://{address}")).unwrap()).unwrap();
+        crate::storage::write_toml(&paths.config_file, &config).unwrap();
+        crate::storage::write_json(&paths.state_file, &InstallationState::new("0.6.0")).unwrap();
+        crate::storage::atomic_write(
+            &paths.secrets_file,
+            secrets::env_file(&secrets::generate_jwt_secret()).as_bytes(),
+            true,
+        )
+        .unwrap();
+        crate::storage::atomic_write(&paths.compose_file, b"original compose", false).unwrap();
+        let token_file = root.path().join("token");
+        fs::write(&token_file, "test-token").unwrap();
+        let files = [&paths.config_file, &paths.secrets_file, &paths.compose_file];
+        let before: Vec<_> = files.iter().map(|file| fs::read(file).unwrap()).collect();
+
+        let result = configure(
+            &paths,
+            &["plugin.token-ttl=7200".to_string()],
+            true,
+            Some(&token_file),
+            false,
+        );
+        finished.store(true, Ordering::SeqCst);
+        let requests = server.join().unwrap();
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("plugin configuration must be a JSON object"));
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].starts_with("GET /Plugins/"));
+        for (file, original) in files.iter().zip(before) {
+            assert_eq!(fs::read(file).unwrap(), original);
+        }
+    }
+
     #[test]
     fn configuration_keys_are_allowlisted() {
         let mut config =

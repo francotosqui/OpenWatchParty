@@ -41,12 +41,8 @@ pub(crate) struct PluginConfiguration(serde_json::Map<String, serde_json::Value>
 impl std::fmt::Debug for PluginConfiguration {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut map = formatter.debug_map();
-        for (key, value) in &self.0 {
-            if key == "JwtSecret" {
-                map.entry(key, &"<redacted>");
-            } else {
-                map.entry(key, value);
-            }
+        for key in self.0.keys() {
+            map.entry(key, &"<redacted>");
         }
         map.finish()
     }
@@ -122,7 +118,9 @@ pub fn install(
         let previous_plugin_config: Option<serde_json::Value> = if plugin_was_absent {
             None
         } else {
-            Some(jellyfin.plugin_configuration()?)
+            let previous = jellyfin.plugin_configuration()?;
+            configuration_object(&previous)?;
+            Some(previous)
         };
         let repository_changed = jellyfin.ensure_repository()?;
         if plugin_needs_install {
@@ -224,21 +222,20 @@ fn write_installed_plugin_configuration(
 /// not manage from `previous` (read before an upgrade, when there was one),
 /// and writes the managed settings over both.
 ///
-/// A previous value is kept only when the installed plugin still has that
-/// setting with the same JSON type: a setting a newer plugin removed, renamed
-/// or retyped falls back to the installed plugin's value instead of making
-/// Jellyfin reject the whole update.
+/// Without a schema, JSON cannot prove compatibility for changed composite
+/// values or a fractional value replacing an integer. Keep compatible scalars;
+/// otherwise retain the installed value. Malformed roots abort the write.
 pub(crate) fn plugin_configuration(
     config: &DesiredConfig,
     secret: &str,
     previous: Option<&serde_json::Value>,
     installed: &serde_json::Value,
 ) -> anyhow::Result<PluginConfiguration> {
-    let mut merged = installed.as_object().cloned().unwrap_or_default();
-    if let Some(previous) = previous.and_then(serde_json::Value::as_object) {
+    let mut merged = configuration_object(installed)?.clone();
+    if let Some(previous) = previous.map(configuration_object).transpose()? {
         for (key, value) in previous {
             if let Some(current) = merged.get_mut(key) {
-                if same_json_type(current, value) {
+                if compatible_value(current, value) {
                     *current = value.clone();
                 }
             }
@@ -261,11 +258,44 @@ pub(crate) fn plugin_configuration(
     Ok(PluginConfiguration(merged))
 }
 
-/// Whether `value` can replace `current` without changing the setting's JSON
-/// type. All numbers count as one type: Jellyfin writes a whole `double` such
-/// as `1.0` as `1`.
-fn same_json_type(current: &serde_json::Value, value: &serde_json::Value) -> bool {
-    std::mem::discriminant(current) == std::mem::discriminant(value)
+pub(crate) fn configuration_object(
+    value: &serde_json::Value,
+) -> anyhow::Result<&serde_json::Map<String, serde_json::Value>> {
+    value
+        .as_object()
+        .context("plugin configuration must be a JSON object; refusing to overwrite it")
+}
+
+fn compatible_value(current: &serde_json::Value, value: &serde_json::Value) -> bool {
+    use serde_json::Value;
+    if current == value {
+        return true;
+    }
+    match (current, value) {
+        (Value::Bool(_), Value::Bool(_)) | (Value::String(_), Value::String(_)) => true,
+        // Jellyfin may serialize a whole double as an integer. Treat an integer
+        // as the narrower type rather than guessing that fractions are safe.
+        (Value::Number(current), Value::Number(value)) if current.is_f64() => {
+            value.as_f64().is_some_and(f64::is_finite)
+        }
+        (Value::Number(current), Value::Number(value)) => {
+            if current
+                .as_i64()
+                .is_some_and(|number| i32::try_from(number).is_ok())
+            {
+                value
+                    .as_i64()
+                    .is_some_and(|number| i32::try_from(number).is_ok())
+            } else if current.is_i64() {
+                value.as_i64().is_some()
+            } else {
+                value.as_u64().is_some()
+            }
+        }
+        // A JSON object or array does not describe its target .NET schema.
+        // A changed composite therefore stays at the installed plugin's value.
+        _ => false,
+    }
 }
 
 pub fn compose(paths: &Paths, arguments: &[&str]) -> anyhow::Result<()> {
@@ -464,17 +494,6 @@ mod tests {
         );
         assert_eq!(written["PanelOpacity"], serde_json::json!(0.55));
         assert!(written.get("RemovedSetting").is_none());
-
-        // A previous configuration that is not an object is ignored, and an
-        // installed plugin that reports none leaves only the managed settings.
-        let written = written_json(Some(&serde_json::json!("corrupt")), &installed_defaults());
-        assert_eq!(
-            written["HideNativeSyncPlayButton"],
-            serde_json::json!(false)
-        );
-        let written = written_json(Some(&previous), &serde_json::Value::Null);
-        assert_eq!(written["JwtSecret"], serde_json::json!("new-secret"));
-        assert!(written.get("HideNativeSyncPlayButton").is_none());
     }
 
     #[test]
@@ -524,7 +543,118 @@ mod tests {
         let debug = format!("{:?}", configuration("super-secret-value"));
         assert!(!debug.contains("super-secret-value"));
         assert!(debug.contains("<redacted>"));
-        assert!(debug.contains("OpenWatchParty"));
+        assert!(debug.contains("JwtAudience"));
+        assert!(!debug.contains("OpenWatchParty"));
+    }
+
+    #[test]
+    fn malformed_configuration_roots_never_reach_the_writer() {
+        let config =
+            DesiredConfig::local(url::Url::parse("http://localhost:8096").unwrap()).unwrap();
+        for malformed in [
+            serde_json::Value::Null,
+            serde_json::json!([]),
+            serde_json::json!("corrupt"),
+            serde_json::json!(7),
+        ] {
+            for (previous, installed) in [
+                (Some(installed_defaults()), malformed.clone()),
+                (Some(malformed.clone()), installed_defaults()),
+                (None, malformed.clone()),
+            ] {
+                let mut posted = false;
+                let result = write_installed_plugin_configuration(
+                    &config,
+                    "new-secret",
+                    previous.as_ref(),
+                    || Ok(installed),
+                    |_| {
+                        posted = true;
+                        Ok(())
+                    },
+                );
+                assert!(result.is_err());
+                assert!(!posted);
+            }
+        }
+    }
+
+    #[test]
+    fn numeric_narrowing_keeps_the_installed_value() {
+        let installed = serde_json::json!({"Scale": 1});
+        for value in [
+            serde_json::json!(0.55),
+            serde_json::json!(1.0),
+            serde_json::json!(2147483648_i64),
+            serde_json::json!(-2147483649_i64),
+            serde_json::json!(u64::MAX),
+        ] {
+            let previous = serde_json::json!({"Scale": value});
+            assert_eq!(
+                written_json(Some(&previous), &installed)["Scale"],
+                serde_json::json!(1)
+            );
+        }
+        for value in [
+            serde_json::json!(2),
+            serde_json::json!(i32::MIN),
+            serde_json::json!(i32::MAX),
+        ] {
+            let previous = serde_json::json!({"Scale": value});
+            assert_eq!(written_json(Some(&previous), &installed)["Scale"], value);
+        }
+        let installed = serde_json::json!({"Scale": 0.55});
+        let previous = serde_json::json!({"Scale": 0.75});
+        assert_eq!(
+            written_json(Some(&previous), &installed)["Scale"],
+            serde_json::json!(0.75)
+        );
+    }
+
+    #[test]
+    fn changed_composites_are_not_assumed_to_have_the_same_schema() {
+        for (current, previous) in [
+            (serde_json::json!([1]), serde_json::json!(["old"])),
+            (serde_json::json!([]), serde_json::json!(["unknown schema"])),
+            (
+                serde_json::json!({"Size": 1}),
+                serde_json::json!({"Size": "old"}),
+            ),
+            (
+                serde_json::json!({"Size": 1}),
+                serde_json::json!({"Removed": 1}),
+            ),
+            (
+                serde_json::Value::Null,
+                serde_json::json!({"unknown": true}),
+            ),
+        ] {
+            let installed = serde_json::json!({"FutureSetting": current});
+            let previous = serde_json::json!({"FutureSetting": previous});
+            assert_eq!(
+                written_json(Some(&previous), &installed)["FutureSetting"],
+                current
+            );
+        }
+    }
+
+    #[test]
+    fn debug_redacts_future_scalar_and_nested_secrets() {
+        let installed = serde_json::json!({
+            "FutureApiKey": "private-api-key", "FutureSettings": {"Password": "private-password"},
+            "FutureTokens": ["private-token"], "PrivateNumericCode": 123456789
+        });
+        let debug = format!("{:?}", written("private-jwt", None, &installed));
+        for secret in [
+            "private-api-key",
+            "private-password",
+            "private-token",
+            "123456789",
+            "private-jwt",
+        ] {
+            assert!(!debug.contains(secret));
+        }
+        assert!(debug.contains("FutureApiKey"));
     }
 
     #[test]

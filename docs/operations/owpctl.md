@@ -101,6 +101,13 @@ owpctl configure --rotate-jwt-secret --yes --api-token-file /run/owp-jellyfin-to
 owpctl uninstall --yes --keep-config
 ```
 
+`install`, `upgrade` and `configure` retain plugin settings that owpctl does not
+manage. Upgrade compatibility is conservative: fractions cannot replace an
+integer setting, and changed arrays or objects retain the installed plugin's
+value because its JSON does not expose the .NET schema. An invalid configuration
+root aborts without posting a replacement. Configuration debug output redacts
+all values, including unknown future secrets.
+
 ## Asymmetric Pairing
 
 New installations start in hybrid mode so existing HS256 sessions are not interrupted. Pairing registers only the plugin public RSA key in the session-server trust store, activates RS256 issuance, then restarts the managed server in asymmetric mode without injecting the shared secret.
