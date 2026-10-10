@@ -253,11 +253,17 @@ pub fn send_leave_notification(notification: &LeaveNotification, context: &str) 
     }
 }
 
-pub async fn handle_disconnect(client_id: &str, state: &SharedState, tasks: &AppTasks) {
-    info!("Disconnecting client {client_id}");
-    let reconnect_grace = {
+/// Removes a client and leaves its room. Returns whether the client was
+/// still registered.
+pub async fn handle_disconnect(client_id: &str, state: &SharedState, tasks: &AppTasks) -> bool {
+    let (reconnect_grace, removed) = {
         let mut state = state.write().await;
         let crate::types::ServerState { clients, rooms } = &mut *state;
+        let room_id = clients.get(client_id).and_then(|c| c.room_id.clone());
+        info!(
+            "Disconnecting client client_id={client_id} room_id={}",
+            room_id.as_deref().unwrap_or("-")
+        );
         let reconnect_grace = begin_host_reconnect_grace(client_id, clients, rooms);
         if let Some((room_id, _, notification)) = &reconnect_grace {
             info!("Holding host role in room {room_id} for reconnect grace");
@@ -265,13 +271,17 @@ pub async fn handle_disconnect(client_id: &str, state: &SharedState, tasks: &App
         } else if let Some(notification) = handle_leave(client_id, clients, rooms) {
             send_leave_notification(&notification, "leave notification");
         }
-        clients.remove(client_id);
-        reconnect_grace.map(|(room_id, generation, _)| (room_id, generation))
+        let removed = clients.remove(client_id).is_some();
+        (
+            reconnect_grace.map(|(room_id, generation, _)| (room_id, generation)),
+            removed,
+        )
     };
     if let Some((room_id, generation)) = reconnect_grace {
         schedule_host_reconnect_expiry(room_id, generation, state.clone(), tasks);
     }
     broadcast_room_list(state).await;
+    removed
 }
 
 #[cfg(test)]
