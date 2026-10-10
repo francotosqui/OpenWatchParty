@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { describe, it, beforeEach } = require('node:test');
+const { describe, it, beforeEach, afterEach } = require('node:test');
 const { FakeDocument } = require('./fake-dom');
 const OWP = require('./setup');
 
@@ -117,5 +117,37 @@ describe('localized rendering', () => {
     const barName = panel.querySelector('.owp-room-name');
     assert.equal(barName.textContent, 'Sala de Ana');
     assert.equal(barName.title, 'Sala de Ana');
+  });
+});
+
+describe('localized pending-sync countdown', () => {
+  let originalNow;
+  beforeEach(() => {
+    originalNow = Date.now;
+    Date.now = () => 10000;
+    const dom = new FakeDocument();
+    dom.documentElement = { lang: 'en' };
+    globalThis.document = dom;
+    require('../ui/indicators.js');
+    Object.assign(OWP.state, { isHost: false, syncStatus: 'pending_play', pendingPlayUntil: 11500, serverOffsetMs: 0 });
+  });
+  afterEach(() => { Date.now = originalNow; });
+
+  it('uses a comma in Spanish, French and German, and a dot in English', () => {
+    for (const language of ['es-AR', 'fr', 'de', 'en']) {
+      document.documentElement.lang = language;
+      const expected = language === 'en' ? '1.5' : '1,5';
+      const indicator = OWP.ui.buildSyncStatusIndicator();
+      assert.equal(indicator.title, t('waitingSync', { seconds: expected }));
+      assert.equal(indicator.getAttribute('aria-label'), indicator.title);
+    }
+  });
+
+  it('clamps expired countdowns to a localized zero and uses the server offset', () => {
+    document.documentElement.lang = 'es';
+    OWP.state.serverOffsetMs = 500;
+    assert.equal(OWP.ui.buildSyncStatusIndicator().title, t('waitingSync', { seconds: '1,0' }));
+    OWP.state.pendingPlayUntil = 9000;
+    assert.equal(OWP.ui.buildSyncStatusIndicator().title, t('waitingSync', { seconds: '0,0' }));
   });
 });

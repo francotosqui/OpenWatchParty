@@ -2,11 +2,43 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { it } = require('node:test');
+const { findUnlocalizedLiterals } = require('./localization-check');
 
 const clientRoot = path.join(__dirname, '..');
-const exceptions = new Set([
-  "ui/home.js:icon.textContent = 'groups';"
-]);
+
+it('detects short labels, multiline calls and local DOM wrappers', () => {
+  const fixtures = [
+    "createElement('button', 'join', 'Join');",
+    "document.createTextNode('Online');",
+    "button.setAttribute(\n 'title',\n 'Close panel'\n);",
+    "button['placeholder'] = 'Search';",
+    "button.textContent = `Join ${name}`;",
+    "button.textContent = ready ? 'Online' : t('offline');",
+    "const label = 'Join'; button.textContent = label;",
+    "function label(el, text) { el.textContent = text; } label(button, 'Join');",
+    "const label = text => document.createTextNode(text); const alias = label; alias('Online');",
+    "function label(text) { return createElement('span', '', text); } label('Join');",
+    "button.append('Join');"
+  ];
+  for (const source of fixtures) assert.equal(findUnlocalizedLiterals(source).length, 1, source);
+});
+
+it('allows translations and internal values without hiding ordinary labels', () => {
+  const source = `
+    button.textContent = t('join');
+    button.setAttribute('title', OWP.i18n.t('closePanel'));
+    document.createElement('button');
+    button.setAttribute('class', 'Online');
+    console.log('Join');
+    button.textContent = user.name;
+    button.textContent = 'OpenWatchParty';
+  `;
+  assert.deepEqual(findUnlocalizedLiterals(source), []);
+  assert.equal(findUnlocalizedLiterals("button.textContent = 'groups';", 'ui/home.js').length, 1);
+  assert.deepEqual(findUnlocalizedLiterals("icon.textContent = 'groups';", 'ui/home.js'), []);
+  assert.equal(findUnlocalizedLiterals('button.textContent = `Close panel`;', 'ui/styles.js').length, 1);
+  assert.equal(findUnlocalizedLiterals('button.textContent = ;').length, 1, 'parse failures must fail the guard');
+});
 
 const sourceFiles = directory => fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
   const absolute = path.join(directory, entry.name);
@@ -17,20 +49,10 @@ const sourceFiles = directory => fs.readdirSync(directory, { withFileTypes: true
 });
 
 it('keeps user-facing English literals in the localization catalog', () => {
-  const literalPatterns = [
-    /(?:textContent|title|placeholder|ariaLabel)\s*=\s*(['"])[^'"\n]*[A-Za-z][^'"\n]*\1/,
-    /setAttribute\(\s*(['"])aria-label\1\s*,\s*(['"])[^'"\n]*[A-Za-z][^'"\n]*\2/,
-    /(?:showToast|window\.confirm)\(\s*(['"])[^'"\n]*[A-Za-z][^'"\n]*\1/
-  ];
   const violations = [];
   for (const file of sourceFiles(clientRoot)) {
     const relative = path.relative(clientRoot, file).replaceAll('\\', '/');
-    fs.readFileSync(file, 'utf8').split(/\r?\n/).forEach((line, index) => {
-      const trimmed = line.trim();
-      if (!literalPatterns.some(pattern => pattern.test(trimmed))) return;
-      if (exceptions.has(`${relative}:${trimmed}`)) return;
-      violations.push(`${relative}:${index + 1}: ${trimmed}`);
-    });
+    violations.push(...findUnlocalizedLiterals(fs.readFileSync(file, 'utf8'), relative));
   }
   assert.deepEqual(violations, [], `Uncatalogued user-facing literals:\n${violations.join('\n')}`);
 });

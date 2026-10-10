@@ -21,7 +21,7 @@
     if (status === 'blocked') return { marker: 'syncing', label: t('playbackBlockedLabel') };
     if (status === 'pending_play') {
       const remaining = Math.max(0, (state.pendingPlayUntil - (Date.now() + (state.serverOffsetMs || 0))) / 1000);
-      return { marker: 'spinner', label: t('waitingSync', { seconds: remaining.toFixed(1) }) };
+      return { marker: 'spinner', label: t('waitingSync', { seconds: OWP.i18n.formatNumber(remaining, 1, 1) }) };
     }
     if (status === 'syncing') return { marker: 'syncing', label: t('outOfSync') };
     return { marker: 'synced', label: t('inSync') };

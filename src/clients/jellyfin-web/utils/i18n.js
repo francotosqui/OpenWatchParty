@@ -231,5 +231,13 @@
     return key ? t(key) : (reason || t('roomClosed'));
   };
 
-  OWP.i18n = { t, locale, catalogs, localizeRoomName, localizeServerError, localizeRoomClosedReason };
+  const formatNumber = (value, min, max) => {
+    try {
+      return new Intl.NumberFormat(locale(), { minimumFractionDigits: min, maximumFractionDigits: max }).format(value);
+    } catch (err) {
+      return value.toFixed(max);
+    }
+  };
+
+  OWP.i18n = { t, locale, formatNumber, catalogs, localizeRoomName, localizeServerError, localizeRoomClosedReason };
 })();

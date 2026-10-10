@@ -306,13 +306,7 @@
   const offersSyncNudge = () => state.showSyncNudge && !state.isHost;
 
   // Seconds and rates with the language's decimal separator.
-  const formatNumber = (value, min, max) => {
-    try {
-      return new Intl.NumberFormat(OWP.i18n.locale(), { minimumFractionDigits: min, maximumFractionDigits: max }).format(value);
-    } catch (err) {
-      return value.toFixed(max);
-    }
-  };
+  const formatNumber = OWP.i18n.formatNumber;
 
   const NUDGE_STATUS = {
     behind: { marker: 'syncing', text: abs => t('nudgeBehind', { seconds: formatNumber(abs, 1, 1) }) },
