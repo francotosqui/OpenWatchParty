@@ -32,6 +32,30 @@ pub fn participant_list_message(room: &Room, clients: &HashMap<String, Client>) 
     }
 }
 
+/// Builds the `participant_statuses` message: each member's last reported
+/// status, or null, in the same order as `participant_list`. It is sent right
+/// after every `participant_list` and whenever a status changes. Clients that
+/// do not know it ignore it, as `participant_list` rejects unknown fields.
+pub fn participant_statuses_message(room: &Room) -> WsMessage {
+    let statuses: Vec<serde_json::Value> = room
+        .clients
+        .iter()
+        .map(|client_id| {
+            room.statuses
+                .get(client_id)
+                .map_or(serde_json::Value::Null, |status| serde_json::json!(status))
+        })
+        .collect();
+    WsMessage {
+        msg_type: "participant_statuses".to_string(),
+        room: Some(room.room_id.clone()),
+        client: None,
+        payload: Some(serde_json::json!({ "statuses": statuses })),
+        ts: now_ms(),
+        server_ts: Some(now_ms()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -75,6 +99,23 @@ mod tests {
         assert_eq!(
             message.payload.unwrap()["participants"],
             serde_json::json!([{ "name": "Franco", "is_host": true }])
+        );
+    }
+
+    #[test]
+    fn statuses_follow_the_list_order_with_null_when_unknown() {
+        let mut room = test_helpers::create_room("room", "host");
+        room.clients = vec!["host".to_string(), "ana".to_string(), "bruno".to_string()];
+        room.statuses.insert("bruno".to_string(), "buffering");
+        room.statuses.insert("host".to_string(), "playing");
+
+        let message = participant_statuses_message(&room);
+
+        assert_eq!(message.msg_type, "participant_statuses");
+        assert_eq!(message.room.as_deref(), Some("room"));
+        assert_eq!(
+            message.payload.unwrap()["statuses"],
+            serde_json::json!(["playing", null, "buffering"])
         );
     }
 }

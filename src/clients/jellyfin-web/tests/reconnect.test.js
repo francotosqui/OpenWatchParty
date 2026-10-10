@@ -41,7 +41,7 @@ class FakeWebSocket {
 
   serverClose() {
     this.readyState = FakeWebSocket.CLOSED;
-    this.onclose({ code: 1006, reason: 'network lost' });
+    this.onclose({ code: 1006, reason: 'network lost', wasClean: false });
   }
 
   close(code = 1000, reason = '') {
@@ -69,6 +69,7 @@ require('../ws/send.js');
 require('../ws/validation.js');
 require('../ws/handlers/room.js');
 require('../ws/handlers/sync.js');
+require('../utils/log.js');
 require('../ws/connection.js');
 require('../app/cleanup.js');
 
@@ -112,7 +113,8 @@ describe('room reconnection lifecycle', () => {
       roomRejoinTimer: null,
       currentVideoElement: null,
       successfulPings: 0,
-      timeSyncSamples: []
+      timeSyncSamples: [],
+      logBuffer: []
     });
   });
 
@@ -171,12 +173,30 @@ describe('room reconnection lifecycle', () => {
       payload: { participants: [{ name: 'Host', is_host: true }, { name: 'Guest', is_host: false }] }
     });
     assert.deepEqual(OWP.state.participants, [
-      { name: 'Host', isHost: true },
-      { name: 'Guest', isHost: false }
+      { name: 'Host', isHost: true, status: null },
+      { name: 'Guest', isHost: false, status: null }
     ]);
   });
 
-  it('does not attempt to recreate a host room after disconnect', async () => {
+  it('reports the previous WebSocket close after reconnecting', async () => {
+    await OWP.actions.connect();
+    const first = sockets[0];
+    first.open();
+    first.serverClose();
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    const second = sockets[1];
+    second.open();
+
+    assert.equal(second.sent[0].type, 'auth');
+    const closeLog = second.sent.find(message => message.type === 'client_log');
+    assert.equal(closeLog.payload.category, 'WS_CLOSE');
+    assert.match(closeLog.payload.message, /code=1006/);
+    assert.match(closeLog.payload.message, /clean=false/);
+    assert.match(closeLog.payload.message, /reason=network lost/);
+  });
+
+  it('does not try to rejoin a host room after disconnecting from a server without host transfer', async () => {
     await OWP.actions.connect();
     const socket = sockets[0];
     socket.open();
@@ -189,6 +209,30 @@ describe('room reconnection lifecycle', () => {
     assert.equal(OWP.state.desiredRoomId, '');
     assert.equal(OWP.state.rejoinPending, false);
     await new Promise(resolve => setTimeout(resolve, 10));
+  });
+
+  it('rejoins a transferred host room as a normal member after disconnect', async () => {
+    await OWP.actions.connect();
+    const socket = sockets[0];
+    socket.open();
+    socket.receive({ type: 'auth_success', payload: { user_name: 'Host', features: ['host_transfer'] } });
+    Object.assign(OWP.state, { inRoom: true, roomId: 'host-room', isHost: true });
+
+    socket.serverClose();
+
+    assert.equal(OWP.state.inRoom, false);
+    assert.equal(OWP.state.roomId, '');
+    assert.equal(OWP.state.desiredRoomId, 'host-room');
+    assert.equal(OWP.state.rejoinPending, true);
+    assert.equal(OWP.state.isHost, false);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    const replacement = sockets[1];
+    replacement.open();
+    replacement.receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
+    assert.equal(
+      replacement.sent.some(message => message.type === 'join_room' && message.room === 'host-room'),
+      true
+    );
   });
 
   it('clears a pending rejoin when the server rejects it', async () => {

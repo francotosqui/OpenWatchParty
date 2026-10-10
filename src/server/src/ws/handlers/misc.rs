@@ -2,7 +2,7 @@ use super::super::constants::PLAY_SCHEDULE_MS;
 use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
 use super::super::pending_play::{all_ready, prepare_scheduled_play};
 use crate::messaging::{broadcast_room_list, send_to_client, send_to_senders};
-use crate::room::{handle_leave, send_leave_notification};
+use crate::room::{close_room_parts, handle_leave, send_leave_notification};
 use crate::types::{IncomingMessage, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::{info, warn};
@@ -80,7 +80,7 @@ fn format_client_log(client_id: &str, entry: &ClientLogEntry) -> String {
 }
 
 pub(in crate::ws) async fn handle_unknown(client_id: &str, state: &SharedState) {
-    warn!("Unknown message type from client {client_id}");
+    warn!("Unknown message type client_id={client_id}");
     send_error(
         client_id,
         state,
@@ -172,10 +172,14 @@ pub(in crate::ws) async fn handle_ready(
 }
 
 pub(in crate::ws) async fn handle_leave_room(client_id: &str, state: &SharedState) {
-    info!("Client {client_id} leaving room");
     let left = {
         let mut state = state.write().await;
         let crate::types::ServerState { clients, rooms } = &mut *state;
+        let room_id = clients.get(client_id).and_then(|c| c.room_id.clone());
+        info!(
+            "Client leaving room client_id={client_id} room_id={}",
+            room_id.as_deref().unwrap_or("-")
+        );
         if let Some(notification) = handle_leave(client_id, clients, rooms) {
             send_leave_notification(&notification, "leave notification");
             true
@@ -194,6 +198,50 @@ pub(in crate::ws) async fn handle_leave_room(client_id: &str, state: &SharedStat
         return;
     }
     broadcast_room_list(state).await;
+}
+
+pub(in crate::ws) async fn handle_close_room(client_id: &str, state: &SharedState) {
+    enum CloseOutcome {
+        Closed,
+        Error(ErrorCode, &'static str),
+    }
+
+    let outcome = {
+        let mut state = state.write().await;
+        let room_id = state
+            .clients
+            .get(client_id)
+            .and_then(|client| client.room_id.clone());
+        match room_id {
+            None => CloseOutcome::Error(ErrorCode::NotInRoom, "Client is not in a room"),
+            Some(room_id) => match state.rooms.get(&room_id) {
+                None => CloseOutcome::Error(ErrorCode::NotInRoom, "Client is not in a room"),
+                Some(room) if room.host_id != client_id => CloseOutcome::Error(
+                    ErrorCode::HostPermissionRequired,
+                    "Only the room host can close the room",
+                ),
+                Some(_) => {
+                    let crate::types::ServerState { clients, rooms } = &mut *state;
+                    let senders = close_room_parts(&room_id, clients, rooms).unwrap_or_default();
+                    let message = WsMessage {
+                        msg_type: "room_closed".to_string(),
+                        room: Some(room_id),
+                        client: None,
+                        payload: Some(serde_json::json!({ "reason": "Host closed the room" })),
+                        ts: now_ms(),
+                        server_ts: Some(now_ms()),
+                    };
+                    send_to_senders(&senders, &message, "room closed");
+                    CloseOutcome::Closed
+                }
+            },
+        }
+    };
+
+    match outcome {
+        CloseOutcome::Closed => broadcast_room_list(state).await,
+        CloseOutcome::Error(code, message) => send_error(client_id, state, code, message).await,
+    }
 }
 
 #[cfg(test)]
@@ -362,6 +410,50 @@ mod tests {
         handle_leave_room("guest", &state).await;
 
         assert_error_code(test_helpers::recv_msg(&mut rx).unwrap(), "NOT_IN_ROOM");
+    }
+
+    #[tokio::test]
+    async fn host_can_close_room_but_guest_and_outsider_cannot() {
+        let state = test_helpers::create_state();
+        let (mut host, mut host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (mut guest, mut guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        let (outsider, mut outsider_rx) =
+            test_helpers::create_client_with_rx("outsider", "Outsider", true);
+        host.room_id = Some("room".to_string());
+        guest.room_id = Some("room".to_string());
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("guest".to_string(), guest);
+            locked.clients.insert("outsider".to_string(), outsider);
+            let mut room = test_helpers::create_room("room", "host");
+            room.clients.push("guest".to_string());
+            locked.rooms.insert("room".to_string(), room);
+        }
+
+        handle_close_room("guest", &state).await;
+        assert_error_code(
+            test_helpers::recv_msg(&mut guest_rx).unwrap(),
+            "HOST_PERMISSION_REQUIRED",
+        );
+        assert!(state.read().await.rooms.contains_key("room"));
+
+        handle_close_room("outsider", &state).await;
+        assert_error_code(
+            test_helpers::recv_msg(&mut outsider_rx).unwrap(),
+            "NOT_IN_ROOM",
+        );
+        assert!(state.read().await.rooms.contains_key("room"));
+
+        handle_close_room("host", &state).await;
+        assert!(!state.read().await.rooms.contains_key("room"));
+        for message in [
+            test_helpers::recv_msg(&mut host_rx).unwrap(),
+            test_helpers::recv_msg(&mut guest_rx).unwrap(),
+        ] {
+            assert_eq!(message.msg_type, "room_closed");
+            assert_eq!(message.payload.unwrap()["reason"], "Host closed the room");
+        }
     }
 
     #[tokio::test]

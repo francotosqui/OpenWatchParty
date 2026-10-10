@@ -1,10 +1,12 @@
 use super::constants::MAX_MESSAGE_SIZE;
 use super::handlers::{
-    handle_auth, handle_chat_message, handle_client_log, handle_create_room, handle_join_room,
-    handle_leave_room, handle_ping, handle_playback, handle_ready, handle_unknown,
+    handle_auth, handle_chat_message, handle_client_log, handle_close_room, handle_create_room,
+    handle_join_room, handle_leave_room, handle_participant_status, handle_ping, handle_playback,
+    handle_ready, handle_unknown,
 };
 use crate::auth::JwtConfig;
 use crate::messaging::{send_room_list, send_to_client};
+use crate::metrics::{metrics, CloseReason, InvalidMessage, RateLimitScope};
 use crate::types::{ClientMessageType, IncomingMessage, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::{debug, warn};
@@ -165,7 +167,9 @@ pub(super) async fn client_msg(
     tasks: &crate::tasks::AppTasks,
 ) -> bool {
     if check_rate_limit(client_id, state).await {
-        warn!("Rate limited client: {client_id}");
+        warn!("Rate limited client_id={client_id}");
+        metrics().rate_limited(RateLimitScope::Messages);
+        metrics().connection_closed(CloseReason::RateLimited);
         send_error(
             client_id,
             state,
@@ -187,10 +191,11 @@ pub(super) async fn client_msg(
 
     if msg.as_bytes().len() > MAX_MESSAGE_SIZE {
         warn!(
-            "Message too large from client {}: {} bytes",
+            "Message too large client_id={} bytes={}",
             client_id,
             msg.as_bytes().len()
         );
+        metrics().invalid_message(InvalidMessage::TooLarge);
         send_error(
             client_id,
             state,
@@ -202,12 +207,14 @@ pub(super) async fn client_msg(
     }
 
     if msg.is_close() {
-        debug!("Client {client_id} requested WebSocket close");
+        debug!("Client requested WebSocket close client_id={client_id}");
+        metrics().connection_closed(CloseReason::ClientClosed);
         return true;
     }
 
     if !msg.is_text() {
-        warn!("Unsupported WebSocket message format from client {client_id}");
+        warn!("Unsupported WebSocket message format client_id={client_id}");
+        metrics().invalid_message(InvalidMessage::UnsupportedFormat);
         send_error(
             client_id,
             state,
@@ -222,7 +229,11 @@ pub(super) async fn client_msg(
     let parsed: IncomingMessage = match serde_json::from_str(msg_str) {
         Ok(v) => v,
         Err(e) => {
-            warn!("JSON parse error from {client_id}: {e}");
+            warn!(
+                "JSON parse error client_id={client_id} error={:?}",
+                e.to_string()
+            );
+            metrics().invalid_message(InvalidMessage::InvalidJson);
             send_error(
                 client_id,
                 state,
@@ -234,10 +245,14 @@ pub(super) async fn client_msg(
         }
     };
 
-    debug!("Message from {}: {:?}", client_id, parsed.msg_type);
+    debug!(
+        "Message received client_id={client_id} type={}",
+        parsed.msg_type.as_str()
+    );
+    metrics().message_received(parsed.msg_type.as_str());
 
     if parsed.msg_type != ClientMessageType::Auth && has_expired_session(client_id, state).await {
-        warn!("Authenticated session expired for client {client_id}");
+        warn!("Authenticated session expired client_id={client_id}");
         send_error(
             client_id,
             state,
@@ -246,6 +261,7 @@ pub(super) async fn client_msg(
         )
         .await;
         close_with_policy(client_id, state, "Authentication expired").await;
+        metrics().connection_closed(CloseReason::AuthenticationExpired);
         return true;
     }
 
@@ -258,12 +274,16 @@ pub(super) async fn client_msg(
         }
         ClientMessageType::Ready => handle_ready(client_id, &parsed, state).await,
         ClientMessageType::LeaveRoom => handle_leave_room(client_id, state).await,
+        ClientMessageType::CloseRoom => handle_close_room(client_id, state).await,
         ClientMessageType::PlayerEvent | ClientMessageType::StateUpdate => {
             handle_playback(client_id, parsed, state, tasks).await
         }
         ClientMessageType::Ping => handle_ping(client_id, &parsed, state).await,
         ClientMessageType::ClientLog => handle_client_log(client_id, &parsed),
         ClientMessageType::ChatMessage => handle_chat_message(client_id, &parsed, state).await,
+        ClientMessageType::ParticipantStatus => {
+            handle_participant_status(client_id, &parsed, state).await
+        }
         ClientMessageType::Unknown => handle_unknown(client_id, state).await,
     }
     false
@@ -351,6 +371,12 @@ mod tests {
         for (code, expected) in cases {
             assert_eq!(serde_json::to_value(code).unwrap(), expected);
         }
+        // Every code has its own series in /metrics, plus `other`.
+        let listed: Vec<&str> = cases.iter().map(|(_, name)| *name).collect();
+        assert_eq!(
+            &crate::metrics::ERROR_CODES[..crate::metrics::ERROR_CODES.len() - 1],
+            &listed[..]
+        );
     }
 
     #[tokio::test]
@@ -485,6 +511,8 @@ mod tests {
     async fn rate_limit_violation_is_terminal() {
         use super::super::constants::RATE_LIMIT_MESSAGES;
 
+        let limited = metrics().limited(RateLimitScope::Messages);
+        let closed = metrics().closed(CloseReason::RateLimited);
         let state = test_helpers::create_state();
         let (mut client, mut rx) = test_helpers::create_client_with_rx("u1", "User", true);
         client.message_count = RATE_LIMIT_MESSAGES;
@@ -501,6 +529,8 @@ mod tests {
         .await;
 
         assert!(terminal);
+        assert_eq!(metrics().limited(RateLimitScope::Messages), limited + 1);
+        assert_eq!(metrics().closed(CloseReason::RateLimited), closed + 1);
         assert_error_code(&test_helpers::recv_msg(&mut rx).unwrap(), "RATE_LIMITED");
         let close = rx.recv().await.unwrap().unwrap();
         assert!(close.is_close());

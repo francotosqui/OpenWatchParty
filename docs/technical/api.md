@@ -63,6 +63,7 @@ Generates a JWT token for the authenticated user.
   "user_name": "John",
   "session_server_url": "wss://jellyfin.example.com/ws",
   "hide_native_syncplay_button": false,
+  "show_sync_nudge_button": false,
   "invite_ttl_seconds": 3600,
   "protocol_version": 1
 }
@@ -78,12 +79,15 @@ Generates a JWT token for the authenticated user.
   "user_name": "John",
   "session_server_url": "wss://jellyfin.example.com/ws",
   "hide_native_syncplay_button": false,
+  "show_sync_nudge_button": false,
   "invite_ttl_seconds": 3600,
   "protocol_version": 1
 }
 ```
 
 `hide_native_syncplay_button` is `true` when the administrator enabled **Hide Jellyfin's SyncPlay button**; the web client then hides the built-in SyncPlay button, and shows it again when a later response turns the setting off.
+
+`show_sync_nudge_button` is `true` when the administrator enabled **Show the sync adjustment button in rooms**; guests then get the sync adjustment in the room bar. Only an explicit `true` turns it on.
 
 `invite_ttl_seconds` is the configured **Invite TTL** (60-86400 seconds). The client sends it when asking the session server for a new invite link; the session server clamps it again.
 
@@ -274,12 +278,12 @@ The `SessionServerUrl` field determines how clients connect to the session serve
 
 **When to set explicitly:**
 - Session server runs on a different host
-- Using a reverse proxy that routes `/ws` to the session server
+- Using a [reverse proxy](../operations/deployment.md#reverse-proxy-configuration) that routes both `/ws` and `/invite` to the session server
 - Port 3000 is not accessible from clients
 
 ## Session Server API
 
-The session server exposes one additional HTTP endpoint beside `/health`.
+Besides `/health`, the session server exposes `/ready` and `/metrics` for operators (see the [Monitoring guide](../operations/monitoring.md)) and one endpoint for clients.
 
 ### POST /invite
 
