@@ -75,6 +75,7 @@
       pendingJoinRoomId: '',
       pendingMediaId: '',
       pendingMediaUntil: 0,
+      mediaSwitchUntil: 0,
       suppressUntil: 0,
       playbackBlocked: false,
       playbackFailureNotified: false,
