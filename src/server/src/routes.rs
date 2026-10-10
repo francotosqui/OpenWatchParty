@@ -1508,6 +1508,7 @@ mod tests {
             metrics().zombies(),
         );
         let state = crate::test_helpers::create_state();
+        let tasks = crate::tasks::AppTasks::new();
         let route = build_ws_route(
             state.clone(),
             test_jwt_config(false),
@@ -1523,9 +1524,9 @@ mod tests {
         client.recv().await.unwrap(); // client_hello
         let id = state.read().await.clients.keys().next().unwrap().clone();
 
-        crate::tasks::remove_zombie(&id, &state).await;
+        crate::tasks::remove_zombie(&id, &state, &tasks).await;
         // A second sweep that finds it gone does not count it again.
-        crate::tasks::remove_zombie(&id, &state).await;
+        crate::tasks::remove_zombie(&id, &state, &tasks).await;
         for _ in 0..20 {
             if metrics().closed(CloseReason::HeartbeatTimeout) > before.0 {
                 break;

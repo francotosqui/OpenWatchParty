@@ -157,8 +157,8 @@ pub fn spawn_heartbeat(state: SharedState, tasks: &AppTasks) -> JoinHandle<()> {
 
 /// Removes a session that missed the heartbeat. Its connection task then
 /// ends with the `heartbeat_timeout` close reason.
-pub(crate) async fn remove_zombie(id: &str, state: &SharedState) {
-    if crate::room::handle_disconnect(id, state).await {
+pub(crate) async fn remove_zombie(id: &str, state: &SharedState, tasks: &AppTasks) {
+    if crate::room::handle_disconnect(id, state, tasks).await {
         warn!("Removed zombie connection client_id={id}");
         crate::metrics::metrics().zombie_removed();
     }
@@ -166,6 +166,7 @@ pub(crate) async fn remove_zombie(id: &str, state: &SharedState) {
 
 pub fn spawn_zombie_cleanup(state: SharedState, tasks: &AppTasks) -> JoinHandle<()> {
     let cancellation = tasks.cancellation_token();
+    let app_tasks = tasks.clone();
     tasks.spawn(async move {
         loop {
             tokio::select! {
@@ -193,7 +194,7 @@ pub fn spawn_zombie_cleanup(state: SharedState, tasks: &AppTasks) -> JoinHandle<
                 if cancellation.is_cancelled() {
                     return;
                 }
-                remove_zombie(&id, &state).await;
+                remove_zombie(&id, &state, &app_tasks).await;
             }
         }
     })

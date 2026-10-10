@@ -262,7 +262,7 @@ pub async fn client_connection(
         }
     }
 
-    crate::room::handle_disconnect(&temp_id, &state).await;
+    crate::room::handle_disconnect(&temp_id, &state, &tasks).await;
     if tokio::time::timeout(
         Duration::from_millis(super::constants::WRITER_SHUTDOWN_TIMEOUT_MS),
         &mut writer_task.0,
