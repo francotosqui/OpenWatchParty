@@ -120,18 +120,19 @@
   const serverLabel = (value) => {
     try {
       const url = new URL(value);
+      if (!['ws:', 'wss:'].includes(url.protocol) || !url.hostname) return 'Unavailable';
       return `${url.host}${url.pathname.replace(/\/ws\/?$/, '').replace(/\/$/, '')}`;
     } catch (err) {
-      return value.replace(/^wss?:\/\//, '').replace(/\/ws$/, '');
+      return 'Unavailable';
     }
   };
 
-  // The session server the client connects to: the one the plugin sends with
-  // the token, or the default it falls back to. It arrives after the lobby is
-  // first drawn, so the label is refreshed on every update.
+  // Token refresh can change the configured URL without replacing the socket.
+  // While connected, show the active socket's target, not the next connection's.
   const updateServerLabel = () => {
     const label = document.getElementById(SERVER_LABEL_ID);
-    if (label) label.textContent = serverLabel(String(state.wsUrl || DEFAULT_WS_URL));
+    const target = state.ws?.readyState === 1 ? state.ws.url : state.wsUrl || DEFAULT_WS_URL;
+    if (label) label.textContent = serverLabel(String(target));
   };
 
   const HELP_ID = 'owp-help';
