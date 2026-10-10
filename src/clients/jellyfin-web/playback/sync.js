@@ -244,6 +244,7 @@
   const ownStatus = () => {
     const video = state.currentVideoElement || utils.getVideo();
     if (!video) return 'not_watching';
+    if (state.guestPaused) return 'paused';
     if (state.pendingMediaId || state.syncStatus === 'pending_play') return 'loading';
     if (state.isBuffering) return 'buffering';
     if (!utils.isVideoReady()) return 'loading';

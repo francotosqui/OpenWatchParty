@@ -75,6 +75,9 @@
     if (becameHost && OWP.actions?.resetDriftCorrection) {
       OWP.actions.resetDriftCorrection();
     }
+    if (becameHost && OWP.playback?.syncPromotedGuest) {
+      OWP.playback.syncPromotedGuest(state.currentVideoElement || OWP.utils.getVideo());
+    }
     ui.render();
     if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();
     ui.showToast(becameHost ? 'You are now the host' : `${msg.payload.host_name} is now the host`);
