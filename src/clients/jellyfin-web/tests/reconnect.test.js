@@ -128,6 +128,32 @@ describe('room reconnection lifecycle', () => {
     OWP.state.ws = null;
   });
 
+  it('disconnect preserves identity and preferences while clearing the connection and recovery intent', async () => {
+    await OWP.actions.connect();
+    const socket = sockets[0];
+    socket.open();
+    Object.assign(OWP.state, { tokenExpiresAt: 1234, followHost: false, showSyncNudge: true,
+      inRoom: true, roomId: 'room-a', desiredRoomId: 'room-a', rejoinPending: true });
+    OWP.actions.disconnect();
+    await new Promise(resolve => queueMicrotask(resolve));
+    assert.equal(socket.readyState, FakeWebSocket.CLOSED);
+    assert.equal(OWP.state.ws, null);
+    assert.equal(OWP.state.connectionPhase, 'disconnected');
+    assert.equal(OWP.state.clientId, '');
+    assert.equal(OWP.state.desiredRoomId, '');
+    assert.equal(OWP.state.rejoinPending, false);
+    assert.equal(OWP.state.inRoom, false);
+    assert.equal(OWP.state.authToken, 'jwt-token');
+    assert.equal(OWP.state.userId, 'user');
+    assert.equal(OWP.state.userName, 'Guest');
+    assert.equal(OWP.state.tokenExpiresAt, 1234);
+    assert.equal(OWP.state.followHost, false);
+    assert.equal(OWP.state.showSyncNudge, true);
+    assert.equal(OWP.state.intervals.ping, null);
+    assert.equal(OWP.state.reconnectTimer, null);
+    assert.equal(OWP.state.roomRejoinTimer, null);
+  });
+
   it('reauthenticates before rejoining a guest room', async () => {
     await OWP.actions.connect();
     const first = sockets[0];
