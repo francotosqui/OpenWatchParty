@@ -110,9 +110,9 @@
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
     SUPPRESS_MS: 2000,
-    SEEK_THRESHOLD: 1.0,          // Reduced from 2.5s - smaller seeks now broadcast (UX-P2)
+    SEEK_THRESHOLD: 1.0,          // Minimum position change for broadcasting a seek or correcting received playback
     OWN_COMMAND_HOLD_MS: 1500,    // A guest's own play or pause holds against room updates already on their way
-    STATE_UPDATE_MS: 1000,        // Reduced from 2000ms - more responsive state updates (UX-P1)
+    STATE_UPDATE_MS: 1000,        // Playback status cadence; the sender also throttles updates to this interval
     SYNC_LEAD_MS: 300,            // Compensates processing + initial HLS buffer
     DRIFT_DEADZONE_SEC: 0.04,
     DRIFT_SOFT_MAX_SEC: 2.0,      // Seek to correct if drift > 2s
@@ -236,11 +236,11 @@
     isInitialSync: false,  // True during initial catch-up after joining (disables HARD_SEEK)
     initialSyncUntil: 0,   // Timestamp when initial sync phase ends (max duration)
     initialSyncTargetPos: null, // Target position when joining; null means no pending target
-    syncStatus: 'synced',  // 'synced' | 'syncing' | 'pending_play' - for UX indicator (UX-P3)
+    syncStatus: 'synced',  // 'synced' | 'syncing' | 'pending_play' - displayed by the sync indicator
     currentDrift: 0,       // Current playback drift in seconds (positive = behind host)
     outOfSyncSince: 0,     // Since when this guest is out of sync, shown by the sync adjustment
     driftCheckedAt: 0,     // Last time trackDrift ran; a longer gap restarts the count
-    pendingPlayUntil: 0,   // Timestamp when pending play ends (for spinner) (UX-P3)
+    pendingPlayUntil: 0,   // Server-clock deadline for pending playback; sync correction waits until it passes
     // Authentication
     authToken: null,
     authEnabled: false,

@@ -78,10 +78,10 @@ public class OpenWatchPartyController : ControllerBase
     private static long _lastRateLimitCleanup = RateLimitClock.GetTimestamp();
     private static readonly TimeSpan RateLimitCleanupInterval = TimeSpan.FromMinutes(5);
 
-    // Cache for embedded script content using Lazy<T> for thread-safe initialization (fixes audit 4.5.1)
+    // Lazy initialization publishes one shared script/ETag pair safely across concurrent requests
     private static readonly Lazy<(string Content, string ETag)> _scriptCache = new(LoadScriptFromResource, LazyThreadSafetyMode.ExecutionAndPublication);
 
-    // P-CS02 fix: Cache JWT signing credentials and handler to avoid repeated allocations
+    // Reuse the token handler and HMAC credentials; rebuild credentials when the JWT secret changes
     private static readonly object SigningCredentialsLock = new();
     private static SigningCredentialCache? _signingCredentialCache;
     private static readonly JwtSecurityTokenHandler _tokenHandler = new();
@@ -281,8 +281,8 @@ public class OpenWatchPartyController : ControllerBase
     }
 
     /// <summary>
-    /// Cleans up expired entries from the rate limit dictionary (P-CS01 fix).
-    /// Called periodically to prevent memory leak from accumulating stale entries.
+    /// Removes expired per-user rate limit entries.
+    /// Cleanup is throttled to avoid scanning the entries on every token request.
     /// </summary>
     private static void CleanupExpiredRateLimits()
     {
@@ -312,7 +312,7 @@ public class OpenWatchPartyController : ControllerBase
     [Produces("application/json")]
     public ActionResult GetToken()
     {
-        // P-CS01 fix: Periodically clean up expired rate limit entries to prevent memory leak
+        // Prune inactive users periodically so the per-user limiter stays bounded over time
         CleanupExpiredRateLimits();
 
         return GetTokenForConfiguration(Plugin.Instance?.Configuration);
@@ -427,7 +427,7 @@ public class OpenWatchPartyController : ControllerBase
     }
 
     /// <summary>
-    /// Gets or creates cached signing credentials (P-CS02 fix).
+    /// Gets or creates HMAC signing credentials for the current JWT secret.
     /// Credentials are cached and reused until the JWT secret changes.
     /// </summary>
     private static SigningCredentials GetSigningCredentials(string jwtSecret)
@@ -498,7 +498,7 @@ public class OpenWatchPartyController : ControllerBase
         );
         if (kid != null) token.Header[JwtHeaderParameterNames.Kid] = kid;
 
-        // P-CS02 fix: Use cached token handler instead of creating new one each time
+        // Reuse the shared handler when serializing the token
         return _tokenHandler.WriteToken(token);
     }
 }
