@@ -10,6 +10,9 @@ nav_order: 4
 
 The OpenWatchParty client is a set of JavaScript modules (IIFE pattern) injected into Jellyfin's web interface. These modules handle playback synchronization between multiple users via WebSocket.
 
+See [Client State Lifecycle](client-state.md) for field ownership, domain
+factories, reset boundaries and cancellation rules.
+
 ## Module Architecture
 
 ```

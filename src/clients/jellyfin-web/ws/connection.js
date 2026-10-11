@@ -107,6 +107,10 @@
     ui.render();
   };
 
+  const resetConnectionSession = () => {
+    Object.assign(state, OWP.stateFactories.createConnectionSessionState());
+  };
+
   const onWsClose = (e, socket) => {
     if (socket !== state.ws) return;
     console.log('[OpenWatchParty] WebSocket closed:', e.code, e.reason);
@@ -118,12 +122,7 @@
         reason: String(e?.reason || '').slice(0, 120) || 'none'
       });
     }
-    state.isConnecting = false;
-    state.connectionPhase = 'disconnected';
-    state.successfulPings = 0;
-    state.timeSyncSamples = [];
-    state.lastRttMs = null;
-    state.clientId = '';
+    resetConnectionSession();
     clearRoomRejoinTimer();
     // An older server closes the room when its host disconnects, so there is
     // nothing to rejoin; a newer one passes the role on and the old host
@@ -319,12 +318,7 @@
     state.authRequestAttempt++;
     clearReconnectTimer();
     cancelRoomRejoin();
-    state.isConnecting = false;
-    state.connectionPhase = 'disconnected';
-    state.clientId = '';
-    state.successfulPings = 0;
-    state.timeSyncSamples = [];
-    state.lastRttMs = null;
+    resetConnectionSession();
     state.serverFeatures = [];
     if (actions.resetRoomState) actions.resetRoomState();
     if (state.intervals.ping) {

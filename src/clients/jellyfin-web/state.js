@@ -1,6 +1,6 @@
 (() => {
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
-  if (OWP.state) return;
+  if (OWP.state && OWP.stateFactories && OWP.stateLifecycle) return;
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.hostname;
@@ -30,7 +30,7 @@
     return handle;
   };
 
-  OWP.timers = {
+  OWP.timers = OWP.timers || {
     setTimeout(callback, delay, scope = 'lifecycle', ...args) {
       return createDeferred('timeout', callback, delay, scope, args);
     },
@@ -92,7 +92,7 @@
     }
   }
 
-  OWP.constants = {
+  OWP.constants = OWP.constants || {
     PANEL_ID: 'owp-panel',
     BTN_ID: 'owp-osd-btn',
     HEADER_BTN_CLASS: 'owp-header-btn',
@@ -154,76 +154,43 @@
     TIME_SYNC_EMA_ALPHA: 0.4     // EMA smoothing coefficient
   };
 
-  OWP.state = {
-    ws: null,
+  // Factories are the sole defaults for each domain; resets never copy credentials
+  // or reset monotonic attempt counters from a whole-state snapshot.
+
+  const createRoomState = () => ({
     roomId: '',
-    clientId: '',
-    name: '',
     isHost: false,
-    followHost: true,
-    suppressUntil: 0,
-    rooms: [],
     inRoom: false,
-    bound: false,
-    autoReconnect: true,
-    isConnecting: false,
-    wsUrl: '',
-    reconnectAttempts: 0,        // For exponential backoff
-    reconnectTimer: null,
-    connectionAttempt: 0,
-    connectionPhase: 'disconnected', // disconnected | connecting | authenticating | authenticated
-    serverFeatures: [],
-    desiredRoomId: '',
-    rejoinPending: false,
-    rejectedRejoinRoomIds: [],
-    roomRejoinTimer: null,
-    initialized: false,
-    // Log buffering (for logs sent before WS connected)
-    logBuffer: [],
-    logBufferMax: 100,
-    successfulPings: 0,
-    serverOffsetMs: 0,
-    timeSyncSamples: [],         // Circular buffer of { rtt, offset, ts } for hybrid time sync
-    lastRttMs: null,             // Latest ping round trip, shown in the room bar; null until the first pong
-    lastSeekSentAt: 0,
-    lastStateSentAt: 0,
-    lastSentPosition: 0,
-    hasTimeSync: false,
-    pendingActionTimer: null,
-    playbackActionAttempt: 0,
-    playbackBlocked: false,
-    playbackFailureNotified: false,
-    homeRoomCache: new LRUCache(50),
-    lastParticipantCount: 0,
-    joiningItemId: '',
-    playbackRequestAttempt: 0,
-    autoJoinAttempt: 0,
-    cardPollAttempt: 0,
-    mediaSyncAttempt: 0,
-    mediaReadyCleanup: null,
-    pendingMediaId: '',
-    mediaSwitchUntil: 0,   // Until then, a closed player is OWP opening the room media
-    pendingMediaUntil: 0,
-    pendingJoinRoomId: '',  // Room to join after navigating to video player
     roomName: '',
     participantCount: 0,
     participants: [],      // [{ name, isHost, status }] from participant_list and participant_statuses
+    lastParticipantCount: 0,
     statusesRoomId: '',    // The room whose server sent participant_statuses: it accepts participant_status
     statusCandidate: '',   // This client's status, and since when, until it holds long enough to send
     statusCandidateSince: 0,
     statusSentKey: '',     // room|client|status last sent, so a status is sent once per room and connection
-    roomBarSection: '',    // Drop-down open under the room bar: 'people', 'chat', 'leave' or ''
-    lobbyHelpOpen: false,  // The help at the top of the lobby, opened with its "?" button
     lastSyncServerTs: 0,
     lastSyncPosition: 0,
     lastSyncPlayState: '',
     roomWaiting: false,
     roomHostId: '',
     sharedPlaybackControl: false,
+    readyRoomId: '',
+  });
+
+  const createRoomPlaybackState = () => ({
+    suppressUntil: 0,
+    pendingActionTimer: null,
+    playbackBlocked: false,
+    playbackFailureNotified: false,
+    joiningItemId: '',
+    pendingMediaId: '',
+    mediaSwitchUntil: 0,   // Until then, a closed player is OWP opening the room media
+    pendingMediaUntil: 0,
+    pendingJoinRoomId: '',  // Room to join after navigating to video player
     guestPaused: false,
     ownCommandUntil: 0,
     ownCommandPlayState: '',
-    readyRoomId: '',
     isBuffering: false,
     wantsToPlay: false,
     streamReloadUntil: 0,  // While the host's stream reloads in place (audio or subtitle track change)
@@ -241,7 +208,51 @@
     outOfSyncSince: 0,     // Since when this guest is out of sync, shown by the sync adjustment
     driftCheckedAt: 0,     // Last time trackDrift ran; a longer gap restarts the count
     pendingPlayUntil: 0,   // Server-clock deadline for pending playback; sync correction waits until it passes
-    // Authentication
+  });
+
+  const createConnectionSessionState = () => ({
+    clientId: '',
+    isConnecting: false,
+    connectionPhase: 'disconnected', // disconnected | connecting | authenticating | authenticated
+    successfulPings: 0,
+    timeSyncSamples: [],         // Circular buffer of { rtt, offset, ts } for hybrid time sync
+    lastRttMs: null,             // Latest ping round trip, shown in the room bar; null until the first pong
+  });
+
+  const createConnectionState = () => ({
+    ws: null,
+    ...createConnectionSessionState(),
+    autoReconnect: true,
+    wsUrl: '',
+    reconnectAttempts: 0,        // For exponential backoff
+    reconnectTimer: null,
+    connectionAttempt: 0,
+    serverFeatures: [],
+    desiredRoomId: '',
+    rejoinPending: false,
+    rejectedRejoinRoomIds: [],
+    roomRejoinTimer: null,
+    serverOffsetMs: 0,
+    hasTimeSync: false,
+  });
+
+  const createPlaybackState = () => ({
+    ...createRoomPlaybackState(),
+    bound: false,
+    lastSeekSentAt: 0,
+    lastStateSentAt: 0,
+    lastSentPosition: 0,
+    playbackActionAttempt: 0,
+    playbackRequestAttempt: 0,
+    autoJoinAttempt: 0,
+    cardPollAttempt: 0,
+    mediaSyncAttempt: 0,
+    mediaReadyCleanup: null,
+    videoListeners: null,
+    currentVideoElement: null,
+  });
+
+  const createAuthenticationState = () => ({
     authToken: null,
     authEnabled: false,
     authBlocked: false,
@@ -256,14 +267,21 @@
     userName: '',
     tokenExpiresAt: 0,           // Timestamp when token expires
     tokenRefreshTimer: null,     // Timer for token refresh
-    // Web client settings delivered with the token response
-    hideNativeSyncPlayButton: false,
-    showSyncNudge: false,       // The plugin offers guests the sync adjustment in the room bar
-    // Room invite links
-    inviteTtlSeconds: 3600,      // Lifetime requested for new invite tickets
-    pendingInviteTicket: '',     // Ticket parsed from the page URL, consumed after authentication
-    inviteJoinPending: false,    // True while joining a room through an invite link
-    // Interval tracking (P4 - memory leak prevention)
+  });
+
+  const createRoomUIState = () => ({
+    roomBarSection: '',    // Drop-down open under the room bar: 'people', 'chat', 'leave' or ''
+  });
+
+  const createUIState = () => ({
+    ...createRoomUIState(),
+    name: '',
+    rooms: [],
+    initialized: false,
+    logBuffer: [],
+    logBufferMax: 100,
+    homeRoomCache: new LRUCache(50),
+    lobbyHelpOpen: false,  // The help at the top of the lobby, opened with its "?" button
     intervals: {
       ui: null,
       ping: null,
@@ -271,8 +289,52 @@
       sync: null,
       stateUpdate: null
     },
-    // Video event listener cleanup
-    videoListeners: null,
-    currentVideoElement: null
+  });
+
+  const createInviteWorkState = () => ({
+    pendingInviteTicket: '',     // Ticket parsed from the page URL, consumed after authentication
+    inviteJoinPending: false,    // True while joining a room through an invite link
+  });
+
+  const createPreferencesState = () => ({
+    followHost: true,
+    hideNativeSyncPlayButton: false,
+    showSyncNudge: false,       // The plugin offers guests the sync adjustment in the room bar
+    inviteTtlSeconds: 3600,      // Lifetime requested for new invite tickets
+  });
+
+  const createState = () => ({
+    ...createConnectionState(),
+    ...createRoomState(),
+    ...createPlaybackState(),
+    ...createAuthenticationState(),
+    ...createUIState(),
+    ...createInviteWorkState(),
+    ...createPreferencesState()
+  });
+
+  OWP.stateFactories = {
+    createState, createRoomState, createRoomPlaybackState, createConnectionSessionState,
+    createRoomUIState, createInviteWorkState
+  };
+  // A loader retry can encounter state from an already loaded module. Install
+  // missing helpers without replacing the live state or its timer registry.
+  OWP.state = OWP.state || createState();
+  OWP.stateLifecycle = {
+    releaseVideoBinding() {
+      const state = OWP.state;
+      // Release callbacks before discarding their handles or replacing a video.
+      if (state.currentVideoElement && state.videoListeners) {
+        for (const [event, listener] of Object.entries(state.videoListeners)) {
+          if (listener) state.currentVideoElement.removeEventListener(event, listener);
+        }
+      }
+      OWP.timers.clearScope('video');
+      if (state.intervals.stateUpdate) OWP.timers.clear(state.intervals.stateUpdate);
+      state.intervals.stateUpdate = null;
+      state.videoListeners = null;
+      state.currentVideoElement = null;
+      state.bound = false;
+    }
   };
 })();
