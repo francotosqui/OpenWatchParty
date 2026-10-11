@@ -81,16 +81,19 @@ async function waitForPaused(page) {
     .toBe(true);
 }
 
-// Sync can settle before the 2-second UI tick binds the new video. Wait for
-// that video's listeners too, so the tested user action actually reaches OWP.
+// OWP ignores the player's own events while it moves the video itself, as in
+// the initial sync after joining: wait until a user's play or pause counts.
 async function waitForSettled(page) {
   await expect
     .poll(() => page.evaluate(() => {
       const owp = window.OpenWatchParty;
       const video = owp.utils.getVideo();
-      return Boolean(video && owp.state.bound && owp.state.currentVideoElement === video
+      return Boolean(video
+        && owp.state.bound
+        && owp.state.currentVideoElement === video
         && typeof owp.state.videoListeners?.pause === 'function'
-        && !owp.state.isInitialSync && owp.utils.shouldSend());
+        && !owp.state.isInitialSync
+        && owp.utils.shouldSend());
     }), { timeout: 30_000 })
     .toBe(true);
 }
@@ -102,7 +105,11 @@ async function isPlaying(page) {
 
 async function startPlayback(page, itemId) {
   await page.goto(`/#/details?id=${itemId}`);
-  const playButton = page.locator('.mainDetailButtons .btnPlay').first();
+  // Jellyfin retains hidden pages; wait for this item's active details controls.
+  const details = page.locator('.page:not(.hide)').filter({
+    has: page.locator(`.mainDetailButtons [data-id="${itemId}"]`),
+  });
+  const playButton = details.locator('.mainDetailButtons .btnPlay:not(.hide)').first();
   await playButton.waitFor({ state: 'visible' });
   await playButton.click();
   await waitForPlaying(page);
@@ -110,9 +117,11 @@ async function startPlayback(page, itemId) {
 
 async function togglePlayback(page) {
   await page.evaluate(() => {
-    const button = document.querySelector('.videoOsdBottom .btnPause, .videoOsdBottom .btnPlay')
-      || document.querySelector('.btnPause, .btnPlay');
-    if (button) button.click();
+    // A cached player's button must not receive the action intended for this video.
+    const button = [...document.querySelectorAll('.videoOsdBottom .btnPause:not(.hide), .videoOsdBottom .btnPlay:not(.hide)')]
+      .find(control => !control.closest('.page.hide'));
+    if (!button) throw new Error('The active player control is not available');
+    button.click();
   });
 }
 
