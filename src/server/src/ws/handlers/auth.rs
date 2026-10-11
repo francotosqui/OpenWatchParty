@@ -10,6 +10,19 @@ use std::sync::Arc;
 
 const HOST_TRANSFER_FEATURE: &str = "host_transfer";
 const PARTICIPANT_STATUS_FEATURE: &str = "participant_status";
+const SHARED_PLAYBACK_FEATURE: &str = "shared_playback_control";
+
+async fn refresh_room_capabilities(client_id: &str, state: &SharedState) {
+    let state = state.read().await;
+    if let Some(room) = state
+        .clients
+        .get(client_id)
+        .and_then(|client| client.room_id.as_ref())
+        .and_then(|id| state.rooms.get(id))
+    {
+        crate::room::send_room_capabilities(room, &state.clients);
+    }
+}
 
 /// Reads the protocol version declared in the auth payload.
 ///
@@ -41,6 +54,9 @@ fn declared_features(payload: Option<&serde_json::Value>) -> Option<Vec<String>>
     }
     if declared.contains(&PARTICIPANT_STATUS_FEATURE) {
         supported.push(PARTICIPANT_STATUS_FEATURE.to_string());
+    }
+    if declared.contains(&SHARED_PLAYBACK_FEATURE) {
+        supported.push(SHARED_PLAYBACK_FEATURE.to_string());
     }
     Some(supported)
 }
@@ -105,6 +121,9 @@ async fn handle_jwt_auth(
                     client.supports_host_transfer = features.is_some_and(|features| {
                         features.iter().any(|f| f == HOST_TRANSFER_FEATURE)
                     });
+                    client.supports_shared_playback_control = features.is_some_and(|features| {
+                        features.iter().any(|f| f == SHARED_PLAYBACK_FEATURE)
+                    });
                     info!("Client authenticated client_id={client_id} user={user_name:?}");
                 }
                 sender
@@ -115,6 +134,7 @@ async fn handle_jwt_auth(
                 Some(client_id),
             );
             send_room_list(client_id, state).await;
+            refresh_room_capabilities(client_id, state).await;
             true
         }
         Err(e) => {
@@ -151,6 +171,8 @@ async fn handle_identity(
             }
             client.supports_host_transfer = features
                 .is_some_and(|features| features.iter().any(|f| f == HOST_TRANSFER_FEATURE));
+            client.supports_shared_playback_control = features
+                .is_some_and(|features| features.iter().any(|f| f == SHARED_PLAYBACK_FEATURE));
             (Some(client.sender.clone()), client.user_name.clone())
         } else {
             (None, String::new())
@@ -165,6 +187,7 @@ async fn handle_identity(
             Some(client_id),
         );
     }
+    refresh_room_capabilities(client_id, state).await;
 }
 
 pub(in crate::ws) async fn handle_auth(
@@ -831,7 +854,7 @@ mod tests {
             "client",
             &auth_message(serde_json::json!({
                 "token": token,
-                "features": ["host_transfer", "future"]
+                "features": ["host_transfer", "shared_playback_control", "future"]
             })),
             &state,
             &jwt_config,
@@ -839,9 +862,47 @@ mod tests {
         .await;
 
         assert!(state.read().await.clients["client"].supports_host_transfer);
+        assert!(state.read().await.clients["client"].supports_shared_playback_control);
         assert_eq!(
             test_helpers::recv_msg(&mut rx).unwrap().payload.unwrap()["features"],
-            serde_json::json!(["host_transfer"])
+            serde_json::json!(["host_transfer", "shared_playback_control"])
         );
+    }
+
+    #[tokio::test]
+    async fn insecure_shared_capability_is_negotiated_and_cleared_on_reauth() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("user", "Guest", true);
+        state.write().await.clients.insert("client".into(), client);
+        for (declared, expected) in [
+            (
+                serde_json::json!(["shared_playback_control", "future"]),
+                true,
+            ),
+            (serde_json::json!([]), false),
+            (serde_json::json!("shared_playback_control"), false),
+        ] {
+            handle_auth(
+                "client",
+                &auth_message(serde_json::json!({ "user_name": "Guest", "features": declared })),
+                &state,
+                &insecure_jwt_config(),
+            )
+            .await;
+            assert_eq!(
+                state.read().await.clients["client"].supports_shared_playback_control,
+                expected
+            );
+            let features =
+                test_helpers::recv_msg(&mut rx).unwrap().payload.unwrap()["features"].clone();
+            assert_eq!(
+                features,
+                if expected {
+                    serde_json::json!(["shared_playback_control"])
+                } else {
+                    serde_json::json!([])
+                }
+            );
+        }
     }
 }

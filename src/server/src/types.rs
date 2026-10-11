@@ -24,6 +24,7 @@ pub struct Client {
     pub session_expires_at: Option<u64>,
     pub authentication_version: u64,
     pub supports_host_transfer: bool,
+    pub supports_shared_playback_control: bool,
     pub message_count: u32,
     pub last_reset: Instant,
     pub last_seen: Instant, // For zombie connection detection
@@ -58,6 +59,10 @@ pub struct Room {
     pub statuses: HashMap<String, &'static str>,
     #[serde(skip)]
     pub status_broadcast: StatusBroadcast,
+    /// Until when a guest's play or pause holds against the host's state
+    /// updates sent before the host applied it.
+    #[serde(skip)]
+    pub guest_command_until: Option<Instant>,
 }
 
 #[derive(Debug, Clone)]
@@ -82,6 +87,8 @@ pub struct PlaybackState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingPlay {
+    #[serde(skip)]
+    pub initiator_id: String,
     pub position: f64,
     #[serde(skip)]
     pub generation: u64,
@@ -295,6 +302,7 @@ mod tests {
     fn room_serialization_skips_internal_timing_and_pending_identity() {
         let mut room = crate::test_helpers::create_room("r1", "host");
         room.pending_play = Some(PendingPlay {
+            initiator_id: "host".to_string(),
             position: 12.0,
             generation: next_pending_play_generation(),
             position_ts: 1_700_000_000_000,
@@ -307,6 +315,7 @@ mod tests {
         assert!(json.get("target_at").is_none());
         assert!(json.get("last_state_at").is_none());
         assert!(json.get("command_cooldown_until").is_none());
+        assert!(json.get("guest_command_until").is_none());
         assert!(json["pending_play"].get("generation").is_none());
         assert_eq!(json["pending_play"]["position_ts"], 1_700_000_000_000_u64);
     }

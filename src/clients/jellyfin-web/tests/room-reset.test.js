@@ -46,7 +46,11 @@ const makeDirtyRoomState = () => {
     lastSyncPosition: 42,
     lastSyncPlayState: 'playing',
     roomWaiting: true,
+    roomHostId: 'host',
+    sharedPlaybackControl: true,
     guestPaused: true,
+    ownCommandUntil: Date.now() + 1000,
+    ownCommandPlayState: 'paused',
     joiningItemId: 'item',
     pendingJoinRoomId: 'room-b',
     pendingMediaId: 'item',
@@ -96,7 +100,11 @@ const assertRoomStateReset = (video) => {
   assert.equal(OWP.state.lastSyncPosition, 0);
   assert.equal(OWP.state.lastSyncPlayState, '');
   assert.equal(OWP.state.roomWaiting, false);
+  assert.equal(OWP.state.roomHostId, '');
+  assert.equal(OWP.state.sharedPlaybackControl, false);
   assert.equal(OWP.state.guestPaused, false);
+  assert.equal(OWP.state.ownCommandUntil, 0);
+  assert.equal(OWP.state.ownCommandPlayState, '');
   assert.equal(OWP.state.pendingActionTimer, null);
   assert.equal(OWP.state.playbackRequestAttempt, 5);
   assert.equal(OWP.state.playbackBlocked, false);

@@ -58,6 +58,7 @@
       lastPlayedPosition: 0,
       lastPlayedPlaying: false,
       streamReloadResume: false,
+      reloadGuestCommand: null,
       isSyncing: false,
       syncCooldownUntil: 0,
       isInitialSync: false,
@@ -72,7 +73,11 @@
       lastSyncPosition: 0,
       lastSyncPlayState: '',
       roomWaiting: false,
+      roomHostId: '',
+      sharedPlaybackControl: false,
       guestPaused: false,
+      ownCommandUntil: 0,
+      ownCommandPlayState: '',
       joiningItemId: '',
       pendingJoinRoomId: '',
       pendingMediaId: '',
@@ -114,8 +119,9 @@
   };
 
   const joinRoom = (id, isReconnect = false, inviteTicket = '') => {
-    if (!isReconnect && actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     state.guestPaused = false;
+    state.sharedPlaybackControl = false;
+    if (!isReconnect && actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     state.desiredRoomId = id;
     state.rejectedRejoinRoomIds = state.rejectedRejoinRoomIds.filter(roomId => roomId !== id);
     state.rejoinPending = isReconnect;

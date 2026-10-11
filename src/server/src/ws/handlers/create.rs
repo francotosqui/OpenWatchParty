@@ -71,6 +71,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         command_cooldown_until: None,
         statuses: HashMap::new(),
         status_broadcast: Default::default(),
+        guest_command_until: None,
     }
 }
 
@@ -184,6 +185,9 @@ pub(in crate::ws) async fn handle_create_room(
             );
         }
         send_message(sender.clone(), &room_msg, Some(client_id));
+        if let Some(room) = room_msg.room.as_ref().and_then(|id| rooms.get(id)) {
+            crate::room::send_room_capabilities(room, clients);
+        }
         if let Some((list, statuses)) = participant_list {
             send_message(sender.clone(), &list, Some(client_id));
             send_message(sender, &statuses, Some(client_id));

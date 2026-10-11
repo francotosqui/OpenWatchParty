@@ -28,7 +28,7 @@ The Watch Party button in the Jellyfin header opens the same panel, but **Create
 
 The **?** next to the panel's close button shows a short help. The first time Jellyfin Web runs in a browser, the panel opens by itself below the header button with this help; it is not shown again in that browser.
 
-As the host, you control playback for everyone. When you play, pause, or seek, all participants follow.
+As the host, you control playback for everyone. When you play, pause, or seek, all participants follow. Guests can play and pause too, for the whole room.
 
 ![The room bar during an active session]({{ '/assets/images/watch-party-panel.png' | relative_url }})
 
@@ -111,12 +111,14 @@ As the host, your actions control everyone:
 
 As a participant:
 
-While you are in a room, seeking is locked to the host: the timeline, skip, chapter, rewind, and fast-forward controls are dimmed, and keyboard seeking is ignored. You can pause for yourself at any time; playing again catches up to the room's current position. You can resume only while the room is playing; when the host has paused or you are waiting for the host, the play control is dimmed and does nothing.
+While you are in a room, seeking is locked to the host: the timeline, skip, chapter, rewind, and fast-forward controls are dimmed, and keyboard seeking is ignored. Play and pause are shared: your pause pauses the whole room, the host included, and anyone's play resumes everyone. Only while the room waits for the host's stream (after a track change, for example) is the play control dimmed and does nothing.
+
+Shared controls require a compatible server and host. With an older host or server, your pause stays local and Play is locked while the room is paused. Resuming your local pause catches you up to the room. Upgrading clients does not grant guests permission to seek or close the room.
 
 | What Happens | What You See |
 |--------------|--------------|
-| Host plays | Video starts automatically unless you paused it for yourself |
-| Host pauses | Video pauses automatically |
+| Host or a guest plays | Video starts automatically |
+| Host or a guest pauses | Video pauses automatically |
 | Host seeks | Video jumps to new position |
 | Host leaves | A compatible participant becomes host; otherwise the room closes |
 | Host reloads or briefly loses connection | The same signed-in user remains host when they reconnect within 10 seconds |
@@ -216,6 +218,7 @@ OpenWatchParty displays toast notifications to keep you informed about room acti
 These appear briefly in the center of the screen:
 - **"Host resumed playback"** - The host started playing
 - **"Host paused playback"** - The host paused
+- **"A guest resumed playback"** / **"A guest paused playback"** - A guest played or paused the room
 - **"A participant joined the room"** - Someone joined
 - **"A participant left the room"** - Someone left
 - **"You are now the host"** / **"<name> is now the host"** - Host control passed to another participant

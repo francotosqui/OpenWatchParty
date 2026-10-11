@@ -3,7 +3,7 @@
   const playback = OWP.playback = OWP.playback || {};
   const state = OWP.state;
   const utils = OWP.utils;
-  const { STATE_UPDATE_MS, SEEK_THRESHOLD, STREAM_RELOAD_MAX_MS } = OWP.constants;
+  const { STATE_UPDATE_MS, SEEK_THRESHOLD, STREAM_RELOAD_MAX_MS, OWN_COMMAND_HOLD_MS } = OWP.constants;
   const hasPendingRoomWork = () => Boolean(
     (state.pendingPlayUntil && utils.getServerNow() < state.pendingPlayUntil)
     || (state.pendingMediaId && state.pendingMediaUntil && utils.nowMs() < state.pendingMediaUntil)
@@ -54,6 +54,9 @@
   const endStreamReload = (video) => {
     state.streamReloadUntil = 0;
     state.lastSentPosition = video.currentTime;
+    // A guest's play or pause that came during the reload goes first: it
+    // holds the sync, so the reload's own play is not sent to the room.
+    if (state.reloadGuestCommand) OWP._wsHandlers?.applyReloadGuestCommand?.(video);
   };
 
   const sendStateUpdate = (video) => {
@@ -103,21 +106,35 @@
     }
   };
 
-  const trackGuestPause = () => {
-    if (state.inRoom && !state.isHost && state.lastSyncPlayState === 'playing') {
-      state.guestPaused = true;
-    }
-  };
-
-  const trackGuestPlay = () => {
-    if (!state.inRoom || state.isHost || !state.guestPaused) return;
-    state.guestPaused = false;
-    // Rejoining playback should catch up on the next sync tick, even if a
-    // host command set an initial-sync or command cooldown while paused.
+  // A guest's own play or pause is the room's: the server passes it to everyone,
+  // the host included. OWP's own plays and pauses set the room state first, so
+  // they never match here.
+  const onGuestEvent = (action, video) => {
+    const actions = OWP.actions;
+    if (!state.inRoom || state.isHost || !actions || !actions.send || !utils.shouldSend()) return;
+    if (!state.sharedPlaybackControl) return;
+    const playing = action === 'play';
+    if (state.lastSyncPlayState !== (playing ? 'paused' : 'playing')) return;
+    // Not while the room waits for the host, nor for the pause that ends an
+    // episode or comes with leaving the player (the stream is gone by then).
+    if (playing && state.roomWaiting) return;
+    // Without a stream (HAVE_NOTHING) it is the player closing; a video that
+    // is still loading or buffering is the user's.
+    if (video.ended || video.readyState === 0 || video.isConnected === false) return;
+    const now = utils.nowMs();
+    const playState = playing ? 'playing' : 'paused';
+    state.lastSyncPlayState = playState;
+    state.lastSyncPosition = video.currentTime;
+    state.lastSyncServerTs = utils.getServerNow();
+    state.ownCommandUntil = now + OWN_COMMAND_HOLD_MS;
+    state.ownCommandPlayState = playState;
     state.isInitialSync = false;
     state.initialSyncUntil = 0;
     state.initialSyncTargetPos = null;
-    state.syncCooldownUntil = 0;
+    state.syncCooldownUntil = playing ? now + 2000 : 0;
+    state.playbackActionAttempt++;
+    utils.log('GUEST', { action, pos: video.currentTime });
+    actions.send('player_event', { action, position: video.currentTime, play_state: playState });
   };
 
   const createVideoListeners = (video) => {
@@ -156,7 +173,14 @@
       },
       play: () => {
         if (playback.markPlaybackResumed) playback.markPlaybackResumed();
-        trackGuestPlay();
+        onGuestEvent('play', video);
+        if (!state.isHost && state.guestPaused) {
+          state.guestPaused = false;
+          state.isInitialSync = false;
+          state.initialSyncUntil = 0;
+          state.initialSyncTargetPos = null;
+          state.syncCooldownUntil = 0;
+        }
         if (state.isHost && state.guestPaused) {
           syncPromotedGuest(video);
           return;
@@ -164,7 +188,8 @@
         onHostEvent('play', video);
       },
       pause: () => {
-        trackGuestPause();
+        if (state.inRoom && !state.isHost && !state.sharedPlaybackControl && state.lastSyncPlayState === 'playing') state.guestPaused = true;
+        onGuestEvent('pause', video);
         onHostEvent('pause', video);
       },
       seeked: () => {
@@ -202,7 +227,6 @@
     if (state.bound) return;
     state.bound = true;
     state.currentVideoElement = video;
-    // A pause belongs to the video it was made on.
     state.guestPaused = false;
     const listeners = createVideoListeners(video);
     state.videoListeners = listeners;

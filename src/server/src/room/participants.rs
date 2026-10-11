@@ -2,6 +2,79 @@ use crate::types::{Client, Room, WsMessage};
 use crate::utils::now_ms;
 use std::collections::HashMap;
 
+/// Sent only to clients that negotiated this extension: legacy payloads stay
+/// unchanged, and shared controls follow the current host's capability.
+pub(crate) fn send_room_capabilities(room: &Room, clients: &HashMap<String, Client>) {
+    let enabled = clients
+        .get(&room.host_id)
+        .is_some_and(|client| client.supports_shared_playback_control);
+    let features: Vec<&str> = if enabled {
+        vec!["shared_playback_control"]
+    } else {
+        vec![]
+    };
+    let senders = room
+        .clients
+        .iter()
+        .filter_map(|id| clients.get(id))
+        .filter(|client| client.supports_shared_playback_control)
+        .map(|client| client.sender.clone())
+        .collect::<Vec<_>>();
+    crate::messaging::send_to_senders(
+        &senders,
+        &WsMessage {
+            msg_type: "room_capabilities".into(),
+            room: Some(room.room_id.clone()),
+            client: None,
+            payload: Some(serde_json::json!({ "features": features })),
+            ts: now_ms(),
+            server_ts: Some(now_ms()),
+        },
+        "room capabilities",
+    );
+}
+
+#[cfg(test)]
+mod capability_tests {
+    use super::*;
+    use crate::test_helpers;
+
+    #[test]
+    fn capabilities_follow_the_host_and_never_reach_legacy_clients() {
+        let (host, mut host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (mut guest, mut guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        guest.supports_shared_playback_control = true;
+        let mut room = test_helpers::create_room("r1", "host");
+        room.clients.push("guest".into());
+        let mut clients = HashMap::from([("host".into(), host), ("guest".into(), guest)]);
+        send_room_capabilities(&room, &clients);
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx)
+                .unwrap()
+                .payload
+                .unwrap()["features"],
+            serde_json::json!([])
+        );
+        assert!(test_helpers::recv_msg(&mut host_rx).is_none());
+        room.host_id = "guest".into();
+        send_room_capabilities(&room, &clients);
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx)
+                .unwrap()
+                .payload
+                .unwrap()["features"],
+            serde_json::json!(["shared_playback_control"])
+        );
+        assert!(test_helpers::recv_msg(&mut host_rx).is_none());
+        clients
+            .get_mut("guest")
+            .unwrap()
+            .supports_shared_playback_control = false;
+        send_room_capabilities(&room, &clients);
+        assert!(test_helpers::recv_msg(&mut guest_rx).is_none());
+    }
+}
+
 /// Builds the `participant_list` message: the display names of the room's
 /// members in join order, with the host flagged.
 ///

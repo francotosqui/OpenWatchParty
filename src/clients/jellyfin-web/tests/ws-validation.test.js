@@ -16,6 +16,14 @@ const envelope = (type, payload, extra = {}) => ({
 });
 
 describe('WebSocket message schema validation', () => {
+  it('validates room capability announcements without changing legacy schemas', () => {
+    valid(envelope('room_capabilities', { features: ['shared_playback_control'] }, { room: 'room-1' }));
+    valid(envelope('room_capabilities', { features: [] }, { room: 'room-1' }));
+    for (const payload of [null, [], {}, { features: 'shared_playback_control' }, { features: [7] }, { features: [], extra: true }]) {
+      invalid(envelope('room_capabilities', payload, { room: 'room-1' }));
+    }
+    invalid(envelope('room_capabilities', { features: [] }));
+  });
   const nominal = [
     envelope('room_list', [{ id: 'room-1', name: 'Movie night', count: 2, media_id: null }]),
     envelope('client_hello', { client_id: 'client-1' }, { client: 'client-1' }),
