@@ -58,12 +58,24 @@ cat > "$fake_bin/actionlint" <<'EOF'
 for file in "$@"; do grep -q BAD_YAML "$file" && exit 1; done
 printf 'actionlint\n' >> "$OWP_HOOK_TOOL_LOG"
 EOF
+cat > "$fake_bin/shellcheck" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+cat > "$fake_bin/jq" <<'EOF'
+#!/usr/bin/env bash
+printf '12.1\n'
+EOF
 cat > "$fake_bin/docker" <<'EOF'
 #!/usr/bin/env bash
 for argument in "$@"; do
     if [[ -f $argument ]] && grep -q BAD_COMPOSE "$argument"; then exit 1; fi
 done
-printf 'docker-compose\n' >> "$OWP_HOOK_TOOL_LOG"
+if [[ $1 == run ]]; then
+    printf 'docker-workflows\n' >> "$OWP_HOOK_TOOL_LOG"
+else
+    printf 'docker-compose\n' >> "$OWP_HOOK_TOOL_LOG"
+fi
 EOF
 cat > "$fake_bin/gitleaks" <<'EOF'
 #!/usr/bin/env bash
@@ -124,6 +136,36 @@ expect_failure ESLint
 printf 'BAD_YAML\n' >> "$repository/.github/workflows/ci.yml"
 git -C "$repository" add .github/workflows/ci.yml
 expect_failure YAML
+
+# An installed actionlint must not make a missing ShellCheck silently pass.
+# Restrict PATH so the runner's own ShellCheck/Docker cannot hide the absence.
+limited_bin="$temporary_dir/limited-bin"
+mkdir -p "$limited_bin"
+for tool in bash git mktemp chmod rm grep dirname; do
+    ln -s "$(command -v "$tool")" "$limited_bin/$tool"
+done
+for tool in actionlint docker gitleaks; do
+    ln -s "$fake_bin/$tool" "$limited_bin/$tool"
+done
+printf '# staged workflow change\n' >> "$repository/.github/workflows/ci.yml"
+git -C "$repository" add .github/workflows/ci.yml
+: > "$tool_log"
+(cd "$repository" && PATH="$limited_bin" OWP_HOOK_TOOL_LOG="$tool_log" .githooks/pre-commit) >/dev/null
+grep -q '^docker-workflows$' "$tool_log" || {
+    printf 'missing ShellCheck did not select the bundled validator\n' >&2
+    exit 1
+}
+if grep -q '^actionlint$' "$tool_log"; then
+    printf 'native actionlint ran without ShellCheck\n' >&2
+    exit 1
+fi
+rm "$limited_bin/docker"
+if (cd "$repository" && PATH="$limited_bin" OWP_HOOK_TOOL_LOG="$tool_log" .githooks/pre-commit) >"$temporary_dir/missing-tools.log" 2>&1; then
+    printf 'workflow passed without ShellCheck or Docker\n' >&2
+    exit 1
+fi
+grep -q 'requires actionlint and ShellCheck, or Docker' "$temporary_dir/missing-tools.log"
+git -C "$repository" reset --hard --quiet HEAD
 
 printf 'SECRET_TOKEN=aB3dE5gH7jK9mN2pQ4sT6vW8yZ0cD1fG\n' > "$repository/leaked.txt"
 git -C "$repository" add leaked.txt
