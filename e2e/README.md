@@ -9,7 +9,8 @@ stack, including a second tab sharing the host's browser context.
 ```bash
 # Use one disposable key for both the plugin and session server. Host recovery
 # requires JWT authentication; the lifecycle tests fail clearly in insecure mode.
-export JWT_SECRET="$(openssl rand -base64 32)"
+JWT_SECRET="$(openssl rand -base64 32)"
+export JWT_SECRET
 export ALLOW_INSECURE_NO_AUTH=false
 # Boots and provisions the stack (just up) and then runs the suite
 just e2e
