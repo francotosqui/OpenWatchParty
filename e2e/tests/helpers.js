@@ -87,7 +87,13 @@ async function waitForSettled(page) {
   await expect
     .poll(() => page.evaluate(() => {
       const owp = window.OpenWatchParty;
-      return !owp.state.isInitialSync && owp.utils.shouldSend();
+      const video = owp.utils.getVideo();
+      return Boolean(video
+        && owp.state.bound
+        && owp.state.currentVideoElement === video
+        && typeof owp.state.videoListeners?.pause === 'function'
+        && !owp.state.isInitialSync
+        && owp.utils.shouldSend());
     }), { timeout: 30_000 })
     .toBe(true);
 }
