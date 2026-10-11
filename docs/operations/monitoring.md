@@ -372,13 +372,78 @@ Create a simple status page:
 
 ## Capacity Planning
 
-### Resource Estimates
+### Measured Session Capacity
 
-| Metric | Per Client | Per Room |
-|--------|------------|----------|
-| Memory | ~1 KB | ~5 KB |
-| CPU | Minimal | Minimal |
-| Bandwidth | ~1 KB/s | ~10 KB/s |
+These are short, reproducible session-server measurements, **not a maximum
+capacity claim**. Jellyfin transcoding and video delivery are separate and are
+not part of this test.
+
+Measured on 2026-10-10 from `main` commit `3be7235`: optimized Rust 1.88.0 GNU
+Linux build, Docker Desktop/WSL2 kernel `6.18.33.2-microsoft-standard-WSL2`, on
+an Intel Core i9-9900KF (8 cores / 16 threads). The Docker VM had 16 logical
+CPUs and approximately 9.7 GiB RAM. The server container was limited to **2 CPUs
+and 512 MiB**; the Node load generator ran on the same Windows host through
+loopback port forwarding. Normal background workloads remained running.
+Authentication was explicitly disabled only in this disposable test server,
+without TLS. `MAX_CONNECTIONS` and `MAX_CONNECTIONS_PER_IP` were both 256.
+
+Each run lasted 30 seconds after room setup and a 1.2-second settling period.
+Every client sent one application ping per second and one chat message every
+five seconds; hosts sent one playback state per second and a play/pause command
+every ten seconds. Every recipient's chat delivery and every ping response were
+checked. CPU/memory were sampled using Docker stats (14 samples per run).
+
+| Rooms × clients | Connections | Inbound messages/s | Chat p95 / p99 (ms) | Ping p95 / p99 (ms) | CPU mean / peak (%) | Peak memory (MiB) |
+|---|---:|---:|---:|---:|---:|---:|
+| 10 × 5 | 50 | 71.00 | 44.489 / 46.810 | 42.846 / 314.094 | 0.538 / 1.09 | 11.43 |
+| 10 × 20 | 200 | 250.97 | 44.545 / 52.645 | 41.719 / 311.756 | 2.309 / 5.50 | 33.46 |
+| 16 × 16 | 256 | 324.77 | 50.458 / 59.669 | 42.448 / 49.395 | 2.884 / 7.01 | 42.04 |
+
+All three runs had zero server errors, unexpected closes, outstanding probes,
+or outbound queue failures. Expected/delivered chat messages were respectively
+1,500/1,500, 24,000/24,000 and 24,576/24,576. Docker's 100% CPU corresponds to
+one fully used logical CPU. Latencies include network, client scheduling and
+fan-out; memory is Docker's reported container usage, not a per-client estimate.
+The 256-connection run reaches the configured connection limit, not a measured
+CPU or memory ceiling. Longer runs, TLS/JWT, slower clients, WAN latency and
+different traffic patterns need their own measurements before planning a
+deployment. Keep room membership within the server's 20-client limit.
+
+### Reproduce a Load Test
+
+Use an empty **disposable** server. The generator refuses a server that already
+has connections or rooms. Node 22 or newer provides its built-in WebSocket
+client; there are no npm dependencies. For example, from the repository root:
+
+```sh
+docker build --build-arg BUILD_MODE=release -f infra/docker/server.Dockerfile \
+  -t openwatchparty/session-server:test src/server
+docker run -d --name owp-load --cpus 2 --memory 512m \
+  -p 127.0.0.1:19000:3000 \
+  -e ALLOW_INSECURE_NO_AUTH=true -e ALLOWED_ORIGINS='*' -e LOG_LEVEL=warn \
+  -e MAX_CONNECTIONS=256 -e MAX_CONNECTIONS_PER_IP=256 \
+  openwatchparty/session-server:test
+node infra/scripts/load-session-server.mjs \
+  --rooms 16 --clients 16 --seconds 30 --container owp-load
+docker rm -f owp-load
+```
+
+The JSON report includes chat/ping percentiles, throughput, delivery counts,
+errors, unexpected disconnects, outstanding probes, outbound send failures,
+active state and sampled container CPU/memory. Exit status is nonzero if the
+traffic test fails or sampling is unavailable. Without `--container`, resources
+are explicitly `null`. `Session Load Smoke` runs a smaller 50-client/10-second
+test in CI to catch generator/protocol regressions; its debug build is not used
+as a capacity benchmark.
+
+### Fuzzing Hostile Input
+
+`Inbound WebSocket Fuzz` exercises real frame assembly, JSON parsing,
+validation and dispatch with a committed seed corpus, bounded input/time/RSS
+and room-state assertions. It runs for 30 seconds on pull requests and 300
+seconds weekly. Crash reproducers are retained as workflow artifacts; every
+server panic discovered must become a deterministic regression test.
+See the [fuzzing instructions](https://github.com/mhbxyz/OpenWatchParty/tree/main/src/server/fuzz).
 
 ### Scaling Considerations
 

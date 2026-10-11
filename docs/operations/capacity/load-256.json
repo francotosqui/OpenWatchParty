@@ -1,0 +1,39 @@
+{
+  "config": {
+    "url": "ws://127.0.0.1:19000/ws",
+    "rooms": 16,
+    "clients": 16,
+    "seconds": 30,
+    "container": "owp-load-62"
+  },
+  "seconds": 30.003,
+  "sent": 9744,
+  "received": 38721,
+  "messages_per_second": 324.77,
+  "chat": {
+    "expected": 24576,
+    "delivered": 24576,
+    "p50_ms": 36.313,
+    "p95_ms": 50.458,
+    "p99_ms": 59.669
+  },
+  "ping": {
+    "samples": 7680,
+    "p50_ms": 13.603,
+    "p95_ms": 42.448,
+    "p99_ms": 49.395
+  },
+  "errors": 0,
+  "unexpected_closes": 0,
+  "outstanding_probes": 0,
+  "send_failures": 0,
+  "active_connections": 256,
+  "active_rooms": 16,
+  "resources": {
+    "samples": 14,
+    "cpu_percent_mean": 2.884,
+    "cpu_percent_max": 7.01,
+    "memory_mib_max": 42.04
+  },
+  "passed": true
+}

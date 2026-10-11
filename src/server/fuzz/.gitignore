@@ -1,0 +1,11 @@
+/artifacts/
+/coverage/
+/corpus/inbound_ws/*
+!/corpus/inbound_ws/text
+!/corpus/inbound_ws/fragmented
+!/corpus/inbound_ws/sequence
+!/corpus/inbound_ws/binary
+!/corpus/inbound_ws/raw
+!/corpus/inbound_ws/oversized
+!/corpus/inbound_ws/fragment_limit
+!/corpus/inbound_ws/jwt
