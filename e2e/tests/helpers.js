@@ -118,12 +118,8 @@ async function startPlayback(page, itemId) {
 async function togglePlayback(page) {
   await page.evaluate(() => {
     // A cached player's button must not receive the action intended for this video.
-    const video = window.OpenWatchParty.utils.getVideo();
-    const activePage = video?.closest('.page');
-    if (!activePage || activePage.classList.contains('hide')) {
-      throw new Error('The active player page is not available');
-    }
-    const button = activePage.querySelector('.videoOsdBottom .btnPause:not(.hide), .videoOsdBottom .btnPlay:not(.hide)');
+    const button = [...document.querySelectorAll('.videoOsdBottom .btnPause:not(.hide), .videoOsdBottom .btnPlay:not(.hide)')]
+      .find(control => !control.closest('.page.hide'));
     if (!button) throw new Error('The active player control is not available');
     button.click();
   });
