@@ -197,6 +197,12 @@ Ensures the specified media is playing.
 - **Already playing**: Skipped only when `getPlayingItemId()` reports the same item.
 - **Retry**: Up to 5 attempts, 500ms apart.
 
+Private `schedulePlaybackRetry` in `playback/play.js` schedules missing-identity,
+item lookup, and playback failure retries: at most five retries at 500 ms, each
+carrying the original request generation and force flag. `ensurePlayback` checks
+validity before work and after asynchronous operations; only the current
+generation may clear `joiningItemId` in its finalizer.
+
 #### `notifyReady() -> void`
 Sends `ready` message to server indicating client is ready to play.
 
