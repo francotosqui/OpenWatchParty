@@ -208,7 +208,7 @@ pub async fn client_connection(ws: WebSocket, clients: Clients, rooms: Rooms) {
 
     // 6. Send client_hello with ID
     send_to_client(&client_id, &WsMessage {
-        msg_type: ServerMessageType::ClientHello,
+        msg_type: "client_hello",
         payload: { "client_id": client_id }
     });
 
@@ -243,11 +243,11 @@ Broadcasts a scheduled play event to all participants.
 fn broadcast_scheduled_play(room: &mut Room, clients: &Clients, position: f64, target_server_ts: u64) {
     // 1. Update room state
     room.state.position = position;
-    room.state.play_state = PlayState::Playing;
+    room.state.play_state = "playing";
 
     // 2. Create message with target_server_ts
     let msg = WsMessage {
-        msg_type: ServerMessageType::PlayerEvent,
+        msg_type: "player_event",
         payload: { "action": "play", "position": position, "target_server_ts": target_server_ts },
         server_ts: target_server_ts
     };
