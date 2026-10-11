@@ -161,6 +161,63 @@
     return { mode: 'error', code, message };
   };
 
+  // Apply only a response whose request generation was checked after JSON decoding.
+  const applyTokenResponse = (data, isCurrentRequest) => {
+    if (!Object.prototype.hasOwnProperty.call(data, 'session_server_url')
+        || typeof data.session_server_url !== 'string') {
+      return authError(
+        'invalid_response',
+        'OpenWatchParty token endpoint must explicitly provide session_server_url',
+        isCurrentRequest
+      );
+    }
+    const sessionServerUrl = utils.normalizeSessionServerUrl(data.session_server_url);
+    if (!sessionServerUrl.valid) {
+      return authError(
+        'invalid_response',
+        `OpenWatchParty token endpoint returned an invalid session server URL: ${sessionServerUrl.error}`,
+        isCurrentRequest
+      );
+    }
+    if (data.auth_enabled === true && typeof data.token === 'string' && data.token) {
+      state.authBlocked = false;
+      state.authError = '';
+      state.userId = data.user_id || '';
+      state.userName = data.user_name || getJellyfinUsername() || '';
+      state.wsUrl = sessionServerUrl.url;
+      state.authEnabled = true;
+      state.authToken = data.token;
+      setNativeSyncPlayHidden(data.hide_native_syncplay_button === true);
+      setSyncNudgeShown(data.show_sync_nudge_button === true);
+      applyInviteTtl(data);
+      const expiresIn = data.expires_in || 3600;
+      state.tokenExpiresAt = Date.now() + (expiresIn * 1000);
+      scheduleTokenRefresh(expiresIn);
+      console.log('[OpenWatchParty] Auth token obtained for user:', state.userName, 'expires in', expiresIn, 's');
+      return { mode: 'authenticated', token: data.token, expiresIn };
+    }
+    if (data.auth_enabled === false && data.insecure_mode === true) {
+      state.authBlocked = false;
+      state.authError = '';
+      state.userId = data.user_id || '';
+      state.userName = data.user_name || getJellyfinUsername() || '';
+      state.wsUrl = sessionServerUrl.url;
+      state.authEnabled = false;
+      state.authToken = null;
+      state.tokenExpiresAt = 0;
+      setNativeSyncPlayHidden(data.hide_native_syncplay_button === true);
+      setSyncNudgeShown(data.show_sync_nudge_button === true);
+      applyInviteTtl(data);
+      console.log('[OpenWatchParty] Explicit insecure mode enabled, connecting without token');
+      return { mode: 'insecure', token: null };
+    }
+    return authError(
+      'invalid_response',
+      'OpenWatchParty token endpoint returned an invalid authentication response',
+      isCurrentRequest
+    );
+  };
+
   const fetchAuthToken = async () => {
     const authRequestAttempt = ++state.authRequestAttempt;
     const isCurrentRequest = () => authRequestAttempt === state.authRequestAttempt;
@@ -229,59 +286,7 @@
       if (!isCurrentRequest()) {
         return { mode: 'error', code: 'request_invalidated', message: 'Authentication request was invalidated' };
       }
-      if (!Object.prototype.hasOwnProperty.call(data, 'session_server_url')
-          || typeof data.session_server_url !== 'string') {
-        return authError(
-          'invalid_response',
-          'OpenWatchParty token endpoint must explicitly provide session_server_url',
-          isCurrentRequest
-        );
-      }
-      const sessionServerUrl = utils.normalizeSessionServerUrl(data.session_server_url);
-      if (!sessionServerUrl.valid) {
-        return authError(
-          'invalid_response',
-          `OpenWatchParty token endpoint returned an invalid session server URL: ${sessionServerUrl.error}`,
-          isCurrentRequest
-        );
-      }
-      if (data.auth_enabled === true && typeof data.token === 'string' && data.token) {
-        state.authBlocked = false;
-        state.authError = '';
-        state.userId = data.user_id || '';
-        state.userName = data.user_name || getJellyfinUsername() || '';
-        state.wsUrl = sessionServerUrl.url;
-        state.authEnabled = true;
-        state.authToken = data.token;
-        setNativeSyncPlayHidden(data.hide_native_syncplay_button === true);
-        setSyncNudgeShown(data.show_sync_nudge_button === true);
-        applyInviteTtl(data);
-        const expiresIn = data.expires_in || 3600;
-        state.tokenExpiresAt = Date.now() + (expiresIn * 1000);
-        scheduleTokenRefresh(expiresIn);
-        console.log('[OpenWatchParty] Auth token obtained for user:', state.userName, 'expires in', expiresIn, 's');
-        return { mode: 'authenticated', token: data.token, expiresIn };
-      }
-      if (data.auth_enabled === false && data.insecure_mode === true) {
-        state.authBlocked = false;
-        state.authError = '';
-        state.userId = data.user_id || '';
-        state.userName = data.user_name || getJellyfinUsername() || '';
-        state.wsUrl = sessionServerUrl.url;
-        state.authEnabled = false;
-        state.authToken = null;
-        state.tokenExpiresAt = 0;
-        setNativeSyncPlayHidden(data.hide_native_syncplay_button === true);
-        setSyncNudgeShown(data.show_sync_nudge_button === true);
-        applyInviteTtl(data);
-        console.log('[OpenWatchParty] Explicit insecure mode enabled, connecting without token');
-        return { mode: 'insecure', token: null };
-      }
-      return authError(
-        'invalid_response',
-        'OpenWatchParty token endpoint returned an invalid authentication response',
-        isCurrentRequest
-      );
+      return applyTokenResponse(data, isCurrentRequest);
     } catch (err) {
       if (!isCurrentRequest()) {
         return { mode: 'error', code: 'request_invalidated', message: 'Authentication request was invalidated' };
