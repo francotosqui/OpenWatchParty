@@ -484,7 +484,9 @@ describe('room reconnection lifecycle', () => {
     callbacks.open();
     callbacks.error(new Error('late error'));
     callbacks.close({ code: 1006, reason: 'late close' });
-    callbacks.message({ get data() { throw new Error('stale data must not be read'); } });
+    let staleDataReads = 0;
+    callbacks.message({ get data() { staleDataReads++; return '{}'; } });
+    assert.equal(staleDataReads, 0);
     assert.equal(OWP.state.ws, second);
     assert.equal(OWP.state.connectionPhase, phase);
     assert.equal(second.sent.length, sent);
