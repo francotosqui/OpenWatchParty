@@ -310,6 +310,15 @@ Closes the room when invoked by the host. It sends `close_room` when the server 
 Establishes WebSocket connection.
 - **Auto-reconnect**: If `autoReconnect === true`, retries with exponential backoff starting at 1 second and capped at 30 seconds.
 
+### Connection setup responsibilities
+
+`connect` coordinates socket replacement, token acquisition, endpoint validation,
+and callback installation. Private `blockConnection` records authentication or
+endpoint failures with the same login watchdog bookkeeping and toast suppression.
+Private `onWsMessage` checks socket identity before reading data, validates
+JSON/schema, and filters room messages before dispatch. Retry backoff and protocol
+payloads remain owned by the existing connection lifecycle.
+
 ### Message Handler (`handleMessage`)
 
 #### `room_list`

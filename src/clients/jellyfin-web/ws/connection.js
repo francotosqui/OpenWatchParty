@@ -186,6 +186,60 @@
     }
   };
 
+  const onWsMessage = (e, socket) => {
+    if (socket !== state.ws) return;
+    let msg;
+    try {
+      msg = JSON.parse(e.data);
+    } catch {
+      console.error('[OpenWatchParty] Invalid WebSocket JSON');
+      return;
+    }
+    const validation = OWP.wsValidation.validateMessage(msg);
+    if (!validation.valid) {
+      const type = OWP.wsValidation.isKnownType(msg?.type) ? msg.type : 'unknown';
+      console.warn('[OpenWatchParty] Invalid WebSocket message schema:', type, validation.error);
+      return;
+    }
+    try {
+      if (msg.type === 'room_state') {
+        if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) {
+          console.warn('[OpenWatchParty] Ignoring room_state for unexpected room:', msg.room);
+          return;
+        }
+        if (!state.rejoinPending && state.rejectedRejoinRoomIds.includes(msg.room)) {
+          console.warn('[OpenWatchParty] Ignoring late room_state after failed rejoin:', msg.room);
+          return;
+        }
+      }
+      if (!state.inRoom || msg.room === state.roomId || !msg.room || msg.type === 'room_state') {
+        handleMessage(msg);
+      }
+    } catch (err) {
+      console.error('[OpenWatchParty] WebSocket handler failed:', msg.type, err?.name || 'Error');
+    }
+  };
+
+  // Both endpoint configuration and authentication failures use the same
+  // watchdog bookkeeping and toast suppression window.
+  const blockConnection = (message) => {
+    state.isConnecting = false;
+    state.authBlocked = true;
+    state.authError = message;
+    state.authFailedToken = OWP.actions.getJellyfinAccessToken
+      ? OWP.actions.getJellyfinAccessToken()
+      : '';
+    const now = Date.now();
+    if (ui.showToast
+        && (message !== state.lastAuthToastMessage
+          || (now - state.lastAuthToastAt) > AUTH_TOAST_SUPPRESS_MS)) {
+      state.lastAuthToastMessage = message;
+      state.lastAuthToastAt = now;
+      ui.showToast(message);
+    }
+    ui.render();
+  };
+
   const connect = async () => {
     if (state.isConnecting) {
       console.log('[OpenWatchParty] Connection already in progress, skipping');
@@ -218,44 +272,13 @@
       return;
     }
     if (!authResult || !['authenticated', 'insecure'].includes(authResult.mode)) {
-      state.isConnecting = false;
-      const message = authResult?.message || 'OpenWatchParty authentication returned an invalid result';
-      state.authBlocked = true;
-      state.authError = message;
-      state.authFailedToken = OWP.actions.getJellyfinAccessToken
-        ? OWP.actions.getJellyfinAccessToken()
-        : '';
-      const now = Date.now();
-      if (ui.showToast
-          && (message !== state.lastAuthToastMessage
-            || (now - state.lastAuthToastAt) > AUTH_TOAST_SUPPRESS_MS)) {
-        state.lastAuthToastMessage = message;
-        state.lastAuthToastAt = now;
-        ui.showToast(message);
-      }
-      ui.render();
+      blockConnection(authResult?.message || 'OpenWatchParty authentication returned an invalid result');
       return;
     }
     const token = authResult.mode === 'authenticated' ? authResult.token : null;
     const sessionServerUrl = utils.normalizeSessionServerUrl(state.wsUrl || DEFAULT_WS_URL);
     if (!sessionServerUrl.valid) {
-      state.isConnecting = false;
-      state.authBlocked = true;
-      state.authError = sessionServerUrl.error;
-      // Recorded like any other blocked authentication, so the retry watchdog
-      // backs off instead of reconnecting on every UI tick.
-      state.authFailedToken = OWP.actions.getJellyfinAccessToken
-        ? OWP.actions.getJellyfinAccessToken()
-        : '';
-      const now = Date.now();
-      if (ui.showToast
-          && (sessionServerUrl.error !== state.lastAuthToastMessage
-            || (now - state.lastAuthToastAt) > AUTH_TOAST_SUPPRESS_MS)) {
-        state.lastAuthToastMessage = sessionServerUrl.error;
-        state.lastAuthToastAt = now;
-        ui.showToast(sessionServerUrl.error);
-      }
-      ui.render();
+      blockConnection(sessionServerUrl.error);
       return;
     }
     const wsUrl = sessionServerUrl.url;
@@ -278,39 +301,7 @@
       state.isConnecting = false;
     };
     socket.onclose = (event) => onWsClose(event, socket);
-    socket.onmessage = (e) => {
-      if (socket !== state.ws) return;
-      let msg;
-      try {
-        msg = JSON.parse(e.data);
-      } catch {
-        console.error('[OpenWatchParty] Invalid WebSocket JSON');
-        return;
-      }
-      const validation = OWP.wsValidation.validateMessage(msg);
-      if (!validation.valid) {
-        const type = OWP.wsValidation.isKnownType(msg?.type) ? msg.type : 'unknown';
-        console.warn('[OpenWatchParty] Invalid WebSocket message schema:', type, validation.error);
-        return;
-      }
-      try {
-        if (msg.type === 'room_state') {
-          if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) {
-            console.warn('[OpenWatchParty] Ignoring room_state for unexpected room:', msg.room);
-            return;
-          }
-          if (!state.rejoinPending && state.rejectedRejoinRoomIds.includes(msg.room)) {
-            console.warn('[OpenWatchParty] Ignoring late room_state after failed rejoin:', msg.room);
-            return;
-          }
-        }
-        if (!state.inRoom || msg.room === state.roomId || !msg.room || msg.type === 'room_state') {
-          handleMessage(msg);
-        }
-      } catch (err) {
-        console.error('[OpenWatchParty] WebSocket handler failed:', msg.type, err?.name || 'Error');
-      }
-    };
+    socket.onmessage = (e) => onWsMessage(e, socket);
   };
 
   const disconnect = () => {
