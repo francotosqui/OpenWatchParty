@@ -18,7 +18,7 @@ plugin.js                    # Loader - loads modules in parallel waves
     ├── utils/               # Utility functions
     │   ├── log.js, media.js, misc.js, time.js, video.js
     ├── ui/                  # User interface
-    │   ├── cards.js, header.js, home.js, indicators.js
+    │   ├── cards.js, guest-controls.js, header.js, home.js, indicators.js
     │   ├── render.js, styles.js, toasts.js
     ├── playback/            # Video playback management
     │   ├── bind.js, play.js, sync.js
@@ -102,6 +102,8 @@ Defines global shared state and configuration constants.
 | `lastSyncServerTs` | number | Server timestamp of last sync |
 | `lastSyncPosition` | number | Position of last sync (seconds) |
 | `lastSyncPlayState` | string | Play state of last sync |
+| `roomWaiting` | boolean | `true` while a guest is waiting for the host after buffering |
+| `guestPaused` | boolean | `true` while a guest has paused local playback; on promotion, retained until playback matches the room so the private pause cannot become authoritative |
 | `readyRoomId` | string | Room ID for which "ready" was sent |
 | `mediaSwitchUntil` | number | Until this time (ms), a closed player is OWP opening the room media, not the user leaving |
 | `isBuffering` | boolean | `true` if video is buffering (HLS) |
@@ -251,6 +253,14 @@ Synchronization loop called every 500 ms (`SYNC_LOOP_MS`, non-hosts only).
 ```
 
 ## Module: `ws.js`
+
+When `host_changed` promotes a privately paused guest, `syncPromotedGuest()`
+applies the tracked room position and play state before host events or periodic
+state updates can be sent. Pending room playback and buffering keep the send
+gate closed. Blocked autoplay keeps it closed until the user presses Play;
+an asynchronous completion from a previous room cannot release the gate.
+Participant status reports a private pause as `paused`, regardless of the
+previous drift-correction status.
 
 ### Description
 Manages WebSocket communication with the session server.
