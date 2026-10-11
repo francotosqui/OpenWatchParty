@@ -268,11 +268,11 @@ mod concurrency_tests {
             std::iter::from_fn(|| test_helpers::recv_msg(&mut guest_rx)).collect();
         let room_state_index = messages
             .iter()
-            .position(|msg| msg.msg_type == "room_state")
+            .position(|msg| msg.msg_type == crate::types::ServerMessageType::RoomState)
             .expect("join must enqueue room_state");
         let room_closed_index = messages
             .iter()
-            .position(|msg| msg.msg_type == "room_closed")
+            .position(|msg| msg.msg_type == crate::types::ServerMessageType::RoomClosed)
             .expect("close must enqueue room_closed");
         assert!(room_state_index < room_closed_index);
     }

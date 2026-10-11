@@ -1,4 +1,4 @@
-use crate::types::{Client, Room, WsMessage};
+use crate::types::{Client, Room, ServerMessageType, WsMessage};
 use crate::utils::now_ms;
 use std::collections::HashMap;
 
@@ -23,7 +23,7 @@ pub(crate) fn send_room_capabilities(room: &Room, clients: &HashMap<String, Clie
     crate::messaging::send_to_senders(
         &senders,
         &WsMessage {
-            msg_type: "room_capabilities".into(),
+            msg_type: ServerMessageType::RoomCapabilities,
             room: Some(room.room_id.clone()),
             client: None,
             payload: Some(serde_json::json!({ "features": features })),
@@ -96,7 +96,7 @@ pub fn participant_list_message(room: &Room, clients: &HashMap<String, Client>) 
         })
         .collect();
     WsMessage {
-        msg_type: "participant_list".to_string(),
+        msg_type: ServerMessageType::ParticipantList,
         room: Some(room.room_id.clone()),
         client: None,
         payload: Some(serde_json::json!({ "participants": participants })),
@@ -120,7 +120,7 @@ pub fn participant_statuses_message(room: &Room) -> WsMessage {
         })
         .collect();
     WsMessage {
-        msg_type: "participant_statuses".to_string(),
+        msg_type: ServerMessageType::ParticipantStatuses,
         room: Some(room.room_id.clone()),
         client: None,
         payload: Some(serde_json::json!({ "statuses": statuses })),
@@ -146,7 +146,7 @@ mod tests {
 
         let message = participant_list_message(&room, &clients);
 
-        assert_eq!(message.msg_type, "participant_list");
+        assert_eq!(message.msg_type, ServerMessageType::ParticipantList);
         assert_eq!(message.room.as_deref(), Some("room"));
         assert_eq!(
             message.payload.unwrap(),
@@ -184,7 +184,7 @@ mod tests {
 
         let message = participant_statuses_message(&room);
 
-        assert_eq!(message.msg_type, "participant_statuses");
+        assert_eq!(message.msg_type, ServerMessageType::ParticipantStatuses);
         assert_eq!(message.room.as_deref(), Some("room"));
         assert_eq!(
             message.payload.unwrap()["statuses"],

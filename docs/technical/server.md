@@ -128,7 +128,7 @@ Room playback state.
 | Field | Type | Description |
 |-------|------|-------------|
 | `position` | `f64` | Position in seconds |
-| `play_state` | `String` | `"playing"` or `"paused"` |
+| `play_state` | `PlayState` | `"playing"` or `"paused"` |
 
 ### Struct `PendingPlay`
 
@@ -145,12 +145,26 @@ WebSocket message format.
 
 | Field | Type | JSON Key | Description |
 |-------|------|----------|-------------|
-| `msg_type` | `String` | `"type"` | Message type |
+| `msg_type` | `ServerMessageType` | `"type"` | Message type |
 | `room` | `Option<String>` | `"room"` | Room ID |
 | `client` | `Option<String>` | `"client"` | Sender client ID |
 | `payload` | `Option<Value>` | `"payload"` | Message data |
 | `ts` | `u64` | `"ts"` | Client timestamp |
 | `server_ts` | `Option<u64>` | `"server_ts"` | Server timestamp |
+
+### Outgoing wire types
+
+`WsMessage` uses `ServerMessageType` for the 16 current server message kinds.
+Serde preserves their existing snake_case names; `as_str` supplies the same labels
+for metrics and logging. `IncomingMessage` remains separate and retains its
+unknown-client-type handling.
+
+`PlaybackState` shares the two-case `PlayState` with validated playback payloads.
+Scheduled controls use `ScheduledPlayerEventPayload` with position, canonical
+play state, action, and target timestamp; the room list uses `RoomListEntry` and
+keeps `media_id: null` for rooms without media. Other payloads remain contextual
+JSON in this stage. Optional envelope fields keep their omission rules, and
+protocol version 1 and feature negotiation remain unchanged.
 
 ## Module: `ws/`
 
@@ -194,7 +208,7 @@ pub async fn client_connection(ws: WebSocket, clients: Clients, rooms: Rooms) {
 
     // 6. Send client_hello with ID
     send_to_client(&client_id, &WsMessage {
-        msg_type: "client_hello",
+        msg_type: ServerMessageType::ClientHello,
         payload: { "client_id": client_id }
     });
 
@@ -229,11 +243,11 @@ Broadcasts a scheduled play event to all participants.
 fn broadcast_scheduled_play(room: &mut Room, clients: &Clients, position: f64, target_server_ts: u64) {
     // 1. Update room state
     room.state.position = position;
-    room.state.play_state = "playing";
+    room.state.play_state = PlayState::Playing;
 
     // 2. Create message with target_server_ts
     let msg = WsMessage {
-        msg_type: "player_event",
+        msg_type: ServerMessageType::PlayerEvent,
         payload: { "action": "play", "position": position, "target_server_ts": target_server_ts },
         server_ts: target_server_ts
     };

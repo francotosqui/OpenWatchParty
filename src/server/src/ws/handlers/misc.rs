@@ -3,7 +3,7 @@ use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
 use super::super::pending_play::{all_ready, prepare_scheduled_play};
 use crate::messaging::{broadcast_room_list, send_to_client, send_to_senders};
 use crate::room::{close_room_parts, handle_leave, send_leave_notification};
-use crate::types::{IncomingMessage, SharedState, WsMessage};
+use crate::types::{IncomingMessage, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::{info, warn};
 
@@ -16,7 +16,7 @@ pub(in crate::ws) async fn handle_ping(
         client_id,
         state,
         &WsMessage {
-            msg_type: "pong".to_string(),
+            msg_type: ServerMessageType::Pong,
             room: parsed.room.clone(),
             client: parsed.client.clone(),
             payload: parsed.payload.clone(),
@@ -223,7 +223,7 @@ pub(in crate::ws) async fn handle_close_room(client_id: &str, state: &SharedStat
                     let crate::types::ServerState { clients, rooms } = &mut *state;
                     let senders = close_room_parts(&room_id, clients, rooms).unwrap_or_default();
                     let message = WsMessage {
-                        msg_type: "room_closed".to_string(),
+                        msg_type: ServerMessageType::RoomClosed,
                         room: Some(room_id),
                         client: None,
                         payload: Some(serde_json::json!({ "reason": "Host closed the room" })),
@@ -249,7 +249,7 @@ mod tests {
     use crate::test_helpers;
 
     fn assert_error_code(message: WsMessage, code: &str) {
-        assert_eq!(message.msg_type, "error");
+        assert_eq!(message.msg_type, ServerMessageType::Error);
         assert_eq!(message.payload.unwrap()["code"], code);
     }
 
@@ -270,7 +270,7 @@ mod tests {
         handle_ping("c1", &parsed, &state).await;
 
         let msg = test_helpers::recv_msg(&mut rx).unwrap();
-        assert_eq!(msg.msg_type, "pong");
+        assert_eq!(msg.msg_type, ServerMessageType::Pong);
         assert_eq!(msg.room, Some("room-1".to_string()));
         let seq = msg.payload.unwrap().get("seq").unwrap().as_i64().unwrap();
         assert_eq!(seq, 42);
@@ -344,9 +344,9 @@ mod tests {
 
         // Both should receive a player_event (play broadcast)
         let msg_h = test_helpers::recv_msg(&mut rx_h).unwrap();
-        assert_eq!(msg_h.msg_type, "player_event");
+        assert_eq!(msg_h.msg_type, ServerMessageType::PlayerEvent);
         let msg_g = test_helpers::recv_msg(&mut rx_g).unwrap();
-        assert_eq!(msg_g.msg_type, "player_event");
+        assert_eq!(msg_g.msg_type, ServerMessageType::PlayerEvent);
 
         // pending_play should be cleared
         let state = state.read().await;
@@ -451,7 +451,7 @@ mod tests {
             test_helpers::recv_msg(&mut host_rx).unwrap(),
             test_helpers::recv_msg(&mut guest_rx).unwrap(),
         ] {
-            assert_eq!(message.msg_type, "room_closed");
+            assert_eq!(message.msg_type, ServerMessageType::RoomClosed);
             assert_eq!(message.payload.unwrap()["reason"], "Host closed the room");
         }
     }

@@ -79,10 +79,34 @@ pub struct StatusBroadcast {
     pub scheduled_flush: Option<u64>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PlayState {
+    Playing,
+    Paused,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum PlaybackAction {
+    Play,
+    Pause,
+    Seek,
+    Buffering,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ScheduledPlayerEventPayload {
+    pub action: PlaybackAction,
+    pub position: f64,
+    pub play_state: PlayState,
+    pub target_server_ts: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlaybackState {
     pub position: f64,
-    pub play_state: String,
+    pub play_state: PlayState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -152,11 +176,13 @@ impl ClientMessageType {
     }
 }
 
-/// Outgoing message types from server (reserved for future use)
-#[allow(dead_code)]
+/// Outgoing message types used by the server envelope.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ServerMessageType {
+    RoomCapabilities,
+    ParticipantList,
+    ParticipantStatuses,
     ClientHello,
     AuthSuccess,
     Error,
@@ -170,6 +196,35 @@ pub enum ServerMessageType {
     HostChanged,
     RoomClosed,
     ChatMessage,
+}
+
+impl ServerMessageType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::RoomCapabilities => "room_capabilities",
+            Self::ClientHello => "client_hello",
+            Self::AuthSuccess => "auth_success",
+            Self::Error => "error",
+            Self::RoomList => "room_list",
+            Self::RoomState => "room_state",
+            Self::ParticipantsUpdate => "participants_update",
+            Self::PlayerEvent => "player_event",
+            Self::StateUpdate => "state_update",
+            Self::Pong => "pong",
+            Self::ClientLeft => "client_left",
+            Self::HostChanged => "host_changed",
+            Self::RoomClosed => "room_closed",
+            Self::ChatMessage => "chat_message",
+            Self::ParticipantList => "participant_list",
+            Self::ParticipantStatuses => "participant_statuses",
+        }
+    }
+}
+
+impl std::fmt::Display for ServerMessageType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 /// Incoming WebSocket message from client
@@ -192,7 +247,7 @@ pub struct IncomingMessage {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct WsMessage {
     #[serde(rename = "type")]
-    pub msg_type: String,
+    pub msg_type: ServerMessageType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub room: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -207,6 +262,47 @@ pub struct WsMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn outgoing_envelopes_preserve_every_wire_name_and_optional_field() {
+        for name in [
+            "client_hello",
+            "auth_success",
+            "error",
+            "room_list",
+            "room_state",
+            "participants_update",
+            "player_event",
+            "state_update",
+            "pong",
+            "client_left",
+            "host_changed",
+            "room_closed",
+            "chat_message",
+            "participant_list",
+            "participant_statuses",
+            "room_capabilities",
+        ] {
+            for fixture in [
+                serde_json::json!({"type":name,"ts":0}),
+                serde_json::json!({"type":name,"room":"r1","client":"c1",
+                    "payload":{"text":"hello", "nested":[null, true]},"ts":u64::MAX,"server_ts":42}),
+            ] {
+                let message: WsMessage = serde_json::from_value(fixture.clone()).unwrap();
+                assert_eq!(message.msg_type.as_str(), name);
+                assert_eq!(serde_json::to_value(message).unwrap(), fixture);
+            }
+        }
+    }
+
+    #[test]
+    fn canonical_playback_states_preserve_the_wire_contract() {
+        for name in ["playing", "paused"] {
+            let fixture = serde_json::json!({"position":123.5,"play_state":name});
+            let state: PlaybackState = serde_json::from_value(fixture.clone()).unwrap();
+            assert_eq!(serde_json::to_value(state).unwrap(), fixture);
+        }
+    }
 
     #[test]
     fn test_client_message_type_deserialize() {
@@ -291,7 +387,7 @@ mod tests {
     fn test_playback_state() {
         let state = PlaybackState {
             position: 123.45,
-            play_state: "playing".to_string(),
+            play_state: PlayState::Playing,
         };
         let json = serde_json::to_string(&state).unwrap();
         assert!(json.contains("123.45"));
