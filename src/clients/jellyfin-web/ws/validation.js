@@ -161,6 +161,8 @@
     room_list: validateRoomList,
     client_hello: validateClientHello,
     auth_success: validateAuthSuccess,
+    room_capabilities: message => object(message.payload) && onlyKeys(message.payload, ['features']) && features(message.payload.features)
+      ? null : 'room_capabilities is invalid',
     room_state: validateRoomState,
     participants_update: validateParticipantCount,
     client_left: validateParticipantCount,
@@ -176,6 +178,7 @@
   };
   const roomRequired = new Set([
     'room_state',
+    'room_capabilities',
     'participants_update',
     'client_left',
     'participant_list',

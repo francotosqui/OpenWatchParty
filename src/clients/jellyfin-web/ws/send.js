@@ -118,6 +118,8 @@
   };
 
   const joinRoom = (id, isReconnect = false, inviteTicket = '') => {
+    state.guestPaused = false;
+    state.sharedPlaybackControl = false;
     if (!isReconnect && actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     state.desiredRoomId = id;
     state.rejectedRejoinRoomIds = state.rejectedRejoinRoomIds.filter(roomId => roomId !== id);

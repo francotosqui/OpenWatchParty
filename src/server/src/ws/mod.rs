@@ -64,6 +64,7 @@ mod concurrency_tests {
             let mut pending_room = test_helpers::create_room("pending-room", "pending-host");
             pending_room.ready_clients.clear();
             pending_room.pending_play = Some(PendingPlay {
+                initiator_id: "host".to_string(),
                 position: 12.0,
                 generation: crate::types::next_pending_play_generation(),
                 position_ts: created_at,
@@ -175,6 +176,7 @@ mod concurrency_tests {
                 room.ready_clients.clear();
                 room.ready_clients.insert("host".to_string());
                 room.pending_play = Some(PendingPlay {
+                    initiator_id: "host".to_string(),
                     position: 12.0,
                     generation: crate::types::next_pending_play_generation(),
                     position_ts: now_ms(),
@@ -290,6 +292,7 @@ mod concurrency_tests {
             let mut room = test_helpers::create_room("room", "host");
             room.clients = vec!["host".to_string(), "guest".to_string()];
             room.pending_play = Some(PendingPlay {
+                initiator_id: "host".to_string(),
                 position: 12.0,
                 generation: crate::types::next_pending_play_generation(),
                 position_ts: created_at,

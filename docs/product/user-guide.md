@@ -113,6 +113,8 @@ As a participant:
 
 While you are in a room, seeking is locked to the host: the timeline, skip, chapter, rewind, and fast-forward controls are dimmed, and keyboard seeking is ignored. Play and pause are shared: your pause pauses the whole room, the host included, and anyone's play resumes everyone. Only while the room waits for the host's stream (after a track change, for example) is the play control dimmed and does nothing.
 
+Shared controls require a compatible server and host. With an older host or server, your pause stays local and Play is locked while the room is paused. Resuming your local pause catches you up to the room. Upgrading clients does not grant guests permission to seek or close the room.
+
 | What Happens | What You See |
 |--------------|--------------|
 | Host or a guest plays | Video starts automatically |

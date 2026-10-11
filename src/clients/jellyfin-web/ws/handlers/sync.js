@@ -8,7 +8,10 @@
 
   const applyRoomState = (msg) => {
     // Names from another room must not show until this room's list arrives.
-    if (msg.room !== state.roomId) state.participants = [];
+    if (msg.room !== state.roomId) {
+      state.participants = [];
+      state.sharedPlaybackControl = false;
+    }
     state.inRoom = true;
     state.roomId = msg.room;
     state.roomName = msg.payload.name;
@@ -152,12 +155,12 @@
       state.lastSyncPlayState = msg.payload.play_state || state.lastSyncPlayState;
       if (msg.payload.play_state === 'playing') state.roomWaiting = false;
     }
+    if (state.guestPaused) {
+      state.lastSyncServerTs = msg.server_ts || utils.getServerNow();
+      state.lastSyncPosition = msg.payload.position ?? state.lastSyncPosition;
+      return;
+    }
     if (msg.payload.play_state === 'playing' && video.paused) {
-      if (state.guestPaused) {
-        state.lastSyncServerTs = msg.server_ts || utils.getServerNow();
-        state.lastSyncPosition = msg.payload.position ?? state.lastSyncPosition;
-        return;
-      }
       utils.startSyncing();
       OWP.playback.safePlay(video, 'state update');
       state.lastSyncServerTs = utils.getServerNow();

@@ -104,6 +104,7 @@ Defines global shared state and configuration constants.
 | `lastSyncPlayState` | string | Play state of last sync |
 | `roomWaiting` | boolean | `true` while a guest is waiting for the host after buffering |
 | `roomHostId` | string | Client id of the room's host, to tell a guest's play or pause from the host's |
+| `sharedPlaybackControl` | boolean | Enabled only after server and current-room capability negotiation; false on connection or room reset |
 | `ownCommandUntil` | number | Until when a guest's own play or pause holds against room updates already on their way |
 | `ownCommandPlayState` | string | Play state of that command |
 | `guestPaused` | boolean | `true` while a guest has paused local playback; on promotion, retained until playback matches the room so the private pause cannot become authoritative |
@@ -268,7 +269,9 @@ previous drift-correction status.
 ### Description
 Manages WebSocket communication with the session server.
 
-Every new connection resets `serverFeatures` and advertises `features: ["host_transfer", "participant_status"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
+Every new connection resets `serverFeatures` and shared-control availability and advertises `features: ["host_transfer", "participant_status", "shared_playback_control"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
+
+`room_capabilities` enables shared play/pause only while the current host supports it. Otherwise guests retain their private pause and cannot play a paused room. Canonical playback acknowledgements clear the optimistic command hold and apply in server order, with event suppression to prevent echoes. Host-side commands retry a temporarily missing video until `VIDEO_ACTION_MAX_WAIT_MS`, preserving the room, role and playback-attempt guards. Pending retries gate authoritative heartbeats; a stream reload still defers the latest command until it completes.
 
 After an unexpected close, the client buffers a `WS_CLOSE` diagnostic containing the
 WebSocket close code, clean flag, and truncated reason. On the next connection it

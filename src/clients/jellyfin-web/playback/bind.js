@@ -227,6 +227,7 @@
     if (state.bound) return;
     state.bound = true;
     state.currentVideoElement = video;
+    state.guestPaused = false;
     const listeners = createVideoListeners(video);
     state.videoListeners = listeners;
     video.addEventListener('waiting', listeners.waiting);

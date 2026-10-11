@@ -36,7 +36,7 @@
   // loads.
   const isPlayLocked = (video) => isGuestLocked(video)
     && video.paused
-    && state.roomWaiting;
+    && (state.roomWaiting || (!state.sharedPlaybackControl && state.lastSyncPlayState === 'paused'));
 
   const showBlockedToast = (message) => {
     const now = Date.now();

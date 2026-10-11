@@ -106,6 +106,8 @@ const joinAs = (clientId, { playing = true } = {}) => {
     roomId: 'room-a',
     clientId,
     roomHostId: 'host',
+    sharedPlaybackControl: true,
+    guestPaused: false,
     isHost: clientId === 'host',
     roomWaiting: false,
     isBuffering: false,
@@ -152,6 +154,48 @@ describe('play and pause shared by the room', () => {
   });
 
   describe('a guest', () => {
+    it('keeps a local pause without sending commands when the host is legacy', async () => {
+      OWP.state.sharedPlaybackControl = false;
+      video.pause();
+      assert.equal(OWP.state.guestPaused, true);
+      assert.deepEqual(playerEvents(), []);
+      h.handleStateUpdate(stateUpdate('playing', 20), video);
+      assert.equal(video.paused, true);
+      await video.play();
+      assert.equal(OWP.state.guestPaused, false);
+      assert.deepEqual(playerEvents(), []);
+    });
+
+    it('enables shared controls only after server and room capability agreement', () => {
+      OWP.state.sharedPlaybackControl = false;
+      OWP.state.serverFeatures = [];
+      const message = { room: 'room-a', payload: { features: ['shared_playback_control'] } };
+      h.handleRoomCapabilities(message);
+      assert.equal(OWP.state.sharedPlaybackControl, false);
+      OWP.state.serverFeatures = ['shared_playback_control'];
+      h.handleRoomCapabilities({ ...message, room: 'other' });
+      assert.equal(OWP.state.sharedPlaybackControl, false);
+      h.handleRoomCapabilities(message);
+      assert.equal(OWP.state.sharedPlaybackControl, true);
+      h.handleRoomCapabilities({ ...message, payload: { features: [] } });
+      assert.equal(OWP.state.sharedPlaybackControl, false);
+    });
+
+    it('applies server-ordered acknowledgements without echoing or retaining an optimistic hold', async () => {
+      video.pause();
+      assert.equal(playerEvents().length, 1);
+      h.handlePlayerEvent(playerEvent('play', 20, { client: 'other-guest' }), video);
+      h.handlePlayerEvent(playerEvent('pause', 24, { client: 'guest' }), video);
+      assert.equal(video.paused, true);
+      assert.equal(video.currentTime, 24);
+      assert.equal(OWP.state.ownCommandUntil, 0);
+      assert.equal(playerEvents().length, 1);
+      h.handlePlayerEvent(playerEvent('play', 28, { client: 'guest' }), video);
+      await Promise.resolve();
+      assert.equal(video.paused, false);
+      assert.equal(video.currentTime, 28);
+      assert.equal(playerEvents().length, 1);
+    });
     it('pauses the room, and an update the host sent before that does not resume it', () => {
       video.currentTime = 12;
       video.pause();
@@ -298,6 +342,40 @@ describe('play and pause shared by the room', () => {
       assert.deepEqual(toasts, ['A guest paused playback']);
     });
 
+    it('retries a guest pause while Jellyfin replaces the video element', async () => {
+      const oldVideo = video;
+      oldVideo.isConnected = false;
+      video = null;
+      OWP.state.currentVideoElement = null;
+      h.handlePlayerEvent(playerEvent('pause', 12, { client: 'guest' }), oldVideo);
+      video = new FakeVideo();
+      OWP.state.currentVideoElement = video;
+      await new Promise(resolve => setTimeout(resolve, OWP.constants.VIDEO_ACTION_RETRY_MS + 20));
+      assert.equal(video.paused, true);
+      assert.equal(video.currentTime, 12);
+      assert.deepEqual(playerEvents(), []);
+    });
+
+    it('bounds a missing-video retry and cancels it after a room or role change', async () => {
+      video = null;
+      OWP.state.currentVideoElement = null;
+      h.handlePlayerEvent(playerEvent('pause', 12, { client: 'guest' }), null);
+      assert.ok(OWP.state.pendingActionTimer);
+      localNow += OWP.constants.VIDEO_ACTION_MAX_WAIT_MS + 1;
+      await new Promise(resolve => setTimeout(resolve, OWP.constants.VIDEO_ACTION_RETRY_MS + 20));
+      assert.equal(OWP.state.pendingActionTimer, null);
+      assert.equal(OWP.state.pendingPlayUntil, 0);
+      localNow = 1000;
+      h.handlePlayerEvent(playerEvent('pause', 12, { client: 'guest' }), null);
+      OWP.state.isHost = false;
+      video = new FakeVideo();
+      OWP.state.currentVideoElement = video;
+      await new Promise(resolve => setTimeout(resolve, OWP.constants.VIDEO_ACTION_RETRY_MS + 20));
+      assert.equal(video.paused, false);
+      assert.deepEqual(playerEvents(), []);
+      assert.equal(OWP.state.pendingPlayUntil, 0);
+    });
+
     it('plays for a guest from where the room was', () => {
       video.paused = true;
       serverNow = 1000;
@@ -314,13 +392,13 @@ describe('play and pause shared by the room', () => {
       assert.deepEqual(toasts, ['A guest resumed playback']);
     });
 
-    it('stays put when already in that state, as with its own pending play', () => {
+    it('aligns to the canonical position even when already playing', () => {
       video.currentTime = 30;
       h.handlePlayerEvent(playerEvent('play', 20), video);
 
-      assert.equal(video.currentTime, 30);
+      assert.equal(video.currentTime, 20);
       assert.equal(safePlayCalls, 0);
-      assert.equal(OWP.state.isSyncing, false);
+      assert.equal(OWP.state.isSyncing, true);
       assert.deepEqual(toasts, []);
     });
 

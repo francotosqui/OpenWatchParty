@@ -6,13 +6,13 @@
   const ui = OWP.ui;
   const { SEEK_THRESHOLD, VIDEO_ACTION_RETRY_MS, VIDEO_ACTION_MAX_WAIT_MS } = OWP.constants;
 
-  const applyPosition = (video, position, projectPlaying = false, eventServerTs = null) => {
+  const applyPosition = (video, position, projectPlaying = false, eventServerTs = null, seekVideo = true) => {
     if (typeof position !== 'number' || !Number.isFinite(position)) return;
     const elapsed = projectPlaying && typeof eventServerTs === 'number'
       ? Math.max(0, utils.getServerNow() - eventServerTs) / 1000
       : 0;
     const target = position + elapsed;
-    if (Math.abs(target - video.currentTime) > SEEK_THRESHOLD) video.currentTime = target;
+    if (seekVideo && Math.abs(target - video.currentTime) > SEEK_THRESHOLD) video.currentTime = target;
     state.lastSyncPosition = target;
     state.lastSyncServerTs = utils.getServerNow();
   };
@@ -25,8 +25,7 @@
     return activeVideo || (fallbackIsUsable ? fallbackVideo : null);
   };
 
-  // Play and pause are the room's: any member can send them. The pending play
-  // the server starts once everyone is ready comes under the host's id.
+  // The canonical event retains the initiating member, even after readiness.
   const fromGuest = msg => Boolean(msg.client) && msg.client !== state.roomHostId;
 
   const applyPlayerEvent = (msg, fallbackVideo) => {
@@ -39,45 +38,47 @@
     state.isInitialSync = false;
     state.initialSyncUntil = 0;
     state.initialSyncTargetPos = null;
+    const applyToVideo = !state.guestPaused || state.sharedPlaybackControl;
+    if (state.sharedPlaybackControl) state.guestPaused = false;
 
     switch (action) {
       case 'play':
         state.roomWaiting = false;
-        applyPosition(video, position, true, msg.server_ts);
+        applyPosition(video, position, true, msg.server_ts, applyToVideo);
         state.lastSyncPlayState = 'playing';
         state.syncCooldownUntil = utils.nowMs() + 2000;
         state.syncStatus = 'syncing';
-        OWP.playback.safePlay(video, 'host play command');
+        if (applyToVideo) OWP.playback.safePlay(video, 'host play command');
         if (ui.showToast) ui.showToast(fromGuest(msg) ? 'A guest resumed playback' : 'Host resumed playback');
         break;
       case 'pause':
         state.roomWaiting = false;
-        applyPosition(video, position, false, null);
+        applyPosition(video, position, false, null, applyToVideo);
         state.lastSyncPlayState = 'paused';
         state.syncCooldownUntil = 0;
         state.syncStatus = 'synced';
-        video.pause();
+        if (applyToVideo) video.pause();
         if (ui.showToast) ui.showToast(fromGuest(msg) ? 'A guest paused playback' : 'Host paused playback');
         break;
       case 'seek':
         state.roomWaiting = false;
-        applyPosition(video, position, hostPlayState === 'playing', msg.server_ts);
+        applyPosition(video, position, hostPlayState === 'playing', msg.server_ts, applyToVideo);
         state.lastSyncPlayState = hostPlayState;
         state.syncCooldownUntil = utils.nowMs() + 2000;
         if (hostPlayState === 'playing') {
           state.syncStatus = 'syncing';
-          OWP.playback.safePlay(video, 'host seek command');
+          if (applyToVideo) OWP.playback.safePlay(video, 'host seek command');
         } else {
           state.syncStatus = 'synced';
-          video.pause();
+          if (applyToVideo) video.pause();
         }
         break;
       case 'buffering':
         state.roomWaiting = true;
-        applyPosition(video, position, false, null);
+        applyPosition(video, position, false, null, applyToVideo);
         state.lastSyncPlayState = 'paused';
         state.syncStatus = 'syncing';
-        video.pause();
+        if (applyToVideo) video.pause();
         break;
     }
     if (ui.updateSyncIndicator) ui.updateSyncIndicator();
@@ -96,15 +97,14 @@
       state.reloadGuestCommand = { msg, roomId: state.roomId, attempt: state.playbackActionAttempt };
       return true;
     }
-    // Already there, as with the host's own pending play once everyone is ready.
-    if (playing !== video.paused) return true;
+    const changed = playing === video.paused;
     utils.startSyncing();
     applyPosition(video, msg.payload.position, playing, msg.server_ts);
     state.wantsToPlay = playing;
-    if (playing) OWP.playback.safePlay(video, 'guest play command');
-    else video.pause();
-    // The pending play the server starts comes under the host's id.
-    if (ui.showToast && fromGuest(msg)) ui.showToast(playing ? 'A guest resumed playback' : 'A guest paused playback');
+    if (changed && playing) OWP.playback.safePlay(video, 'guest play command');
+    else if (changed) video.pause();
+    // Scheduled play retains its initiator; only guest actions get this toast.
+    if (changed && ui.showToast && fromGuest(msg)) ui.showToast(playing ? 'A guest resumed playback' : 'A guest paused playback');
     return true;
   };
 
@@ -123,10 +123,28 @@
     const targetTs = msg.payload.target_server_ts || msg.server_ts || utils.getServerNow();
     const roomId = msg.room || state.roomId;
     const actionAttempt = ++state.playbackActionAttempt;
-    utils.scheduleAt(targetTs, () => {
-      if (actionAttempt !== state.playbackActionAttempt || !state.inRoom || state.roomId !== roomId || !state.isHost) return;
-      applyGuestCommand(msg, video);
-    });
+    const retryDeadline = utils.nowMs() + Math.max(0, targetTs - utils.getServerNow()) + VIDEO_ACTION_MAX_WAIT_MS;
+    state.pendingPlayUntil = targetTs;
+    const apply = () => {
+      if (actionAttempt !== state.playbackActionAttempt || !state.inRoom || state.roomId !== roomId || !state.isHost) {
+        if (actionAttempt === state.playbackActionAttempt && state.roomId === roomId) {
+          state.pendingPlayUntil = 0;
+          state.pendingActionTimer = null;
+        }
+        return;
+      }
+      if (applyGuestCommand(msg, video)) {
+        state.pendingPlayUntil = 0;
+        state.pendingActionTimer = null;
+      } else if (utils.nowMs() < retryDeadline) {
+        state.pendingPlayUntil = utils.getServerNow() + Math.max(0, retryDeadline - utils.nowMs());
+        state.pendingActionTimer = OWP.timers.setTimeout(apply, VIDEO_ACTION_RETRY_MS, 'room');
+      } else {
+        state.pendingPlayUntil = 0;
+        state.pendingActionTimer = null;
+      }
+    };
+    utils.scheduleAt(targetTs, apply);
   };
 
   h.handlePlayerEvent = (msg, video) => {
@@ -136,6 +154,8 @@
     }
     utils.startSyncing();
     if (!msg.payload) return;
+    state.ownCommandUntil = 0;
+    state.ownCommandPlayState = '';
     const targetTs = msg.payload.target_server_ts || msg.server_ts || utils.getServerNow();
     const roomId = msg.room || state.roomId;
     const actionAttempt = ++state.playbackActionAttempt;

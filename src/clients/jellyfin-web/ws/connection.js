@@ -89,6 +89,7 @@
     state.lastAuthToastMessage = '';
     state.lastAuthToastAt = 0;
     state.serverFeatures = [];
+    state.sharedPlaybackControl = false;
     // The version is always declared: it is what lets the server negotiate
     // even when the client has no token or identity to authenticate with.
     const authPayload = { protocol_version: PROTOCOL_VERSION, features: CLIENT_FEATURES };
@@ -169,6 +170,7 @@
       case 'room_list': h.handleRoomList(msg); break;
       case 'client_hello': h.handleClientHello(msg); break;
       case 'auth_success': h.handleAuthSuccess(msg); break;
+      case 'room_capabilities': h.handleRoomCapabilities(msg); break;
       case 'room_state': h.handleRoomState(msg, video); break;
       case 'participants_update': h.handleParticipantsUpdate(msg); break;
       case 'client_left': h.handleClientLeft(msg); break;

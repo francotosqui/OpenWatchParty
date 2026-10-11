@@ -97,6 +97,7 @@ const createHarness = () => {
   };
   const setGuest = ({ paused = true, playState = 'paused', waiting = false } = {}) => {
     Object.assign(OWP.state, {
+      sharedPlaybackControl: true,
       inRoom: true,
       isHost: false,
       roomId: 'room-a',

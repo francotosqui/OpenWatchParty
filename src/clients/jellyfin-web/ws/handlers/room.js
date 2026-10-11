@@ -19,9 +19,17 @@
 
   h.handleAuthSuccess = (msg) => {
     state.serverFeatures = msg.payload?.features || [];
+    if (!state.serverFeatures.includes('shared_playback_control')) state.sharedPlaybackControl = false;
     if (state.connectionPhase !== 'authenticated' && OWP.actions?.handleAuthenticatedConnection) {
       OWP.actions.handleAuthenticatedConnection();
     }
+  };
+
+  h.handleRoomCapabilities = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId) return;
+    state.sharedPlaybackControl = state.serverFeatures.includes('shared_playback_control')
+      && msg.payload.features.includes('shared_playback_control');
+    if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();
   };
 
   h.handleParticipantsUpdate = (msg) => {
