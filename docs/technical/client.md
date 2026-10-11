@@ -428,6 +428,8 @@ The configuration page (`configPage.html`) has its own `configMessages` catalog 
 
 To add a locale, copy the complete `en` catalog in `utils/i18n.js` (and in `configPage.html`), translate each value without changing its `{placeholders}`, and register the locale in `catalogs`. The localization tests enforce matching keys and placeholders in every shipped catalog. Plurals use `_one` and `_other` keys, which covers the shipped languages; a language with more plural forms (`few`, `many`) needs those keys added to `en` first.
 
+The literal guard scans all client scripts together, preserving their IIFE scopes and original file/line locations. It follows local bindings and statically named `OWP` helper exports (including namespace aliases) across files to DOM text, attributes, HTML-writing methods and toast/confirmation sinks. Unknown `OWP.ui` helpers conservatively reject literal string arguments; use catalog lookups for their labels. Dynamic property names and runtime-generated text are outside this static guard's analysis. HTML-writing sinks reject uncatalogued literal text, including short labels and markup; this does not make translated HTML safe or change the client's createElement-based rendering.
+
 ## Module: `app.js`
 
 ### Description
