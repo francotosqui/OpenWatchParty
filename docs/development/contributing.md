@@ -113,6 +113,8 @@ For staged GitHub Actions workflows, the pre-commit hook requires both
 image containing both. Installing only `actionlint` skips embedded shell checks
 in that tool; the hook therefore selects Docker or reports the missing tools.
 This catches shell errors locally before the workflow lint job runs in CI.
+On Git Bash, the hook converts the host mount with `cygpath` and disables MSYS
+conversion only for that Docker call, preserving the container's `/repo` path.
 
 ### 2. Creating a PR
 

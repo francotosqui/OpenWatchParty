@@ -72,7 +72,11 @@ for argument in "$@"; do
     if [[ -f $argument ]] && grep -q BAD_COMPOSE "$argument"; then exit 1; fi
 done
 if [[ $1 == run ]]; then
+    [[ ${MSYS_NO_PATHCONV:-} == 1 ]] || exit 1
     printf 'docker-workflows\n' >> "$OWP_HOOK_TOOL_LOG"
+    for argument in "$@"; do
+        [[ $argument != *':/repo:ro' ]] || printf 'docker-volume:%s\n' "$argument" >> "$OWP_HOOK_TOOL_LOG"
+    done
 else
     printf 'docker-compose\n' >> "$OWP_HOOK_TOOL_LOG"
 fi
@@ -159,6 +163,17 @@ if grep -q '^actionlint$' "$tool_log"; then
     printf 'native actionlint ran without ShellCheck\n' >&2
     exit 1
 fi
+cat > "$limited_bin/cygpath" <<'EOF'
+#!/usr/bin/env bash
+printf 'C:/fixture/snapshot\n'
+EOF
+chmod +x "$limited_bin/cygpath"
+: > "$tool_log"
+(cd "$repository" && PATH="$limited_bin" OWP_HOOK_TOOL_LOG="$tool_log" .githooks/pre-commit) >/dev/null
+grep -q '^docker-volume:C:/fixture/snapshot:/repo:ro$' "$tool_log" || {
+    printf 'Git Bash host mount was not converted for Docker\n' >&2
+    exit 1
+}
 rm "$limited_bin/docker"
 if (cd "$repository" && PATH="$limited_bin" OWP_HOOK_TOOL_LOG="$tool_log" .githooks/pre-commit) >"$temporary_dir/missing-tools.log" 2>&1; then
     printf 'workflow passed without ShellCheck or Docker\n' >&2
