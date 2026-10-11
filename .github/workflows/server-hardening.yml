@@ -68,7 +68,7 @@ jobs:
           docker run -d --name owp-load --cpus 2 --memory 512m -p 127.0.0.1:19000:3000 \
             -e ALLOW_INSECURE_NO_AUTH=true -e ALLOWED_ORIGINS='*' -e LOG_LEVEL=warn \
             -e MAX_CONNECTIONS=256 -e MAX_CONNECTIONS_PER_IP=256 openwatchparty/session-server:test
-          for attempt in $(seq 1 30); do
+          for (( attempt = 0; attempt < 30; attempt++ )); do
             curl -fsS http://127.0.0.1:19000/ready && exit 0
             sleep 1
           done

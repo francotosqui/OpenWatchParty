@@ -18,6 +18,8 @@ regexes = [
   '''^98WPRKE6UmMf3yz96/mQPgkiEnDw4mIo1BPYNUA45rQ=$''',
   '''^K7xR9mPqN2wLhVbE4cT8fY0jU5sA3dG1$''',
   '''^YOUR_API_KEY$''',
+  # RFC 6455's public example handshake nonce, not an authentication key.
+  '''^dGhlIHNhbXBsZSBub25jZQ==$''',
   '''^eyJhbGciOiJIUzI1NiIs(\.\.\.|InR5cCI6IkpXVCJ9\.\.\.)$''',
 ]
 
