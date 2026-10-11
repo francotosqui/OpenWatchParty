@@ -17,6 +17,7 @@
       state.clientId = msg.client;
     }
     state.isHost = (msg.payload.host_id === state.clientId);
+    if (state.isHost) state.guestPaused = false;
     state.roomHostId = msg.payload.host_id;
     if (!state.hasTimeSync && typeof msg.server_ts === 'number') {
       state.serverOffsetMs = msg.server_ts - utils.nowMs();
@@ -152,6 +153,11 @@
       if (msg.payload.play_state === 'playing') state.roomWaiting = false;
     }
     if (msg.payload.play_state === 'playing' && video.paused) {
+      if (state.guestPaused) {
+        state.lastSyncServerTs = msg.server_ts || utils.getServerNow();
+        state.lastSyncPosition = msg.payload.position ?? state.lastSyncPosition;
+        return;
+      }
       utils.startSyncing();
       OWP.playback.safePlay(video, 'state update');
       state.lastSyncServerTs = utils.getServerNow();

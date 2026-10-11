@@ -106,6 +106,7 @@ Defines global shared state and configuration constants.
 | `roomHostId` | string | Client id of the room's host, to tell a guest's play or pause from the host's |
 | `ownCommandUntil` | number | Until when a guest's own play or pause holds against room updates already on their way |
 | `ownCommandPlayState` | string | Play state of that command |
+| `guestPaused` | boolean | `true` while a guest has paused local playback; on promotion, retained until playback matches the room so the private pause cannot become authoritative |
 | `readyRoomId` | string | Room ID for which "ready" was sent |
 | `isBuffering` | boolean | `true` if video is buffering (HLS) |
 | `wantsToPlay` | boolean | `true` if user wants to play |
@@ -255,6 +256,14 @@ Synchronization loop called every 500 ms (`SYNC_LOOP_MS`, non-hosts only).
 ```
 
 ## Module: `ws.js`
+
+When `host_changed` promotes a privately paused guest, `syncPromotedGuest()`
+applies the tracked room position and play state before host events or periodic
+state updates can be sent. Pending room playback and buffering keep the send
+gate closed. Blocked autoplay keeps it closed until the user presses Play;
+an asynchronous completion from a previous room cannot release the gate.
+Participant status reports a private pause as `paused`, regardless of the
+previous drift-correction status.
 
 ### Description
 Manages WebSocket communication with the session server.

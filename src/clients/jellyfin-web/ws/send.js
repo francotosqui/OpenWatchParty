@@ -74,6 +74,8 @@
       lastSyncPlayState: '',
       roomWaiting: false,
       roomHostId: '',
+      sharedPlaybackControl: false,
+      guestPaused: false,
       ownCommandUntil: 0,
       ownCommandPlayState: '',
       joiningItemId: '',

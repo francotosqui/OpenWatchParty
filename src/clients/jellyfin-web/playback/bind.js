@@ -15,6 +15,42 @@
   // the room.
   const isReloadingStream = () => Boolean(state.streamReloadUntil && utils.nowMs() < state.streamReloadUntil);
 
+  let promotedPlay = null;
+
+  // A private guest pause must not become the room's state on promotion.
+  // Keep that pause as a send gate until the room position and play state
+  // have been applied, including an asynchronous or blocked play request.
+  const syncPromotedGuest = (video) => {
+    if (!state.isHost || !state.guestPaused || !video || !state.lastSyncServerTs) return;
+    if (hasPendingRoomWork() || state.isBuffering || !utils.isVideoReady() || utils.isSeeking()) return;
+    if (promotedPlay?.video === video && promotedPlay.roomId === state.roomId) return;
+    if (state.playbackBlocked && video.paused && state.lastSyncPlayState === 'playing') return;
+    utils.startSyncing();
+    const playing = state.lastSyncPlayState === 'playing';
+    const position = playing
+      ? utils.adjustedPosition(state.lastSyncPosition, state.lastSyncServerTs)
+      : state.lastSyncPosition;
+    video.currentTime = position;
+    if (!playing) {
+      video.pause();
+      state.guestPaused = false;
+      return;
+    }
+    if (!video.paused) {
+      state.guestPaused = false;
+      return;
+    }
+    const attempt = { video, roomId: state.roomId, actionAttempt: state.playbackActionAttempt };
+    promotedPlay = attempt;
+    Promise.resolve(playback.safePlay(video, 'host promotion')).then(success => {
+      if (success && !video.paused && state.inRoom && state.isHost
+          && state.roomId === attempt.roomId && state.currentVideoElement === video
+          && state.playbackActionAttempt === attempt.actionAttempt) state.guestPaused = false;
+    }).finally(() => {
+      if (promotedPlay === attempt) promotedPlay = null;
+    });
+  };
+
   const endStreamReload = (video) => {
     state.streamReloadUntil = 0;
     state.lastSentPosition = video.currentTime;
@@ -26,6 +62,8 @@
   const sendStateUpdate = (video) => {
     const actions = OWP.actions;
     if (!state.isHost || !actions || !actions.send) return;
+    syncPromotedGuest(video);
+    if (state.guestPaused) return;
     if (state.isSyncing || hasPendingRoomWork() || isReloadingStream()) return;
     if (utils.isSeeking()) return;
     if (state.isBuffering || !utils.isVideoReady()) return;
@@ -38,6 +76,7 @@
   const onHostEvent = (action, video) => {
     const actions = OWP.actions;
     if (!state.isHost || !actions || !actions.send || !utils.shouldSend()) return;
+    if (state.guestPaused) return;
     if (state.isSyncing || hasPendingRoomWork() || isReloadingStream()) return;
     if (action === 'seek' && !utils.isVideoReady()) return;
     if (action === 'pause') {
@@ -73,6 +112,7 @@
   const onGuestEvent = (action, video) => {
     const actions = OWP.actions;
     if (!state.inRoom || state.isHost || !actions || !actions.send || !utils.shouldSend()) return;
+    if (!state.sharedPlaybackControl) return;
     const playing = action === 'play';
     if (state.lastSyncPlayState !== (playing ? 'paused' : 'playing')) return;
     // Not while the room waits for the host, nor for the pause that ends an
@@ -102,7 +142,7 @@
       waiting: () => {
         state.isBuffering = true;
         utils.log('VIDEO', { event: 'buffering', pos: video.currentTime, readyState: video.readyState });
-        if (state.isHost && !state.isSyncing && !hasPendingRoomWork() && !isReloadingStream()
+        if (state.isHost && !state.guestPaused && !state.isSyncing && !hasPendingRoomWork() && !isReloadingStream()
             && utils.shouldSend() && OWP.actions && OWP.actions.send) {
           OWP.actions.send('player_event', { action: 'buffering', position: video.currentTime });
         }
@@ -125,7 +165,7 @@
         if (wasReloading) endStreamReload(video);
         if (wasBuffering || wasReloading) {
           utils.log('VIDEO', { event: 'playing', pos: video.currentTime });
-          if (state.isHost && !state.isSyncing && !hasPendingRoomWork() && utils.shouldSend()
+          if (state.isHost && !state.guestPaused && !state.isSyncing && !hasPendingRoomWork() && utils.shouldSend()
               && OWP.actions && OWP.actions.send) {
             OWP.actions.send('player_event', { action: 'play', position: video.currentTime });
           }
@@ -134,9 +174,21 @@
       play: () => {
         if (playback.markPlaybackResumed) playback.markPlaybackResumed();
         onGuestEvent('play', video);
+        if (!state.isHost && state.guestPaused) {
+          state.guestPaused = false;
+          state.isInitialSync = false;
+          state.initialSyncUntil = 0;
+          state.initialSyncTargetPos = null;
+          state.syncCooldownUntil = 0;
+        }
+        if (state.isHost && state.guestPaused) {
+          syncPromotedGuest(video);
+          return;
+        }
         onHostEvent('play', video);
       },
       pause: () => {
+        if (state.inRoom && !state.isHost && !state.sharedPlaybackControl && state.lastSyncPlayState === 'playing') state.guestPaused = true;
         onGuestEvent('pause', video);
         onHostEvent('pause', video);
       },
@@ -149,7 +201,7 @@
       // 0:00 and then to seek back.
       emptied: () => {
         // A reload already under way (a retry empties again) keeps its limit.
-        if (!state.isHost || !state.inRoom || isReloadingStream()) return;
+        if (!state.isHost || !state.inRoom || state.guestPaused || isReloadingStream()) return;
         state.streamReloadUntil = utils.nowMs() + STREAM_RELOAD_MAX_MS;
         state.streamReloadResume = state.lastPlayedPlaying;
         if (!state.streamReloadResume || hasPendingRoomWork()
@@ -214,5 +266,5 @@
     state.currentVideoElement = null;
   };
 
-  Object.assign(playback, { bindVideo, cleanupVideoListeners });
+  Object.assign(playback, { bindVideo, cleanupVideoListeners, syncPromotedGuest });
 })();
