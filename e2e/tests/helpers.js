@@ -81,13 +81,16 @@ async function waitForPaused(page) {
     .toBe(true);
 }
 
-// OWP ignores the player's own events while it moves the video itself, as in
-// the initial sync after joining: wait until a user's play or pause counts.
+// Sync can settle before the 2-second UI tick binds the new video. Wait for
+// that video's listeners too, so the tested user action actually reaches OWP.
 async function waitForSettled(page) {
   await expect
     .poll(() => page.evaluate(() => {
       const owp = window.OpenWatchParty;
-      return !owp.state.isInitialSync && owp.utils.shouldSend();
+      const video = owp.utils.getVideo();
+      return Boolean(video && owp.state.bound && owp.state.currentVideoElement === video
+        && typeof owp.state.videoListeners?.pause === 'function'
+        && !owp.state.isInitialSync && owp.utils.shouldSend());
     }), { timeout: 30_000 })
     .toBe(true);
 }
