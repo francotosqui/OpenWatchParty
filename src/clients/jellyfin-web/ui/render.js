@@ -113,6 +113,28 @@
     if (hint) hint.hidden = enabled;
   };
 
+  const SERVER_LABEL_ID = 'owp-server-label';
+
+  // Host and path, without the scheme and the /ws endpoint. Only the parts
+  // that are safe to show, should a URL ever carry more.
+  const serverLabel = (value) => {
+    try {
+      const url = new URL(value);
+      if (!['ws:', 'wss:'].includes(url.protocol) || !url.hostname) return t('unavailable');
+      return `${url.host}${url.pathname.replace(/\/ws\/?$/, '').replace(/\/$/, '')}`;
+    } catch (err) {
+      return t('unavailable');
+    }
+  };
+
+  // Token refresh can change the configured URL without replacing the socket.
+  // While connected, show the active socket's target, not the next connection's.
+  const updateServerLabel = () => {
+    const label = document.getElementById(SERVER_LABEL_ID);
+    const target = state.ws?.readyState === 1 ? state.ws.url : state.wsUrl || DEFAULT_WS_URL;
+    if (label) label.textContent = serverLabel(String(target));
+  };
+
   const HELP_ID = 'owp-help';
   const HELP_BUTTON_ID = 'owp-btn-help';
 
@@ -210,11 +232,14 @@
     lobby.append(roomSection, createSection);
 
     const footer = createElement('div', 'owp-footer');
-    footer.append(document.createTextNode(t('server')), document.createTextNode(String(DEFAULT_WS_URL.replace(/^wss?:\/\//, '').replace('/ws', ''))));
+    const server = createElement('span');
+    server.id = SERVER_LABEL_ID;
+    footer.append(document.createTextNode(t('server')), server);
     panel.replaceChildren(header, createLobbyHelp(), lobby, footer);
     applyLobbyHelp();
     ui.updateRoomListUI();
     updateCreateRoomButton();
+    updateServerLabel();
   };
 
   // Names when the server sends them (participant_list), otherwise the count,
@@ -645,6 +670,7 @@
       ui.updateSyncIndicator();
       ui.updateRoomListUI();
       updateCreateRoomButton();
+      updateServerLabel();
       ui.renderHomeWatchParties();
       return;
     }
@@ -711,9 +737,17 @@
   const isKeyboardClick = event => !!event && event.detail === 0;
 
   const injectOsdButton = () => {
-    if (document.getElementById(BTN_ID)) return;
-    const videoOsd = document.querySelector('.videoOsdBottom .buttons');
+    // Jellyfin keeps the previous player page in the DOM, hidden as
+    // `.page.hide`: use the buttons of the shown player, and move the button
+    // there when it is still in another player page.
+    const videoOsd = Array.from(document.querySelectorAll('.videoOsdBottom .buttons'))
+      .find(buttons => !buttons.closest('.page.hide'));
     if (!videoOsd) return;
+    const existing = document.getElementById(BTN_ID);
+    if (existing) {
+      if (existing.closest('.videoOsdBottom .buttons') === videoOsd) return;
+      existing.remove();
+    }
     const btn = document.createElement('button');
     btn.id = BTN_ID;
     btn.className = 'paper-icon-button-light btnWatchParty autoSize';

@@ -62,6 +62,7 @@ fn promote_next_host(
         .unwrap_or_default();
     room.host_id = new_host_id.clone();
     room.pending_host_reconnect = None;
+    crate::room::send_room_capabilities(room, clients);
     Some(host_changed_message(room_id, &new_host_id, &host_name))
 }
 
@@ -321,6 +322,7 @@ mod tests {
         let _rx = test_helpers::setup_room_with_host(&mut clients, &mut rooms, "host-1");
 
         rooms.get_mut("room-1").unwrap().pending_play = Some(PendingPlay {
+            initiator_id: "host".to_string(),
             position: 10.0,
             generation: crate::types::next_pending_play_generation(),
             position_ts: 0,
@@ -444,6 +446,7 @@ mod tests {
         room.state.position = 42.0;
         room.state.play_state = "playing".to_string();
         room.pending_play = Some(PendingPlay {
+            initiator_id: "host".to_string(),
             position: 10.0,
             generation: crate::types::next_pending_play_generation(),
             position_ts: 0,
@@ -502,6 +505,7 @@ mod tests {
             let mut room = test_helpers::create_room("room", "host");
             room.clients.push("guest".to_string());
             room.pending_play = Some(PendingPlay {
+                initiator_id: "host".to_string(),
                 position: 10.0,
                 generation: crate::types::next_pending_play_generation(),
                 position_ts: 0,

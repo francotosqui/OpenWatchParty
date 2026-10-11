@@ -291,6 +291,9 @@ pub(in crate::ws) async fn handle_join_room(
             send_to_senders(&senders, &list, "participant list");
             send_to_senders(&senders, &statuses, "participant statuses");
         }
+        if let Some(room) = state.rooms.get(room_id) {
+            crate::room::send_room_capabilities(room, &state.clients);
+        }
     }
 }
 

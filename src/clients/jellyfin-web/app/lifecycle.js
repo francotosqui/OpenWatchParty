@@ -34,6 +34,7 @@
     state.autoJoinAttempt++;
     OWP.timers.clearScope('media');
     state.bound = false;
+    if (ui.updateGuestControls) ui.updateGuestControls();
   };
 
   const createPanel = () => {
@@ -121,6 +122,9 @@
       if (ui.updateCreateRoomButton) ui.updateCreateRoomButton();
       const video = utils.getVideo();
       if (hadVideoElement && !video) {
+        // OWP left the player itself to start the room media from its details
+        // page: give the new video time to appear before leaving the room.
+        if (Date.now() < state.mediaSwitchUntil) return;
         hadVideoElement = false;
         onVideoPlayerExit();
         return;
@@ -150,6 +154,7 @@
       }
     }, HOME_REFRESH_MS, 'lifecycle');
     state.intervals.sync = OWP.timers.setInterval(() => {
+      if (ui.updateGuestControls) ui.updateGuestControls();
       if (state.inRoom && !state.isHost) {
         playback.syncLoop();
       }

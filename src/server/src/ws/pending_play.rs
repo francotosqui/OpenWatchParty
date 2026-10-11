@@ -19,6 +19,10 @@ pub(super) fn prepare_scheduled_play(
     event_server_ts: u64,
     target_server_ts: u64,
 ) -> (Vec<ClientSender>, WsMessage) {
+    let initiator_id = room
+        .pending_play
+        .take()
+        .map_or_else(|| room.host_id.clone(), |pending| pending.initiator_id);
     room.state.position = position;
     room.state.play_state = "playing".to_string();
     let now = Instant::now();
@@ -29,10 +33,17 @@ pub(super) fn prepare_scheduled_play(
     room.command_cooldown_until = now.checked_add(Duration::from_millis(
         PLAY_SCHEDULE_MS + super::constants::COMMAND_COOLDOWN_MS,
     ));
+    // A guest's pending play keeps holding until the host has applied it.
+    if room
+        .guest_command_until
+        .is_some_and(|deadline| now < deadline)
+    {
+        room.guest_command_until = room.command_cooldown_until;
+    }
     let msg = WsMessage {
         msg_type: "player_event".to_string(),
         room: Some(room.room_id.clone()),
-        client: Some(room.host_id.clone()),
+        client: Some(initiator_id),
         payload: Some(serde_json::json!({
             "action": "play",
             "position": position,
@@ -75,7 +86,6 @@ pub(super) fn schedule_pending_play(
                 Some(pending) if pending.generation == generation => pending,
                 _ => return,
             };
-            room.pending_play = None;
             let target_server_ts = now_ms() + PLAY_SCHEDULE_MS;
             let (senders, msg) = prepare_scheduled_play(
                 room,
@@ -142,11 +152,47 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    async fn pending_play_timeout_retains_the_guest_initiator_for_every_member() {
+        let state = test_helpers::create_state();
+        let (host, mut host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (guest, mut guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        let mut room = test_helpers::create_room("r1", "host");
+        room.clients.push("guest".into());
+        let generation = crate::types::next_pending_play_generation();
+        room.pending_play = Some(crate::types::PendingPlay {
+            initiator_id: "guest".into(),
+            position: 12.0,
+            generation,
+            position_ts: now_ms(),
+        });
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".into(), host);
+            locked.clients.insert("guest".into(), guest);
+            locked.rooms.insert("r1".into(), room);
+        }
+        let tasks = crate::tasks::AppTasks::new();
+        let timer = schedule_pending_play("r1".into(), generation, state.clone(), &tasks);
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_millis(MAX_READY_WAIT_MS + 1)).await;
+        timer.await.unwrap();
+        for rx in [&mut host_rx, &mut guest_rx] {
+            let event = test_helpers::recv_msg(rx).unwrap();
+            assert_eq!(event.client.as_deref(), Some("guest"));
+            assert_eq!(event.payload.unwrap()["action"], "play");
+        }
+        assert!(state.read().await.rooms["r1"].pending_play.is_none());
+        tasks.cancel();
+        tasks.wait().await;
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn pending_play_timer_is_reaped_on_shutdown() {
         let state = test_helpers::create_state();
         let created_at = now_ms();
         let mut room = test_helpers::create_room("r1", "host");
         room.pending_play = Some(crate::types::PendingPlay {
+            initiator_id: "host".to_string(),
             position: 12.0,
             generation: crate::types::next_pending_play_generation(),
             position_ts: created_at,
@@ -172,6 +218,7 @@ mod tests {
         let created_at = now_ms();
         let mut room = test_helpers::create_room("r1", "host");
         room.pending_play = Some(crate::types::PendingPlay {
+            initiator_id: "host".to_string(),
             position: 12.0,
             generation: crate::types::next_pending_play_generation(),
             position_ts: created_at,
@@ -201,6 +248,7 @@ mod tests {
         let mut room = test_helpers::create_room("r1", "host");
         let old_generation = crate::types::next_pending_play_generation();
         room.pending_play = Some(crate::types::PendingPlay {
+            initiator_id: "host".to_string(),
             position: 12.0,
             generation: old_generation,
             position_ts: 10_000,
@@ -211,6 +259,7 @@ mod tests {
         tokio::task::yield_now().await;
         let mut locked = state.write().await;
         locked.rooms.get_mut("r1").unwrap().pending_play = Some(crate::types::PendingPlay {
+            initiator_id: "host".to_string(),
             position: 8.0,
             generation: crate::types::next_pending_play_generation(),
             position_ts: 9_000,

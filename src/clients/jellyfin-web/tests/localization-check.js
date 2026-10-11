@@ -35,6 +35,13 @@ const findUnlocalizedLiterals = (source, filename = 'fixture.js') => new Linter(
           // Stylesheets and Material icon glyph names are not UI labels.
           if (filename === 'ui/styles.js' && nameOf(node.left.object) === 'style' && nameOf(node.left.property) === 'textContent') return;
           if (filename === 'ui/home.js' && nameOf(node.left.object) === 'icon' && node.right.value === 'groups') return;
+          if (filename === 'ui/guest-controls.js'
+            && node.left.object.type === 'CallExpression'
+            && callName(node.left.object) === 'querySelector'
+            && node.left.object.arguments[0]?.value === '.owp-guest-lock-icon'
+            && node.right.type === 'ConditionalExpression'
+            && node.right.consequent.value === 'hourglass_empty'
+            && node.right.alternate.value === 'lock') return;
           sinks.push(node.right);
         },
         CallExpression(node) {

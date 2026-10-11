@@ -20,9 +20,17 @@
 
   h.handleAuthSuccess = (msg) => {
     state.serverFeatures = msg.payload?.features || [];
+    if (!state.serverFeatures.includes('shared_playback_control')) state.sharedPlaybackControl = false;
     if (state.connectionPhase !== 'authenticated' && OWP.actions?.handleAuthenticatedConnection) {
       OWP.actions.handleAuthenticatedConnection();
     }
+  };
+
+  h.handleRoomCapabilities = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId) return;
+    state.sharedPlaybackControl = state.serverFeatures.includes('shared_playback_control')
+      && msg.payload.features.includes('shared_playback_control');
+    if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();
   };
 
   h.handleParticipantsUpdate = (msg) => {
@@ -73,8 +81,12 @@
     if (!state.inRoom || msg.room !== state.roomId) return;
     const becameHost = msg.payload.host_id === state.clientId;
     state.isHost = becameHost;
+    state.roomHostId = msg.payload.host_id;
     if (becameHost && OWP.actions?.resetDriftCorrection) {
       OWP.actions.resetDriftCorrection();
+    }
+    if (becameHost && OWP.playback?.syncPromotedGuest) {
+      OWP.playback.syncPromotedGuest(state.currentVideoElement || OWP.utils.getVideo());
     }
     ui.render();
     if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();

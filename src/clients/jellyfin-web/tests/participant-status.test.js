@@ -52,6 +52,7 @@ const enterRoom = () => {
     roomId: 'room-1',
     clientId: 'client-a',
     isHost: false,
+    guestPaused: false,
     participants: [],
     statusesRoomId: '',
     serverFeatures: [],
@@ -162,6 +163,23 @@ describe('participant statuses', () => {
       now += 5000;
       OWP.playback.reportStatus();
       assert.equal(sent.length, 1);
+    });
+
+    it('reports a private guest pause instead of stale sync-engine status', () => {
+      for (const syncStatus of ['synced', 'syncing']) {
+        assert.equal(statusWith({ guestPaused: true, syncStatus }, { paused: true }), 'paused');
+      }
+      OWP.state.serverFeatures = ['participant_status'];
+      OWP.playback.reportStatus();
+      now += PARTICIPANT_STATUS_HOLD_MS;
+      OWP.playback.reportStatus();
+      assert.deepEqual(sent, [['participant_status', { status: 'paused' }]]);
+      OWP.state.guestPaused = false;
+      video.paused = false;
+      OWP.playback.reportStatus();
+      now += PARTICIPANT_STATUS_HOLD_MS;
+      OWP.playback.reportStatus();
+      assert.deepEqual(sent.at(-1), ['participant_status', { status: 'catching_up' }]);
     });
 
     it('waits again whenever the status changes before it held', () => {

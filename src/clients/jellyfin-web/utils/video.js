@@ -2,7 +2,8 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const utils = OWP.utils = OWP.utils || {};
 
-  const getVideo = () => document.querySelector('video');
+  const getVideo = () => [...document.querySelectorAll('video')]
+    .find(video => !video.closest('.page.hide')) || null;
 
   const isVideoReady = () => {
     const video = getVideo();

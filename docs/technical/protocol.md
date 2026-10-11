@@ -205,7 +205,9 @@ Indicate client is ready to receive playback commands.
 
 ### `player_event`
 
-Send a playback event (host only).
+Send a playback event. Guests may send `play` and `pause` only when both they and the current host negotiated `shared_playback_control` in `auth`. Otherwise guest commands receive `HOST_PERMISSION_REQUIRED`. `seek`, `buffering` and `state_update` remain host only.
+
+The server sends `room_capabilities` with `{ "features": ["shared_playback_control"] }` (or an empty array) only to clients that negotiated this extension. It follows room creation/join, host transfer/reclaim and authentication changes. Legacy clients receive no new fields or message types. A new client uses shared controls only after both the server acknowledgement and the room announcement; otherwise it keeps the guest seek/play lock and private pause behavior.
 
 ```json
 {
@@ -236,7 +238,13 @@ Send a playback event (host only).
 **Effects:**
 - Updates `room.state`
 - Updates `room.last_command_ts` (cooldown)
-- Broadcasts to other participants
+- Broadcasts the canonical event in server order; negotiated play/pause senders receive it too as an acknowledgement. Applying it must suppress playback-event feedback. Legacy host senders retain their previous exclusion behavior.
+
+A guest's `play` or `pause` holds the room's play state: until its cooldown ends, a host `state_update` with the other play state is ignored, since the host sent it before applying the command. For a pending play the hold lasts until it starts, then for the same cooldown. Any host `player_event` ends the hold.
+
+`PendingPlay` retains the initiating client ID. Both readiness completion and the readiness timeout emit the scheduled event under that ID, including the sender in the broadcast. Readiness updates do not turn a guest's play into a host command.
+
+Only the host seeks, so a guest's `play` or `pause` cannot move the room: its `position` is replaced by where the room is (the last position, moved on by the time since it took effect while playing).
 
 ### `state_update`
 
@@ -665,7 +673,7 @@ Error response.
 | `ROOM_NOT_FOUND` | The requested room does not exist |
 | `ROOM_FULL` | The requested room reached its participant limit |
 | `NOT_ROOM_MEMBER` | The client is not a member of the requested room |
-| `HOST_PERMISSION_REQUIRED` | A non-host client attempted a host-only command, such as playback control or `close_room` |
+| `HOST_PERMISSION_REQUIRED` | A non-host client sent a `seek`, a `buffering` event, a `state_update` or `close_room` |
 | `INVALID_PLAYBACK_PAYLOAD` | A playback payload is absent, malformed, or outside accepted bounds |
 | `NOT_IN_ROOM` | `leave_room` or `close_room` was requested while the client had no room |
 | `INVALID_READY` | A `ready` transition is missing required room context |

@@ -8,7 +8,10 @@
 
   const applyRoomState = (msg) => {
     // Names from another room must not show until this room's list arrives.
-    if (msg.room !== state.roomId) state.participants = [];
+    if (msg.room !== state.roomId) {
+      state.participants = [];
+      state.sharedPlaybackControl = false;
+    }
     state.inRoom = true;
     state.roomId = msg.room;
     state.roomName = msg.payload.name;
@@ -17,6 +20,8 @@
       state.clientId = msg.client;
     }
     state.isHost = (msg.payload.host_id === state.clientId);
+    if (state.isHost) state.guestPaused = false;
+    state.roomHostId = msg.payload.host_id;
     if (!state.hasTimeSync && typeof msg.server_ts === 'number') {
       state.serverOffsetMs = msg.server_ts - utils.nowMs();
       state.hasTimeSync = true;
@@ -36,6 +41,7 @@
     state.lastSyncServerTs = stateServerTs;
     state.lastSyncPosition = basePos;
     state.lastSyncPlayState = msg.payload.state.play_state || 'paused';
+    if (hostPlaying) state.roomWaiting = false;
     state.pendingPlayUntil = 0;
     state.syncStatus = hostPlaying ? 'syncing' : 'synced';
     if (ui.updateSyncIndicator) ui.updateSyncIndicator();
@@ -142,9 +148,17 @@
 
   h.handleStateUpdate = (msg, video) => {
     if (state.isHost || !video) return;
+    // The host sent this before the room took this guest's own play or pause.
+    if (utils.nowMs() < state.ownCommandUntil && msg.payload?.play_state !== state.ownCommandPlayState) return;
     state.playbackActionAttempt++;
     if (msg.payload) {
       state.lastSyncPlayState = msg.payload.play_state || state.lastSyncPlayState;
+      if (msg.payload.play_state === 'playing') state.roomWaiting = false;
+    }
+    if (state.guestPaused) {
+      state.lastSyncServerTs = msg.server_ts || utils.getServerNow();
+      state.lastSyncPosition = msg.payload.position ?? state.lastSyncPosition;
+      return;
     }
     if (msg.payload.play_state === 'playing' && video.paused) {
       utils.startSyncing();

@@ -53,6 +53,8 @@ The command opens a one-time URL bound to `127.0.0.1`. The browser assistant:
 
 The Jellyfin administrator token is held in memory and deleted immediately after setup. The web assistant stops after installation or 30 minutes.
 
+`install`, `upgrade` and `configure` write only the plugin settings owpctl manages: the JWT secret, audience and issuer, the token and invite lifetimes, and the session server URL, and it turns off unauthenticated access and the auto-detected session server. Every other plugin setting, such as hiding Jellyfin's SyncPlay button, keeps the value it had before the update. A setting the new plugin version no longer has, or now stores with a different type, takes that version's default.
+
 ## Headless Setup
 
 Create the configuration:
@@ -98,6 +100,13 @@ owpctl configure --set session.log-level=debug
 owpctl configure --rotate-jwt-secret --yes --api-token-file /run/owp-jellyfin-token
 owpctl uninstall --yes --keep-config
 ```
+
+`install`, `upgrade` and `configure` retain plugin settings that owpctl does not
+manage. Upgrade compatibility is conservative: fractions cannot replace an
+integer setting, and changed arrays or objects retain the installed plugin's
+value because its JSON does not expose the .NET schema. An invalid configuration
+root aborts without posting a replacement. Configuration debug output redacts
+all values, including unknown future secrets.
 
 ## Asymmetric Pairing
 

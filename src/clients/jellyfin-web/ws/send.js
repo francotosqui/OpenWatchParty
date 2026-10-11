@@ -59,6 +59,7 @@
       lastPlayedPosition: 0,
       lastPlayedPlaying: false,
       streamReloadResume: false,
+      reloadGuestCommand: null,
       isSyncing: false,
       syncCooldownUntil: 0,
       isInitialSync: false,
@@ -72,10 +73,17 @@
       lastSyncServerTs: 0,
       lastSyncPosition: 0,
       lastSyncPlayState: '',
+      roomWaiting: false,
+      roomHostId: '',
+      sharedPlaybackControl: false,
+      guestPaused: false,
+      ownCommandUntil: 0,
+      ownCommandPlayState: '',
       joiningItemId: '',
       pendingJoinRoomId: '',
       pendingMediaId: '',
       pendingMediaUntil: 0,
+      mediaSwitchUntil: 0,
       suppressUntil: 0,
       playbackBlocked: false,
       playbackFailureNotified: false,
@@ -87,6 +95,7 @@
     state.cardPollAttempt++;
     state.mediaSyncAttempt++;
     state.playbackActionAttempt++;
+    if (OWP.ui?.updateGuestControls) OWP.ui.updateGuestControls();
     if (OWP.chat) OWP.chat.clear();
   };
 
@@ -111,6 +120,8 @@
   };
 
   const joinRoom = (id, isReconnect = false, inviteTicket = '') => {
+    state.guestPaused = false;
+    state.sharedPlaybackControl = false;
     if (!isReconnect && actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     state.desiredRoomId = id;
     state.rejectedRejoinRoomIds = state.rejectedRejoinRoomIds.filter(roomId => roomId !== id);

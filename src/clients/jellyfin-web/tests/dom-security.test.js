@@ -111,7 +111,7 @@ describe('dynamic DOM rendering', () => {
     OWP.state.inRoom = false;
     OWP.ui.updateRoomListUI = () => {};
     OWP.ui.render(true);
-    assert.equal(panel.querySelector('.owp-footer').textContent, `Server: ${SCRIPT}`);
+    assert.equal(panel.querySelector('.owp-footer').textContent, 'Server: Unavailable');
     assertNoExecutableNodes();
   });
 

@@ -18,7 +18,7 @@ plugin.js                    # Loader - loads modules in parallel waves
     ├── utils/               # Utility functions
     │   ├── log.js, media.js, misc.js, time.js, video.js
     ├── ui/                  # User interface
-    │   ├── cards.js, header.js, home.js, indicators.js
+    │   ├── cards.js, guest-controls.js, header.js, home.js, indicators.js
     │   ├── render.js, styles.js, toasts.js
     ├── playback/            # Video playback management
     │   ├── bind.js, play.js, sync.js
@@ -102,7 +102,14 @@ Defines global shared state and configuration constants.
 | `lastSyncServerTs` | number | Server timestamp of last sync |
 | `lastSyncPosition` | number | Position of last sync (seconds) |
 | `lastSyncPlayState` | string | Play state of last sync |
+| `roomWaiting` | boolean | `true` while a guest is waiting for the host after buffering |
+| `roomHostId` | string | Client id of the room's host, to tell a guest's play or pause from the host's |
+| `sharedPlaybackControl` | boolean | Enabled only after server and current-room capability negotiation; false on connection or room reset |
+| `ownCommandUntil` | number | Until when a guest's own play or pause holds against room updates already on their way |
+| `ownCommandPlayState` | string | Play state of that command |
+| `guestPaused` | boolean | `true` while a guest has paused local playback; on promotion, retained until playback matches the room so the private pause cannot become authoritative |
 | `readyRoomId` | string | Room ID for which "ready" was sent |
+| `mediaSwitchUntil` | number | Until this time (ms), a closed player is OWP opening the room media, not the user leaving |
 | `isBuffering` | boolean | `true` if video is buffering (HLS) |
 | `wantsToPlay` | boolean | `true` if user wants to play |
 | `isSyncing` | boolean | Anti-feedback lock during sync |
@@ -182,7 +189,7 @@ Manages HTML5 video element interaction and playback synchronization.
 ### Functions
 
 #### `playItem(item: object) -> boolean`
-Starts playback of a media item via Jellyfin API. Without a PlaybackManager, it opens the item's details page and selects the play button of that visible page (never one of a hidden, earlier details page).
+Starts playback of a media item via Jellyfin API. Without a PlaybackManager, it opens the item's details page and selects the play button of that visible page (never one of a hidden, earlier details page). Leaving the player for that page sets `mediaSwitchUntil` (`MEDIA_SWITCH_GRACE_MS`, 20 s), so the periodic UI check does not take the closed player for the user leaving the room.
 
 #### `ensurePlayback(itemId: string, attempt?: number) -> void`
 Ensures the specified media is playing.
@@ -194,7 +201,7 @@ Ensures the specified media is playing.
 Sends `ready` message to server indicating client is ready to play.
 
 #### `watchReady() -> void`
-Waits for video to be ready (`readyState >= 2`) then calls `notifyReady()`.
+Waits for the room media to play (`getPlayingItemId()`, which ignores the hidden pages Jellyfin keeps) and its video to be ready (`readyState >= 2`), then applies the room state and calls `notifyReady()`. A new video is required only when a different item was playing. Once ready, it ends the `mediaSwitchUntil` grace.
 
 #### `bindVideo() -> void`
 Binds video events to synchronization handlers.
@@ -235,8 +242,9 @@ Synchronization loop called every 500 ms (`SYNC_LOOP_MS`, non-hosts only).
 ```
 1. If host or not in room → reset playbackRate to 1
 2. If no sync or state !== 'playing' → reset playbackRate to 1
-   If the room is paused and the video plays (a guest pressed play) → pause it,
-   unless a room command is being applied or a host play is scheduled
+   If the room is paused and the video plays without the room taking it (while it
+   waits for the host) → pause it, unless a room command is being applied or a
+   host play is scheduled
 3. If isBuffering or readyState < 3 → do nothing (let it load)
 4. If video paused → reset playbackRate to 1
 5. Calculate expected position:
@@ -251,10 +259,20 @@ Synchronization loop called every 500 ms (`SYNC_LOOP_MS`, non-hosts only).
 
 ## Module: `ws.js`
 
+When `host_changed` promotes a privately paused guest, `syncPromotedGuest()`
+applies the tracked room position and play state before host events or periodic
+state updates can be sent. Pending room playback and buffering keep the send
+gate closed. Blocked autoplay keeps it closed until the user presses Play;
+an asynchronous completion from a previous room cannot release the gate.
+Participant status reports a private pause as `paused`, regardless of the
+previous drift-correction status.
+
 ### Description
 Manages WebSocket communication with the session server.
 
-Every new connection resets `serverFeatures` and advertises `features: ["host_transfer", "participant_status"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
+Every new connection resets `serverFeatures` and shared-control availability and advertises `features: ["host_transfer", "participant_status", "shared_playback_control"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
+
+`room_capabilities` enables shared play/pause only while the current host supports it. Otherwise guests retain their private pause and cannot play a paused room. Canonical playback acknowledgements clear the optimistic command hold and apply in server order, with event suppression to prevent echoes. Host-side commands retry a temporarily missing video until `VIDEO_ACTION_MAX_WAIT_MS`, preserving the room, role and playback-attempt guards. Pending retries gate authoritative heartbeats; a stream reload still defers the latest command until it completes.
 
 After an unexpected close, the client buffers a `WS_CLOSE` diagnostic containing the
 WebSocket close code, clean flag, and truncated reason. On the next connection it
@@ -372,7 +390,7 @@ Main panel render:
 - **In-room**: Compact bar with the sync dot, latency, room name, participants, chat and leave buttons, plus their drop-downs
 
 #### `injectOsdButton() -> void`
-Injects "Watch Party" button into video player OSD controls.
+Injects "Watch Party" button into the OSD controls of the shown player page, and moves it there from a player page Jellyfin has hidden.
 
 #### `injectHeaderButtons() -> void`
 Puts a "Watch Party" button first in each Jellyfin 12 header: the legacy `.skinHeader .headerRight` and the MUI app bar box holding SyncPlay, Cast and Search. A `MutationObserver` coalesced per animation frame puts it back when Jellyfin rebuilds a header and keeps a panel opened from the header placed below it (falling back to the default placement while no header button is shown, as in the player). Unless such a panel is open, only changes inside a header or a newly added header trigger the lookup, so busy pages (the player, chat, library grids) don't; the periodic UI check catches anything else.

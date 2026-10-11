@@ -24,7 +24,7 @@
 
   const notifyReady = (roomId, mediaId) => {
     if (!state.inRoom || state.roomId !== roomId || state.readyRoomId === roomId) return;
-    if (mediaId && utils.getCurrentItemId() !== mediaId) return;
+    if (mediaId && utils.getPlayingItemId() !== mediaId) return;
     const actions = OWP.actions;
     if (!actions || !actions.send) return;
     state.readyRoomId = roomId;
@@ -37,10 +37,11 @@
     const gateDeadline = Date.now() + MEDIA_READY_TIMEOUT_MS;
     let deadline = gateDeadline;
     state.pendingMediaUntil = gateDeadline;
-    const initialMediaId = utils.getCurrentItemId();
+    // A new video is needed only when another item was playing.
+    const initialMediaId = utils.getPlayingItemId();
     const initialVideo = utils.getVideo();
     const initialSource = initialVideo?.currentSrc || initialVideo?.src || '';
-    const requiresVideoTransition = Boolean(mediaId && initialMediaId !== mediaId);
+    const requiresVideoTransition = Boolean(mediaId && initialMediaId && initialMediaId !== mediaId);
     let timeoutReported = false;
     let watchedVideo = null;
     let timer = null;
@@ -77,7 +78,10 @@
         cleanup();
         return;
       }
-      if (mediaId && utils.getCurrentItemId() !== mediaId) {
+      // The item actually playing. getCurrentItemId can still name the
+      // previous item from the hidden page Jellyfin keeps for it, or the item
+      // of a details page while nothing plays.
+      if (mediaId && utils.getPlayingItemId() !== mediaId) {
         scheduleCheck();
         return;
       }
@@ -107,6 +111,8 @@
         return;
       }
       state.pendingMediaId = '';
+      // The room media plays: closing the player is an exit again.
+      state.mediaSwitchUntil = 0;
       state.pendingMediaUntil = 0;
       if (typeof onReady === 'function') onReady(video);
       notifyReady(roomId, mediaId);
@@ -196,16 +202,19 @@
     video.playbackRate = rate;
   };
 
-  // Only the host controls playback. While the room is paused the server sends
-  // no further updates (it drops unchanged state updates), so nothing else
-  // would pause a guest who presses play.
+  // A guest's play that the room did not take, as while it waits for the host
+  // (a guest's own play sets the room state first). While the room is paused
+  // the server sends no further updates (it drops unchanged state updates), so
+  // nothing else would pause that guest.
   const holdRoomPause = (video) => {
     if (!state.lastSyncServerTs || state.lastSyncPlayState !== 'paused') return;
     if (video.paused || state.isSyncing) return;
     if (state.pendingPlayUntil && utils.getServerNow() < state.pendingPlayUntil) return;
     utils.log('SYNC', { type: 'hold_room_pause', pos: video.currentTime });
     video.pause();
-    if (OWP.ui && OWP.ui.showToast) OWP.ui.showToast(t('hostOnlyPlayback'));
+    if (OWP.ui && OWP.ui.showToast) {
+      OWP.ui.showToast(t(state.roomWaiting ? 'waitingForHost' : 'hostOnlyPlayback'));
+    }
   };
 
   // Where the host is now, from the last room update, while the room plays.
@@ -245,6 +254,7 @@
   const ownStatus = () => {
     const video = state.currentVideoElement || utils.getVideo();
     if (!video) return 'not_watching';
+    if (state.guestPaused) return 'paused';
     if (state.pendingMediaId || state.syncStatus === 'pending_play') return 'loading';
     if (state.isBuffering) return 'buffering';
     if (!utils.isVideoReady()) return 'loading';

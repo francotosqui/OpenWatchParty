@@ -86,6 +86,7 @@ OWP.ui = {
 OWP.playback = {};
 OWP.utils.getVideo = () => OWP.state.currentVideoElement;
 OWP.utils.getCurrentItemId = () => currentMediaId;
+OWP.utils.getPlayingItemId = () => currentMediaId;
 OWP.utils.isVideoReady = () => Boolean(OWP.state.currentVideoElement?.readyState >= 2);
 OWP.utils.isSeeking = () => false;
 OWP.utils.log = () => {};
@@ -115,6 +116,25 @@ const promote = () => OWP._wsHandlers.handleHostChanged({
   room: 'room-1',
   payload: { host_id: 'client-1', host_name: 'Guest' }
 });
+
+const privatePauseHeartbeat = (video, sent, playState = 'playing') => {
+  const originalSetInterval = OWP.timers.setInterval;
+  let tick;
+  OWP.timers.setInterval = callback => { tick = callback; return null; };
+  try {
+    Object.assign(OWP.state, {
+      ws: { readyState: 1, send: data => sent.push(JSON.parse(data)) },
+      inRoom: true, roomId: 'room-1', currentVideoElement: video,
+      lastSyncServerTs: Date.now(), lastSyncPosition: 30,
+      lastSyncPlayState: playState, lastStateSentAt: 0
+    });
+    OWP.playback.bindVideo();
+    OWP.state.guestPaused = true;
+    return () => tick();
+  } finally {
+    OWP.timers.setInterval = originalSetInterval;
+  }
+};
 
 const roomState = (mediaId, position = 20) => ({
   type: 'room_state',
@@ -149,6 +169,7 @@ describe('host transfer client support', () => {
       inRoom: false,
       roomId: '',
       isHost: false,
+      guestPaused: false,
       serverFeatures: [],
       autoReconnect: true,
       isConnecting: false,
@@ -182,6 +203,8 @@ describe('host transfer client support', () => {
       lastSyncPlayState: '',
       isBuffering: false,
       wantsToPlay: false,
+      playbackBlocked: false,
+      playbackFailureNotified: false,
       suppressUntil: 0,
       hasTimeSync: true,
       serverOffsetMs: 0
@@ -212,7 +235,7 @@ describe('host transfer client support', () => {
     socket.open();
 
     const auth = socket.sent.find(message => message.type === 'auth');
-    assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status']);
+    assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control']);
     socket.receive({
       type: 'auth_success',
       payload: { user_name: 'Guest', features: ['host_transfer'] }
@@ -233,7 +256,7 @@ describe('host transfer client support', () => {
       const socket = sockets[0];
       socket.open();
       const auth = socket.sent.find(message => message.type === 'auth');
-      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status']);
+      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control']);
       assert.equal(auth.payload.token, undefined);
     } finally {
       OWP.actions.fetchAuthToken = originalFetchAuthToken;
@@ -394,6 +417,50 @@ describe('host transfer client support', () => {
     assert.equal(OWP.state.syncCooldownUntil, 0);
   });
 
+  it('synchronizes a privately paused guest before its first authoritative heartbeat', async () => {
+    const sent = [];
+    const video = new FakeVideo({ currentTime: 10 });
+    const originalSetInterval = OWP.timers.setInterval;
+    let tick;
+    let finishPlay;
+    OWP.timers.setInterval = callback => { tick = callback; return null; };
+    video.play = () => new Promise(resolve => {
+      finishPlay = () => {
+        video.paused = false;
+        video.listeners.get('play')?.();
+        resolve();
+      };
+    });
+    try {
+      Object.assign(OWP.state, {
+        ws: { readyState: 1, send: data => sent.push(JSON.parse(data)) },
+        inRoom: true, roomId: 'room-1', currentVideoElement: video,
+        lastSyncServerTs: Date.now() - 2000, lastSyncPosition: 30,
+        lastSyncPlayState: 'playing', lastStateSentAt: 0
+      });
+      OWP.playback.bindVideo();
+      OWP.state.guestPaused = true;
+      promote();
+      OWP.state.isSyncing = false;
+      tick();
+      assert.deepEqual(sent, [], 'the old local pause must never become authoritative');
+      assert.ok(video.currentTime >= 32 && video.currentTime < 33);
+      assert.equal(typeof finishPlay, 'function');
+      finishPlay();
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(OWP.state.guestPaused, false);
+      // Expire event suppression to exercise the real heartbeat callback.
+      OWP.state.isSyncing = false;
+      tick();
+      assert.equal(sent.length, 1);
+      assert.equal(sent[0].type, 'state_update');
+      assert.equal(sent[0].payload.play_state, 'playing');
+      assert.ok(sent[0].payload.position >= 32);
+    } finally {
+      OWP.timers.setInterval = originalSetInterval;
+    }
+  });
+
   it('keeps autoplay-blocked status when promoting a guest', () => {
     const video = new FakeVideo({ playbackRate: 0.95 });
     Object.assign(OWP.state, {
@@ -407,6 +474,82 @@ describe('host transfer client support', () => {
 
     assert.equal(video.playbackRate, 1);
     assert.equal(OWP.state.syncStatus, 'blocked');
+  });
+
+  it('keeps host updates gated after blocked autoplay until the user resumes', async () => {
+    const sent = [];
+    const video = new FakeVideo({ currentTime: 10 });
+    video.play = () => Promise.reject(new Error('Autoplay denied'));
+    const tick = privatePauseHeartbeat(video, sent);
+    promote();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(OWP.state.playbackBlocked, true);
+    assert.equal(OWP.state.guestPaused, true);
+    OWP.state.isSyncing = false;
+    tick();
+    video.listeners.get('waiting')?.();
+    video.listeners.get('seeked')?.();
+    assert.deepEqual(sent, []);
+    video.listeners.get('canplay')?.();
+    video.play = FakeVideo.prototype.play;
+    await video.play();
+    assert.equal(OWP.state.guestPaused, false);
+    assert.ok(video.currentTime >= 30);
+    assert.deepEqual(sent, [], 'resuming during promotion must not broadcast an old seek or play');
+    OWP.state.isSyncing = false;
+    tick();
+    assert.equal(sent[0].payload.play_state, 'playing');
+  });
+
+  it('aligns a promoted private pause with an already paused room', () => {
+    const sent = [];
+    const video = new FakeVideo({ currentTime: 10 });
+    const tick = privatePauseHeartbeat(video, sent, 'paused');
+    promote();
+    assert.equal(video.currentTime, 30);
+    assert.equal(video.playCalls, 0);
+    assert.equal(OWP.state.guestPaused, false);
+    assert.deepEqual(sent, []);
+    OWP.state.isSyncing = false;
+    tick();
+    assert.equal(sent[0].payload.position, 30);
+    assert.equal(sent[0].payload.play_state, 'paused');
+  });
+
+  it('waits for scheduled room work and buffering before resuming a promoted guest', async () => {
+    const sent = [];
+    const video = new FakeVideo({ currentTime: 10 });
+    const tick = privatePauseHeartbeat(video, sent);
+    OWP.state.pendingPlayUntil = Date.now() + 10000;
+    promote();
+    tick();
+    assert.equal(video.playCalls, 0);
+    OWP.state.pendingPlayUntil = 0;
+    OWP.state.isBuffering = true;
+    tick();
+    assert.equal(video.playCalls, 0);
+    assert.deepEqual(sent, []);
+    OWP.state.isBuffering = false;
+    tick();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(video.playCalls, 1);
+    assert.equal(OWP.state.guestPaused, false);
+    assert.deepEqual(sent, []);
+  });
+
+  it('does not clear a new room private pause when an old promotion play finishes', async () => {
+    const sent = [];
+    const video = new FakeVideo({ currentTime: 10 });
+    let finishPlay;
+    video.play = () => new Promise(resolve => { finishPlay = resolve; });
+    privatePauseHeartbeat(video, sent);
+    promote();
+    OWP.actions.resetRoomState();
+    Object.assign(OWP.state, { inRoom: true, roomId: 'room-2', isHost: false, guestPaused: true });
+    finishPlay();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(OWP.state.guestPaused, true);
+    assert.deepEqual(sent, []);
   });
 
   it('keeps a scheduled play timer and plays at its target after promotion', async () => {

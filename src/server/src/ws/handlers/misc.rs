@@ -144,7 +144,6 @@ pub(in crate::ws) async fn handle_ready(
                     .as_ref()
                     .map(|pending| pending.position_ts)
                     .unwrap_or_else(now_ms);
-                room.pending_play = None;
                 let (senders, msg) = prepare_scheduled_play(
                     room,
                     clients,
@@ -325,6 +324,7 @@ mod tests {
             room.ready_clients.clear();
             room.ready_clients.insert("host".to_string());
             room.pending_play = Some(crate::types::PendingPlay {
+                initiator_id: "host".to_string(),
                 position: 10.0,
                 generation: crate::types::next_pending_play_generation(),
                 position_ts: crate::utils::now_ms(),
@@ -466,6 +466,7 @@ mod tests {
             room.ready_clients.insert("outsider-a".to_string());
             room.ready_clients.insert("outsider-b".to_string());
             room.pending_play = Some(crate::types::PendingPlay {
+                initiator_id: "host".to_string(),
                 position: 10.0,
                 generation: crate::types::next_pending_play_generation(),
                 position_ts: crate::utils::now_ms(),

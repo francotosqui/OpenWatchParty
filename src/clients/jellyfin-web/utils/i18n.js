@@ -2,6 +2,9 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
 
   const en = {
+    unavailable: 'Unavailable',
+    hostOnlySeek: 'Only the host can seek',
+    guestResumed: 'A guest resumed playback', guestPaused: 'A guest paused playback', waitingForHost: 'Waiting for the host…',
     status_playing: 'Playing', status_paused: 'Paused', status_in_sync: 'In sync', status_catching_up: 'Catching up', status_buffering: 'Buffering', status_loading: 'Loading', status_blocked: 'Needs to press Play', status_not_watching: 'Not watching',
     lobbyHelp: 'Watch movies and shows together, in sync. This panel opens from the Watch Party button, at the top of Jellyfin or in the player.', gotIt: 'Got it', help: 'Help', syncAdjustment: 'Sync adjustment', nudgeBehind: '{seconds} s behind the host', nudgeAhead: '{seconds} s ahead of the host', nudgeSynced: 'In sync with the host', nudgeBusy: 'Following the host...', nudgePaused: 'The room is paused', nudgeLoading: 'Waiting for the video', autoRateFor: 'Automatic correction: {rate}× speed for {seconds} s.', autoRate: 'Automatic correction: {rate}× speed.', autoOutFor: 'Automatic correction: out of sync for {seconds} s.', autoStarting: 'Automatic correction: starting.', moveAhead: 'Move ahead {step} s', moveBack: 'Move back {step} s', nudgeNote: 'Only moves your video; the host stays in control.',
     watchParty: 'Watch Party', closePanel: 'Close panel', availableRooms: 'Available rooms', createRoom: 'Create Room',
@@ -43,6 +46,9 @@
   };
 
   const es = {
+    unavailable: 'No disponible',
+    hostOnlySeek: 'Solo el anfitrión puede adelantar o atrasar',
+    guestResumed: 'Un invitado reanudó la reproducción', guestPaused: 'Un invitado pausó la reproducción', waitingForHost: 'Esperando al anfitrión…',
     status_playing: 'Reproduciendo', status_paused: 'En pausa', status_in_sync: 'Sincronizado', status_catching_up: 'Alcanzando', status_buffering: 'Esperando datos', status_loading: 'Cargando', status_blocked: 'Debe pulsar Reproducir', status_not_watching: 'No está viendo',
     lobbyHelp: 'Ver películas y series en grupo, sincronizados. Este panel se abre desde el botón Watch Party, arriba en Jellyfin o en el reproductor.', gotIt: 'Entendido', help: 'Ayuda', syncAdjustment: 'Ajuste de sincronización', nudgeBehind: '{seconds} s atrás del anfitrión', nudgeAhead: '{seconds} s adelante del anfitrión', nudgeSynced: 'Sincronizado con el anfitrión', nudgeBusy: 'Siguiendo al anfitrión...', nudgePaused: 'La sala está en pausa', nudgeLoading: 'Esperando el video', autoRateFor: 'Corrección automática: velocidad {rate}× desde hace {seconds} s.', autoRate: 'Corrección automática: velocidad {rate}×.', autoOutFor: 'Corrección automática: sin sincronizar desde hace {seconds} s.', autoStarting: 'Corrección automática: empezando.', moveAhead: 'Adelantar {step} s', moveBack: 'Atrasar {step} s', nudgeNote: 'Solo mueve este video; el anfitrión sigue al mando.',
     watchParty: 'Watch Party', closePanel: 'Cerrar panel', availableRooms: 'Salas disponibles', createRoom: 'Crear sala',
@@ -83,6 +89,9 @@
   };
 
   const fr = {
+    unavailable: 'Indisponible',
+    hostOnlySeek: "Seul l'hôte peut changer la position",
+    guestResumed: "Un invité a repris la lecture", guestPaused: "Un invité a mis en pause", waitingForHost: "En attente de l'hôte…",
     status_playing: 'Lecture', status_paused: 'En pause', status_in_sync: 'Synchronisé', status_catching_up: 'Rattrapage', status_buffering: 'Mise en mémoire tampon', status_loading: 'Chargement', status_blocked: 'Doit appuyer sur Lecture', status_not_watching: 'Ne regarde pas',
     lobbyHelp: 'Regarder des films et des séries ensemble, synchronisés. Ce panneau s’ouvre depuis le bouton Watch Party, en haut de Jellyfin ou dans le lecteur.', gotIt: 'Compris', help: 'Aide', syncAdjustment: 'Réglage de la synchronisation', nudgeBehind: '{seconds} s de retard sur l’hôte', nudgeAhead: '{seconds} s d’avance sur l’hôte', nudgeSynced: 'Synchronisé avec l’hôte', nudgeBusy: 'Suit l’hôte...', nudgePaused: 'La salle est en pause', nudgeLoading: 'En attente de la vidéo', autoRateFor: 'Correction automatique : vitesse {rate}× depuis {seconds} s.', autoRate: 'Correction automatique : vitesse {rate}×.', autoOutFor: 'Correction automatique : désynchronisé depuis {seconds} s.', autoStarting: 'Correction automatique : démarrage.', moveAhead: 'Avancer de {step} s', moveBack: 'Reculer de {step} s', nudgeNote: 'Ne déplace que cette vidéo ; l’hôte garde la main.',
     watchParty: 'Watch Party', closePanel: 'Fermer le panneau', availableRooms: 'Salons disponibles', createRoom: 'Créer un salon',
@@ -123,6 +132,9 @@
   };
 
   const de = {
+    unavailable: 'Nicht verfügbar',
+    hostOnlySeek: 'Nur der Host kann die Position ändern',
+    guestResumed: 'Ein Gast hat die Wiedergabe fortgesetzt', guestPaused: 'Ein Gast hat die Wiedergabe pausiert', waitingForHost: 'Warten auf den Host…',
     status_playing: 'Spielt', status_paused: 'Pausiert', status_in_sync: 'Synchron', status_catching_up: 'Holt auf', status_buffering: 'Puffert', status_loading: 'Lädt', status_blocked: 'Muss Play drücken', status_not_watching: 'Schaut nicht zu',
     lobbyHelp: 'Filme und Serien gemeinsam und synchron ansehen. Dieses Panel öffnet sich über die Watch-Party-Schaltfläche oben in Jellyfin oder im Player.', gotIt: 'Verstanden', help: 'Hilfe', syncAdjustment: 'Synchronisation anpassen', nudgeBehind: '{seconds} s hinter dem Host', nudgeAhead: '{seconds} s vor dem Host', nudgeSynced: 'Synchron mit dem Host', nudgeBusy: 'Folgt dem Host...', nudgePaused: 'Der Raum ist pausiert', nudgeLoading: 'Warten auf das Video', autoRateFor: 'Automatische Korrektur: {rate}-fache Geschwindigkeit seit {seconds} s.', autoRate: 'Automatische Korrektur: {rate}-fache Geschwindigkeit.', autoOutFor: 'Automatische Korrektur: seit {seconds} s nicht synchron.', autoStarting: 'Automatische Korrektur: startet.', moveAhead: '{step} s vorspringen', moveBack: '{step} s zurückspringen', nudgeNote: 'Verschiebt nur dieses Video; der Host behält die Kontrolle.',
     watchParty: 'Watch Party', closePanel: 'Panel schließen', availableRooms: 'Verfügbare Räume', createRoom: 'Raum erstellen',
