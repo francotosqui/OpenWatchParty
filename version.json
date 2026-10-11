@@ -2,6 +2,7 @@
   "version": "0.6.0",
   "jellyfinPackageVersion": "12.0.0",
   "jellyfinTargetAbi": "12.0.0.0",
+  "jellyfinPluginAutoUpdate": false,
   "jellyfinImageVersion": "12.1",
   "fileTransformationVersion": "3.0.1.0",
   "fileTransformationAbi": "12.0.0",

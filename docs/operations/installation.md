@@ -55,6 +55,10 @@ https://mhbxyz.github.io/OpenWatchParty/jellyfin-plugin-repo/manifest.json
 
 The plugin includes native client-script injection. File Transformation and Custom HTML are optional compatibility fallbacks, not required installation steps.
 
+Automatic updates currently remain disabled in release metadata. See
+[plugin updates and rollback]({{ '/operations/plugin-updates/' | relative_url }})
+for the publication prerequisites, explicit opt-in and disposable upgrade checks.
+
 ### 2. Start The Session Server
 
 ```bash

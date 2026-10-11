@@ -22,6 +22,39 @@ MAJOR.MINOR.PATCH
 
 Run `just bump 0.5.0` (or `infra/scripts/bump-version.sh 0.5.0`) to rewrite every mirror of the product version from `version.json` in one shot, adding `--dry-run` to preview the files that would change without writing them. Finish with `infra/scripts/verify-versions.sh`, which fails if any mirror still disagrees.
 
+### Plugin Automatic-Update Readiness
+
+`version.json` controls the packaged `meta.json` through the boolean
+`jellyfinPluginAutoUpdate`. It remains **false** until the maintainer agrees
+with Jellyfin on official publication and verifies the upgrade path described
+in the [plugin update guide]({{ '/operations/plugin-updates/' | relative_url }}).
+The metadata writer rejects non-booleans before replacing its output; old
+version-file fixtures without the field keep the previous `false` default.
+
+This is local plugin metadata, not a field in the repository's `manifest.json`.
+Jellyfin can obtain updates from any configured compatible repository; official
+listing is a publication condition for this project, not a protocol requirement.
+The existing self-hosted repository and manual installation path remain supported.
+
+Official publication requires coordination with the repository owner and the
+Jellyfin maintainers. The current official build tools discover
+`jellyfin-plugin-*` repositories in the Jellyfin organization, and build them
+with JPRM and `build.yaml`: see the
+[official plugin tools](https://github.com/jellyfin/jellyfin-meta-plugins).
+OpenWatchParty is currently an independently owned monorepo. Agree on its
+ownership/build layout and the bundled client's build process before proposing
+an official entry; adding an external URL to those tools does not establish an
+official listing.
+
+Once accepted and published, confirm the official catalog entry has the same
+plugin GUID (`0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d`), compatible ABI, correct
+release URL/checksum and complete client assets. Then set
+`jellyfinPluginAutoUpdate` to `true` in a reviewed release commit, package and
+validate it normally, and run the disposable upgrade/rollback checks. Do not
+rewrite users' installed manifests from plugin startup or overwrite an admin's
+local opt-out. Publishing a flag does not migrate older installations that
+already have `autoUpdate: false`; document their explicit opt-in separately.
+
 ## Release Checklist
 
 ### Pre-Release
