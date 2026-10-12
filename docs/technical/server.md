@@ -47,35 +47,24 @@ src/
 ### Description
 Application entry point. Configures the Warp server and routes.
 
-### Main Function
+### Shared State Initialization
 
 ```rust
-#[tokio::main]
-async fn main() {
-    // Thread-safe shared state
-    let clients: Clients = Arc::new(RwLock::new(HashMap::new()));
-    let rooms: Rooms = Arc::new(RwLock::new(HashMap::new()));
-
-    // WebSocket route: GET /ws
-    let ws_route = warp::path("ws")
-        .and(warp::ws())
-        .and(clients_filter)
-        .and(rooms_filter)
-        .map(|ws, clients, rooms| {
-            ws.on_upgrade(|socket| client_connection(socket, clients, rooms))
-        });
-
-    // Listen on 0.0.0.0:3000
-    warp::serve(ws_route).run(([0, 0, 0, 0], 3000)).await;
-}
+let state: SharedState = Arc::new(RwLock::new(ServerState::default()));
+let app_tasks = tasks::AppTasks::new();
 ```
+
+`main.rs` passes this state, JWT configuration, origin/ingress configuration and
+the task tracker to `routes::build_routes`. It starts heartbeat and zombie
+cleanup tasks and coordinates their cancellation with graceful server shutdown.
+`HOST` and `PORT` default to `0.0.0.0` and `3000`.
 
 ### Global State
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `clients` | `Clients` | HashMap of connected clients |
-| `rooms` | `Rooms` | HashMap of active rooms |
+| `state` | `SharedState` | One lock protecting both connected clients and active rooms |
+| `app_tasks` | `AppTasks` | Tracks application tasks and provides shutdown cancellation |
 
 ## Module: `types.rs`
 
@@ -85,8 +74,12 @@ Defines the data structures used by the server.
 ### Type Aliases
 
 ```rust
-pub type Clients = Arc<RwLock<HashMap<String, Client>>>;
-pub type Rooms = Arc<RwLock<HashMap<String, Room>>>;
+pub type SharedState = Arc<RwLock<ServerState>>;
+
+pub struct ServerState {
+    pub clients: HashMap<String, Client>,
+    pub rooms: HashMap<String, Room>,
+}
 ```
 
 ### Struct `Client`
@@ -97,12 +90,16 @@ Represents a connected WebSocket client.
 |-------|------|-------------|
 | `sender` | `mpsc::Sender<...>` | Bounded channel for sending messages to client |
 | `room_id` | `Option<String>` | Current room ID (if in a room) |
-| `user_id` | `Option<String>` | Jellyfin user ID (set after auth) |
-| `user_name` | `Option<String>` | Display name (set after auth) |
+| `user_id` | `String` | Jellyfin user ID (empty until identity is established) |
+| `user_name` | `String` | Display name |
 | `authenticated` | `bool` | Whether the client has authenticated |
+| `session_expires_at` | `Option<u64>` | JWT expiration in Unix seconds; absent in insecure mode |
+| `authentication_version` | `u64` | Identifies the current authentication generation |
+| `supports_host_transfer` | `bool` | Negotiated host-transfer capability |
+| `supports_shared_playback_control` | `bool` | Negotiated shared-control capability |
 | `message_count` | `u32` | Messages sent in current rate-limit window |
-| `last_reset` | `u64` | Timestamp of last rate-limit window reset |
-| `last_seen` | `u64` | Timestamp of last activity (for zombie detection) |
+| `last_reset` | `Instant` | Monotonic time of last rate-limit window reset |
+| `last_seen` | `Instant` | Monotonic time of last activity (for zombie detection) |
 
 ### Struct `Room`
 
@@ -118,8 +115,15 @@ Represents a watch party room.
 | `ready_clients` | `HashSet<String>` | Yes | Clients ready to receive play |
 | `pending_play` | `Option<PendingPlay>` | Yes | Pending play action |
 | `state` | `PlaybackState` | Yes | Current playback state |
-| `last_state_ts` | `u64` | No | Last accepted state_update timestamp |
-| `last_command_ts` | `u64` | No | Last player_event timestamp (cooldown) |
+| `pending_host_reconnect` | `Option<PendingHostReconnect>` | No | Authenticated user ID and generation for host recovery |
+| `state_server_ts` | `u64` | No | Wall-clock timestamp of the canonical playback state |
+| `target_server_ts` | `Option<u64>` | No | Wall-clock timestamp of a scheduled action |
+| `target_at` | `Option<Instant>` | No | Monotonic deadline for the scheduled action |
+| `last_state_at` | `Option<Instant>` | No | Monotonic time of the last accepted update |
+| `command_cooldown_until` | `Option<Instant>` | No | Deadline suppressing stale state updates after commands |
+| `statuses` | `HashMap<String, &'static str>` | No | Last participant status by client ID |
+| `status_broadcast` | `StatusBroadcast` | No | Participant-status broadcast scheduling |
+| `guest_command_until` | `Option<Instant>` | No | Deadline protecting a guest command from stale host state |
 
 ### Struct `PlaybackState`
 
@@ -137,7 +141,9 @@ Pending play action waiting for all clients to be ready.
 | Field | Type | Description |
 |-------|------|-------------|
 | `position` | `f64` | Position to start at |
-| `created_at` | `u64` | Creation timestamp |
+| `initiator_id` | `String` | Client that requested play; not serialized |
+| `generation` | `u64` | Identifies the pending action; not serialized |
+| `position_ts` | `u64` | Timestamp associated with the pending position |
 
 ### Struct `WsMessage`
 
@@ -185,45 +191,16 @@ Handles WebSocket connections and main business logic. Split into sub-modules: `
 
 ### Function `client_connection`
 
-Manages a client connection lifecycle.
+Manages a WebSocket using `SharedState`, JWT configuration and `AppTasks`:
 
-```rust
-pub async fn client_connection(ws: WebSocket, clients: Clients, rooms: Rooms) {
-    // 1. Split WebSocket into sender/receiver
-    let (client_ws_sender, mut client_ws_rcv) = ws.split();
-
-    // 2. Create mpsc channel for async sending
-    let (client_sender, client_rcv) = mpsc::channel(CHANNEL_BUFFER_SIZE);
-
-    // 3. Task to forward messages to WebSocket
-    tokio::spawn(async move {
-        client_rcv.forward(client_ws_sender).await;
-    });
-
-    // 4. Generate UUID for client
-    let client_id = Uuid::new_v4().to_string();
-
-    // 5. Register client
-    clients.lock().unwrap().insert(client_id, Client { sender, room_id: None });
-
-    // 6. Send client_hello with ID
-    send_to_client(&client_id, &WsMessage {
-        msg_type: "client_hello",
-        payload: { "client_id": client_id }
-    });
-
-    // 7. Send room list
-    send_room_list(&client_id, &clients, &rooms);
-
-    // 8. Message receive loop
-    while let Some(msg) = client_ws_rcv.next().await {
-        client_msg(&client_id, msg, &clients, &rooms).await;
-    }
-
-    // 9. Cleanup on disconnect
-    handle_disconnect(&client_id, &clients, &rooms);
-}
-```
+1. Split the socket and create bounded message/control channels through
+   `ClientSender::channel(CLIENT_CHANNEL_BUFFER)`.
+2. Register a UUID for this connection, independently of its Jellyfin user ID.
+3. Start the supervised writer and send `client_hello` and the room list.
+4. Process incoming messages, control-frame activity, session expiration,
+   writer termination and server cancellation.
+5. On termination, remove this client through `handle_disconnect`, then shut
+   down the writer with a bounded wait.
 
 ### Function `all_ready`
 
@@ -231,31 +208,22 @@ Checks if all clients in a room are ready.
 
 ```rust
 fn all_ready(room: &Room) -> bool {
-    room.ready_clients.len() >= room.clients.len()
+    room.clients
+        .iter()
+        .all(|client_id| room.ready_clients.contains(client_id))
 }
 ```
 
-### Function `broadcast_scheduled_play`
+### Function `prepare_scheduled_play`
 
-Broadcasts a scheduled play event to all participants.
+Updates the room's canonical state and scheduling deadlines, consumes its
+pending play and returns the sender list and `player_event` message. The event
+retains the initiating guest's client ID when shared control is enabled.
+Callers enqueue the message through `send_to_senders`.
 
-```rust
-fn broadcast_scheduled_play(room: &mut Room, clients: &Clients, position: f64, target_server_ts: u64) {
-    // 1. Update room state
-    room.state.position = position;
-    room.state.play_state = "playing";
-
-    // 2. Create message with target_server_ts
-    let msg = WsMessage {
-        msg_type: "player_event",
-        payload: { "action": "play", "position": position, "target_server_ts": target_server_ts },
-        server_ts: target_server_ts
-    };
-
-    // 3. Broadcast to all room clients
-    broadcast_to_room(room, &clients, &msg, None);
-}
-```
+`schedule_pending_play` waits up to `MAX_READY_WAIT_MS` and checks the pending
+generation before applying it. Obsolete or cancelled tasks do not start a
+replacement action.
 
 ### Message Processing
 
@@ -274,10 +242,15 @@ Adds client to an existing room.
 Marks client as ready; triggers pending play if all ready.
 
 #### `leave_room`
-Removes client from room; closes room if host leaves.
+Removes the client. A host's explicit leave transfers immediately to the first
+eligible remaining participant, or closes the room if transfer is unavailable.
+
+#### `close_room`
+Closes the room for everyone; only its host may request this.
 
 #### `player_event`
-Validates host permissions, applies action, broadcasts to room.
+Validates permissions, applies the action and broadcasts canonical results.
+Seek is host-only; guest play/pause requires negotiated room shared control.
 
 #### `state_update`
 Applies filtering (cooldown, rate limit, jitter), broadcasts if accepted.
@@ -292,51 +265,31 @@ Manages room lifecycle and client disconnection. Split into `leave.rs` (client l
 
 ### Function `handle_disconnect`
 
-Called when a client disconnects.
+Called when a connection terminates. It takes a shared-state write guard and
+removes that connection's membership and client registration together.
 
-```rust
-pub fn handle_disconnect(client_id: &str, clients: &Clients, rooms: &Rooms) {
-    // 1. Remove client from their room
-    handle_leave(client_id, &mut clients, &mut rooms);
+A JWT-authenticated host with a non-empty user ID and host-transfer support
+gets a 10-second recovery window. The room records the user ID and a generation,
+removes the old connection from membership, cancels pending play and notifies
+remaining members. A new authenticated connection for the same user can reclaim
+the host role through `join_room` while that generation is pending. It receives
+a new client ID; the old ID is not reused.
 
-    // 2. Remove client from the list
-    clients.remove(client_id);
-
-    // 3. Update room list for all
-    broadcast_room_list(clients, rooms);
-}
-```
+The tracked expiry task promotes the first remaining client in join order
+that supports host transfer, or closes the room if none exists. Hosts that do
+not qualify for recovery follow the leave/transfer path immediately. A stale
+expiry generation cannot change an already recovered room.
 
 ### Function `handle_leave`
 
-Removes a client from a room.
+Explicit leave removes membership, readiness and participant status, without
+starting host recovery. Guest leave preserves the existing host. Host leave
+cancels pending play and promotes an eligible remaining client, or closes the
+room. Empty rooms close unless they are holding a pending host recovery.
 
-```rust
-pub fn handle_leave(client_id: &str, clients: &mut HashMap, rooms: &mut HashMap) {
-    if let Some(room_id) = client.room_id.take() {
-        if let Some(room) = rooms.get_mut(&room_id) {
-            // Remove client
-            room.clients.retain(|id| id != client_id);
-            room.ready_clients.remove(client_id);
-
-            // If host, cancel pending_play
-            if room.host_id == client_id {
-                room.pending_play = None;
-            }
-
-            // Close room if empty or host leaves
-            if room.clients.is_empty() || room.host_id == client_id {
-                for cid in &room.clients {
-                    send_to_client(cid, { "type": "room_closed" });
-                }
-                rooms.remove(&room_id);
-            } else {
-                broadcast_to_room(room, { "type": "client_left", "client": client_id });
-            }
-        }
-    }
-}
-```
+`handle_leave_without_transfer` is used when switching rooms: it does not leave
+the previous room to a replacement host. `close_room` is the separate
+host-authorized operation that closes the room for all members.
 
 ## Module: `messaging.rs`
 
@@ -345,11 +298,12 @@ Message sending utility functions.
 
 ### Functions
 
-- `send_room_list(client_id, clients, rooms)` - Send room list to specific client
-- `broadcast_room_list(clients, rooms)` - Send room list to all clients
-- `send_to_client(client_id, clients, msg)` - Send message to specific client
-- `broadcast_to_room(room, clients, msg, exclude)` - Broadcast to room members
-- `send_error(client_id, clients, message)` - Send error message (also available in `ws/dispatch.rs`)
+- `send_room_list(client_id, state)` - Send room list to a specific client
+- `broadcast_room_list(state)` - Send room list to all clients
+- `send_to_client(client_id, state, msg)` - Send a message to a specific client
+- `collect_room_senders(room, clients, exclude)` - Snapshot room senders under a state guard
+- `send_to_senders(senders, msg, context)` - Enqueue a message for those senders
+- `send_error(client_id, state, code, message)` in `ws/dispatch.rs` - Send a protocol error
 
 ## Module: `auth.rs`
 
@@ -358,15 +312,11 @@ Optional JWT authentication.
 
 ### Validation
 
-```rust
-pub fn validate_token(token: &str, secret: &str) -> Result<Claims, Error> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.validate_exp = true;  // Enforce expiration
-    validation.leeway = 60;  // 60 seconds tolerance
-
-    decode::<Claims>(token, &DecodingKey::from_secret(secret.as_ref()), &validation)
-}
-```
+`JwtConfig` validates HS256 or RS256 tokens according to the configured auth
+mode, keys/trust store, issuer and audience.
+Expiration is enforced at the exact Unix second with no clock leeway. The
+connection also tracks session expiration after authentication, so an idle
+socket does not retain access after its token expires.
 
 ## Concurrency Model
 
@@ -382,8 +332,8 @@ pub fn validate_token(token: &str, secret: &str) -> Result<Claims, Error> {
 │          └───────────────────┼───────────────────┘               │
 │                              │                                   │
 │                              ▼                                   │
-│                   Arc<RwLock<Clients>>                           │
-│                   Arc<RwLock<Rooms>>                             │
+│                 Arc<RwLock<ServerState>>                         │
+│                 clients + rooms under one lock                   │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -391,6 +341,10 @@ pub fn validate_token(token: &str, secret: &str) -> Result<Claims, Error> {
 ### Design Considerations
 
 1. **RwLock**: Read-heavy workload; multiple readers, exclusive writer
-2. **No deadlock**: Only one lock acquired at a time per handler
-3. **Message cloning**: `warp_msg.clone()` for efficient broadcasting
-4. **Bounded channels**: Backpressure via bounded `mpsc::Sender` per client
+2. **Atomic membership**: A write guard covers both client and room maps;
+   callers pass mutable map references to helpers instead of acquiring another
+   room lock
+3. **Socket isolation**: Handlers enqueue through bounded `ClientSender`
+   channels; each connection's writer performs the socket writes
+4. **Task lifetime**: `AppTasks` tracks heartbeat, cleanup, pending actions and
+   recovery deadlines with cancellation and bounded graceful shutdown
