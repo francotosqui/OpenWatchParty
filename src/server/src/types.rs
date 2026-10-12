@@ -14,7 +14,7 @@ pub struct ServerState {
 
 #[derive(Debug, Clone)]
 pub struct Client {
-    // Bounded sender to prevent OOM from slow/malicious clients (P-RS03 fix)
+    // Bounded outgoing queue prevents slow clients from accumulating unbounded messages
     pub sender: crate::messaging::ClientSender,
     pub room_id: Option<String>,
     pub user_id: String,
