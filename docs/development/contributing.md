@@ -108,6 +108,14 @@ docs: update installation instructions
 - [ ] Branch is up to date with main
 - [ ] The [Code of Conduct](https://github.com/mhbxyz/OpenWatchParty/blob/main/CODE_OF_CONDUCT.md) has been reviewed
 
+For staged GitHub Actions workflows, the pre-commit hook requires both
+`actionlint` and `shellcheck` on PATH, or Docker to run the pinned validator
+image containing both. Installing only `actionlint` skips embedded shell checks
+in that tool; the hook therefore selects Docker or reports the missing tools.
+This catches shell errors locally before the workflow lint job runs in CI.
+On Git Bash, the hook converts the host mount with `cygpath` and disables MSYS
+conversion only for that Docker call, preserving the container's `/repo` path.
+
 ### 2. Creating a PR
 
 1. Push your branch:
