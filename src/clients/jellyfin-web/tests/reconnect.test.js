@@ -495,4 +495,30 @@ describe('room reconnection lifecycle', () => {
     const logged = JSON.stringify({ errors, warnings });
     assert.doesNotMatch(logged, /raw-message|schema-message|handler-message/);
   });
+  it('rejects every saved callback of a socket replaced during connection', async () => {
+    await OWP.actions.connect();
+    const first = sockets[0];
+    const callbacks = { open: first.onopen, error: first.onerror,
+      close: first.onclose, message: first.onmessage };
+    // A transport error permits a replacement before the old close arrives.
+    first.onerror(new Error('transport failed'));
+    await OWP.actions.connect();
+    const second = sockets[1];
+    second.open();
+    const phase = OWP.state.connectionPhase;
+    const sent = second.sent.length;
+    callbacks.open();
+    callbacks.error(new Error('late error'));
+    callbacks.close({ code: 1006, reason: 'late close' });
+    let staleDataReads = 0;
+    callbacks.message({ get data() { staleDataReads++; return '{}'; } });
+    assert.equal(staleDataReads, 0);
+    assert.equal(OWP.state.ws, second);
+    assert.equal(OWP.state.connectionPhase, phase);
+    assert.equal(second.sent.length, sent);
+    assert.equal(OWP.state.reconnectTimer, null);
+    assert.equal(first.onmessage, null);
+    assert.equal(first.onclose, null);
+  });
+
 });
