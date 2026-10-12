@@ -2,7 +2,9 @@
 """Check static client module declarations and the three protocol versions.
 
 This reads the repository's literal declarations; it does not execute code or
-generate a new manifest. New declaration syntax must update this check too.
+generate a new manifest. Every client_js_files list declared in the root justfile
+or under infra/ must match the loader. New declaration syntax must update this
+check too.
 Package resource/archive validation remains in package-plugin.sh.
 """
 
@@ -17,6 +19,10 @@ CLIENT = Path("src/clients/jellyfin-web")
 CONTROLLER = Path("src/plugins/jellyfin/OpenWatchParty/Controllers/OpenWatchPartyController.cs")
 RUST = Path("src/server/src/ws/constants.rs")
 JUST = Path("infra/just/common.just")
+# Every other just file is scanned too, so a stale copy cannot pass silently.
+JUST_FILES = ("justfile", "Justfile", ".justfile")
+JUST_DIR = Path("infra")
+JUST_LIST = r'^client_js_files\s*:=\s*"([^"\n]+)"\s*$'
 
 
 def without_comments(text):
@@ -47,12 +53,30 @@ def module_set(modules, label):
     return set(modules)
 
 
+def just_lists(root):
+    """Return each just file's client_js_files list, requiring common.just's."""
+    paths = [Path(name) for name in JUST_FILES if (root / name).is_file()]
+    paths += sorted(path.relative_to(root) for path in (root / JUST_DIR).rglob("*.just"))
+    lists = []
+    for path in paths:
+        text = (root / path).read_text(encoding="utf-8")
+        declared = len(re.findall(r"^client_js_files\s*:=", text, re.MULTILINE))
+        if path != JUST and declared == 0:
+            continue
+        literal = one(JUST_LIST, text, path.as_posix())
+        if declared != 1:
+            raise ValueError(f"{path.as_posix()}: expected one literal declaration, found {declared}")
+        lists.append((path.as_posix(), literal.split()))
+    if JUST.as_posix() not in (label for label, _ in lists):
+        raise ValueError(f"{JUST.as_posix()}: expected one literal declaration, found 0")
+    return lists
+
+
 def verify(root):
     loader = without_comments((root / CLIENT / "plugin.js").read_text(encoding="utf-8"))
     controller = without_comments((root / CONTROLLER).read_text(encoding="utf-8"))
     state = without_comments((root / CLIENT / "state.js").read_text(encoding="utf-8"))
     rust = without_comments((root / RUST).read_text(encoding="utf-8"))
-    just = (root / JUST).read_text(encoding="utf-8")
 
     calls = re.findall(r"\bload\s*\(([^)]*)\)", loader)
     modules = []
@@ -62,14 +86,13 @@ def verify(root):
             raise ValueError("plugin.js: load() requires a literal module path")
         modules.append(literal[2])
     expected = module_set(modules, "plugin.js")
-    copied = one(r'^client_js_files\s*:=\s*"([^"\n]+)"\s*$', just, str(JUST)).split()
     allowed_block = one(r"AllowedClientModules\s*=\s*new HashSet<string>\([^)]*\)\s*\{([^}]+)\}\s*;",
                         controller, "AllowedClientModules")
     allowed = re.findall(r'"([^"\n]+)"', allowed_block)
     # Reject expressions instead of silently extracting only the quoted paths.
     if re.sub(r'"[^"\n]+"|[\s,]', "", allowed_block):
         raise ValueError("AllowedClientModules: expected literal module paths")
-    for label, entries in ((str(JUST), copied), ("AllowedClientModules", allowed)):
+    for label, entries in just_lists(root) + [("AllowedClientModules", allowed)]:
         actual = module_set(entries, label)
         missing, extra = sorted(expected - actual), sorted(actual - expected)
         if missing or extra:

@@ -94,6 +94,42 @@ class ClientContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing or empty client module"):
             contract.verify(self.root)
 
+    def test_every_just_file_declaration_must_match(self):
+        for path in (Path("justfile"), Path("infra/just/build.just")):
+            with self.subTest(path=path):
+                target = self.root / path
+                target.write_text('set quiet\nclient_js_files := "state.js utils/time.js"\n', encoding="utf-8")
+                self.assertEqual(contract.verify(self.root), (2, 1))
+                self.replace(path, " utils/time.js", "")
+                with self.assertRaisesRegex(ValueError, f"^{path.as_posix()}: module mismatch"):
+                    contract.verify(self.root)
+                target.unlink()
+
+    def test_just_files_without_the_list_are_ignored(self):
+        for path in (Path("justfile"), Path("infra/just/lint.just")):
+            (self.root / path).write_text('import "common.just"\nlint:\n    true\n', encoding="utf-8")
+        self.assertEqual(contract.verify(self.root), (2, 1))
+
+    def test_other_just_declarations_must_be_single_literals(self):
+        target = self.root / "justfile"
+        for text, message in (
+            ('client_js_files := "state.js" + " utils/time.js"\n', "justfile: expected one literal declaration, found 0"),
+            ('client_js_files := "state.js utils/time.js"\nclient_js_files := "state.js utils/time.js"\n',
+             "justfile: expected one literal declaration, found 2"),
+            ('client_js_files := "state.js utils/time.js"\nclient_js_files := other\n',
+             "justfile: expected one literal declaration, found 2"),
+        ):
+            with self.subTest(text=text):
+                target.write_text(text, encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, message):
+                    contract.verify(self.root)
+
+    def test_missing_common_just_declaration_fails(self):
+        (self.root / contract.JUST).unlink()
+        (self.root / "justfile").write_text('client_js_files := "state.js utils/time.js"\n', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "common.just: expected one literal declaration, found 0"):
+            contract.verify(self.root)
+
     def test_commented_declarations_are_not_contracts(self):
         self.replace(contract.CLIENT / "plugin.js", "await load('state.js');",
                      "// load('unused.js');\n/* load('state.js'); */\nawait load('state.js');")
