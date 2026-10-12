@@ -105,6 +105,11 @@ class ClientContractTests(unittest.TestCase):
                     contract.verify(self.root)
                 target.unlink()
 
+    def test_exported_declaration_is_checked(self):
+        (self.root / "justfile").write_text('export client_js_files := "state.js"\n', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "^justfile: module mismatch"):
+            contract.verify(self.root)
+
     def test_just_files_without_the_list_are_ignored(self):
         for path in (Path("justfile"), Path("infra/just/lint.just")):
             (self.root / path).write_text('import "common.just"\nlint:\n    true\n', encoding="utf-8")

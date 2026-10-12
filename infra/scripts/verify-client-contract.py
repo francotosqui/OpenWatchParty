@@ -22,7 +22,8 @@ JUST = Path("infra/just/common.just")
 # Every other just file is scanned too, so a stale copy cannot pass silently.
 JUST_FILES = ("justfile", "Justfile", ".justfile")
 JUST_DIR = Path("infra")
-JUST_LIST = r'^client_js_files\s*:=\s*"([^"\n]+)"\s*$'
+JUST_DECLARATION = r"^(?:export\s+)?client_js_files\s*:="
+JUST_LIST = JUST_DECLARATION + r'\s*"([^"\n]+)"\s*$'
 
 
 def without_comments(text):
@@ -60,7 +61,7 @@ def just_lists(root):
     lists = []
     for path in paths:
         text = (root / path).read_text(encoding="utf-8")
-        declared = len(re.findall(r"^client_js_files\s*:=", text, re.MULTILINE))
+        declared = len(re.findall(JUST_DECLARATION, text, re.MULTILINE))
         if path != JUST and declared == 0:
             continue
         literal = one(JUST_LIST, text, path.as_posix())
