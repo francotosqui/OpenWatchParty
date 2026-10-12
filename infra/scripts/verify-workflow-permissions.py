@@ -10,6 +10,10 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = ROOT / ".github" / "workflows"
 
 EXPECTED = {
+    "server-hardening.yml": {
+        "fuzz": {"contents": "read"},
+        "load-smoke": {"contents": "read"},
+    },
     "ci.yml": {
         "rust-tests": {"contents": "read"},
         "dotnet-tests": {"contents": "read"},
