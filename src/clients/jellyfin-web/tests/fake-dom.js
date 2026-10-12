@@ -89,6 +89,15 @@ class FakeNode {
     return false;
   }
 
+  insertAdjacentElement(position, node) {
+    if (position !== 'beforebegin' || !this.parentNode) throw new Error(`unsupported insertAdjacentElement: ${position}`);
+    if (node.parentNode) node.remove();
+    const siblings = this.parentNode.childNodes;
+    node.parentNode = this.parentNode;
+    siblings.splice(siblings.indexOf(this), 0, node);
+    return node;
+  }
+
   remove() {
     if (!this.parentNode) return;
     const index = this.parentNode.childNodes.indexOf(this);
@@ -252,6 +261,7 @@ class FakeElement extends FakeNode {
 class FakeDocument {
   constructor() {
     this.documentElement = new FakeElement('html');
+    this.documentElement.lang = 'en';
     this.head = new FakeElement('head');
     this.body = new FakeElement('body');
     this.documentElement.append(this.head, this.body);
