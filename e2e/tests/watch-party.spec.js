@@ -39,6 +39,7 @@ async function ensureHostPlaying() {
 
 async function openRoomWithGuest(joinMethod) {
   await ensureHostPlaying();
+  await helpers.waitForSettled(host);
   await helpers.createRoom(host);
   const room = await helpers.owpState(host);
   expect(room.roomName).toContain(helpers.HOST_USER);
@@ -53,6 +54,8 @@ async function openRoomWithGuest(joinMethod) {
   const guestState = await helpers.owpState(guest);
   expect(guestState.roomId).toBe(room.roomId);
   expect(guestState.isHost).toBe(false);
+  await helpers.waitForSettled(host);
+  await helpers.waitForSettled(guest);
   return room;
 }
 
@@ -111,7 +114,7 @@ test('a guest play resumes the paused room', async () => {
   await expect(host.locator('.owp-toast-system', { hasText: 'A guest resumed playback' })).toHaveCount(1);
 });
 
-test('the host leaving closes the room for the guest', async () => {
+test('the host choosing Close for everyone closes the room for the guest', async () => {
   await openRoomWithGuest('header');
 
   await helpers.leaveRoom(host);
