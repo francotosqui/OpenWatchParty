@@ -7,7 +7,7 @@ use super::handlers::{
 use crate::auth::JwtConfig;
 use crate::messaging::{send_room_list, send_to_client};
 use crate::metrics::{metrics, CloseReason, InvalidMessage, RateLimitScope};
-use crate::types::{ClientMessageType, IncomingMessage, SharedState, WsMessage};
+use crate::types::{ClientMessageType, IncomingMessage, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::{debug, warn};
 use serde::Serialize;
@@ -70,7 +70,7 @@ pub(super) fn error_message(
     message: &str,
 ) -> WsMessage {
     WsMessage {
-        msg_type: "error".to_string(),
+        msg_type: ServerMessageType::Error,
         room,
         client: Some(client_id.to_string()),
         payload: Some(serde_json::json!({ "code": code, "message": message })),
@@ -304,7 +304,7 @@ mod tests {
     }
 
     fn assert_error_code(message: &WsMessage, code: &str) {
-        assert_eq!(message.msg_type, "error");
+        assert_eq!(message.msg_type, ServerMessageType::Error);
         assert_eq!(message.payload.as_ref().unwrap()["code"], code);
         assert!(message.payload.as_ref().unwrap()["message"].is_string());
     }
@@ -503,7 +503,7 @@ mod tests {
 
         assert_eq!(
             test_helpers::recv_msg(&mut rx).unwrap().msg_type,
-            "room_list"
+            ServerMessageType::RoomList
         );
     }
 

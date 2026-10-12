@@ -146,7 +146,10 @@ mod tests {
     }
 
     fn statuses(message: &WsMessage) -> serde_json::Value {
-        assert_eq!(message.msg_type, "participant_statuses");
+        assert_eq!(
+            message.msg_type,
+            crate::types::ServerMessageType::ParticipantStatuses
+        );
         message.payload.as_ref().unwrap()["statuses"].clone()
     }
 

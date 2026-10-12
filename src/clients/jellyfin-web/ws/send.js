@@ -33,68 +33,33 @@
     if (OWP.ui?.updateSyncIndicator) OWP.ui.updateSyncIndicator();
   };
 
-  const resetRoomState = () => {
+  const resetRoomPlayback = () => {
     normalizePlaybackRate();
     if (state.mediaReadyCleanup) state.mediaReadyCleanup();
     OWP.timers.clearScope('room');
     OWP.timers.clearScope('media');
-    state.pendingActionTimer = null;
-    Object.assign(state, {
-      inRoom: false,
-      roomId: '',
-      roomName: '',
-      participantCount: 0,
-      participants: [],
-      statusesRoomId: '',
-      statusCandidate: '',
-      statusCandidateSince: 0,
-      statusSentKey: '',
-      roomBarSection: '',
-      lastParticipantCount: 0,
-      isHost: false,
-      readyRoomId: '',
-      isBuffering: false,
-      wantsToPlay: false,
-      streamReloadUntil: 0,
-      lastPlayedPosition: 0,
-      lastPlayedPlaying: false,
-      streamReloadResume: false,
-      reloadGuestCommand: null,
-      isSyncing: false,
-      syncCooldownUntil: 0,
-      isInitialSync: false,
-      initialSyncUntil: 0,
-      initialSyncTargetPos: null,
-      syncStatus: 'synced',
-      currentDrift: 0,
-      outOfSyncSince: 0,
-      driftCheckedAt: 0,
-      pendingPlayUntil: 0,
-      lastSyncServerTs: 0,
-      lastSyncPosition: 0,
-      lastSyncPlayState: '',
-      roomWaiting: false,
-      roomHostId: '',
-      sharedPlaybackControl: false,
-      guestPaused: false,
-      ownCommandUntil: 0,
-      ownCommandPlayState: '',
-      joiningItemId: '',
-      pendingJoinRoomId: '',
-      pendingMediaId: '',
-      pendingMediaUntil: 0,
-      mediaSwitchUntil: 0,
-      suppressUntil: 0,
-      playbackBlocked: false,
-      playbackFailureNotified: false,
-      inviteJoinPending: false,
-      pendingInviteTicket: ''
-    });
+    Object.assign(state, OWP.stateFactories.createRoomPlaybackState());
+    // Generation fences must advance, not return to their initial value.
     state.playbackRequestAttempt++;
     state.autoJoinAttempt++;
     state.cardPollAttempt++;
     state.mediaSyncAttempt++;
     state.playbackActionAttempt++;
+  };
+
+  const resetRoomMembership = () => {
+    Object.assign(state, OWP.stateFactories.createRoomState());
+  };
+
+  const resetRoomUI = () => {
+    Object.assign(state, OWP.stateFactories.createRoomUIState());
+  };
+
+  const resetRoomState = () => {
+    resetRoomPlayback();
+    resetRoomMembership();
+    resetRoomUI();
+    Object.assign(state, OWP.stateFactories.createInviteWorkState());
     if (OWP.ui?.updateGuestControls) OWP.ui.updateGuestControls();
     if (OWP.chat) OWP.chat.clear();
   };
@@ -165,6 +130,9 @@
     normalizePlaybackRate,
     resetDriftCorrection,
     resetRoomState,
+    resetRoomPlayback,
+    resetRoomMembership,
+    resetRoomUI,
     createRoom,
     joinRoom,
     leaveRoom,

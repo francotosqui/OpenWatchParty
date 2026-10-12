@@ -10,6 +10,9 @@ nav_order: 4
 
 The OpenWatchParty client is a set of JavaScript modules (IIFE pattern) injected into Jellyfin's web interface. These modules handle playback synchronization between multiple users via WebSocket.
 
+See [Client State Lifecycle](client-state.md) for field ownership, domain
+factories, reset boundaries and cancellation rules.
+
 ## Module Architecture
 
 ```
@@ -80,7 +83,12 @@ Defines global shared state and configuration constants.
 | `PLAYBACK_RATE_MAX` | number | `1.15` | Maximum playback speed for catchup |
 | `DRIFT_GAIN` | number | `0.15` | Proportional gain for speed adjustment (sqrt curve) |
 | `UI_CHECK_MS` | number | `2000` | UI injection check interval (ms) |
-| `PING_MS` | number | `10000` | Ping interval for RTT (ms) |
+| `PING_INIT_MS` | number | `2000` | Initial application ping interval (ms) |
+| `PING_STABLE_MS` | number | `30000` | Application ping interval after clock convergence (ms) |
+| `PING_STABLE_AFTER` | number | `5` | Valid clock samples before the stable interval |
+| `RECONNECT_BASE_MS` | number | `1000` | Initial transport reconnect delay (ms) |
+| `RECONNECT_MAX_MS` | number | `30000` | Maximum transport reconnect delay (ms) |
+| `ROOM_REJOIN_TIMEOUT_MS` | number | `5000` | Authentication/rejoin wait timeout (ms) |
 | `HOME_REFRESH_MS` | number | `5000` | Home watch parties refresh (ms) |
 | `SYNC_LOOP_MS` | number | `500` | Sync loop interval (ms) |
 
@@ -100,6 +108,10 @@ Defines global shared state and configuration constants.
 | `bound` | boolean | `true` if video events are bound |
 | `autoReconnect` | boolean | `true` for automatic reconnection |
 | `serverFeatures` | string[] | Features confirmed by `auth_success`; reset for every WebSocket connection |
+| `desiredRoomId` | string | Room to recover after an unexpected transport close |
+| `rejoinPending` | boolean | Waiting to authenticate or receive the recovered room state |
+| `connectionAttempt` | number | Generation that invalidates obsolete connection work |
+| `authRequestAttempt` | number | Generation that invalidates obsolete token requests |
 | `serverOffsetMs` | number | Client/server clock offset (ms) |
 | `lastSeekSentAt` | number | Timestamp of last seek sent |
 | `lastStateSentAt` | number | Timestamp of last state update sent |
@@ -128,7 +140,47 @@ Defines global shared state and configuration constants.
 | `wantsToPlay` | boolean | `true` if user wants to play |
 | `isSyncing` | boolean | Anti-feedback lock during sync |
 
-## Module: `utils.js`
+### Connection and Room Lifecycle
+
+`OWP.state` is currently a flat shared object, defined in `state.js`. The
+following describes its existing owners and cleanup boundaries; these are not
+separate nested state objects.
+
+| Boundary | Owner | Behavior |
+|----------|-------|----------|
+| Token acquisition/refresh | `ws/auth.js` | Updates credentials/configuration; invalidates obsolete responses through request generations |
+| WebSocket transport | `ws/connection.js` | Owns socket callbacks, reconnect and rejoin timers, ping cadence and connection generations |
+| Room state reset | `ws/send.js` (`resetRoomState`) | Clears room/media timers, pending playback, membership, statuses and chat; invalidates outstanding media/playback work |
+| Room messages | `ws/handlers/room.js` | Applies membership, host and capability messages for the current room |
+| Video binding | `playback/bind.js` | Attaches/detaches listeners for the current video element |
+| Full client cleanup | `app/cleanup.js` | Stops the client, clears deferred work, detaches video/panel listeners and removes header buttons |
+
+On an unexpected socket close, the client remembers the room in
+`desiredRoomId`, normalizes playback rate and clears active membership. It
+reconnects with capped exponential backoff (1s, 2s, 4s, 8s, 16s, then 30s),
+resetting the counter when a socket opens. After authentication, it rejoins the
+remembered room; authentication/rejoin waits time out after 5s. A failed rejoin
+resets room state and rejects late room-state replies. An older server without
+host transfer closes the room on host disconnect, so the host does not attempt
+room recovery in that case.
+
+The server decides whether a reconnecting host reclaims its role during the
+10s authenticated recovery window or returns as a guest after transfer.
+Explicit leave cancels automatic rejoin. `disconnect()` disables reconnect,
+invalidates pending connection/authentication work and resets room state;
+full cleanup also cancels the remaining deferred operations.
+
+Application clock pings run every 2s until five valid samples have arrived,
+then every 30s. An offset change greater than 50ms restores the fast cadence.
+These JSON pings measure clock offset and latency; the server's separate
+20s WebSocket control-frame heartbeat maintains transport liveness even when
+JavaScript timers are throttled.
+
+When adding a state field, identify its owner, whether it survives transport
+loss, and which room reset or full-cleanup path clears it. Preserve user
+preferences and valid credentials across a room reset.
+
+## Module: `utils/`
 
 ### Description
 Shared utility functions.
@@ -210,6 +262,12 @@ Ensures the specified media is playing.
 - **Usage**: Called when participant joins to load the same media as host.
 - **Already playing**: Skipped only when `getPlayingItemId()` reports the same item.
 - **Retry**: Up to 5 attempts, 500ms apart.
+
+Private `schedulePlaybackRetry` in `playback/play.js` schedules missing-identity,
+item lookup, and playback failure retries: at most five retries at 500 ms, each
+carrying the original request generation and force flag. `ensurePlayback` checks
+validity before work and after asynchronous operations; only the current
+generation may clear `joiningItemId` in its finalizer.
 
 #### `notifyReady() -> void`
 Sends `ready` message to server indicating client is ready to play.
@@ -294,6 +352,14 @@ sends `auth` first, then flushes that diagnostic through `client_log`. A host th
 rejoins during the server's 10-second grace period regains the host role under its
 new connection ID.
 
+### Token request lifecycle
+
+`fetchAuthToken` owns request generation, ApiClient waiting, the abort deadline,
+HTTP/JSON errors, and timeout cleanup. Private `applyTokenResponse` validates the
+endpoint URL and applies the explicit authentication mode, identity, settings,
+and refresh schedule. The coordinator checks its generation after fetch and JSON
+decoding, before applying a response; obsolete failures cannot block a newer login.
+
 ### Functions
 
 #### `send(type: string, payload?: object, roomOverride?: string) -> void`
@@ -323,6 +389,15 @@ Closes the room when invoked by the host. It sends `close_room` when the server 
 #### `connect() -> void`
 Establishes WebSocket connection.
 - **Auto-reconnect**: If `autoReconnect === true`, retries with exponential backoff starting at 1 second and capped at 30 seconds.
+
+### Connection setup responsibilities
+
+`connect` coordinates socket replacement, token acquisition, endpoint validation,
+and callback installation. Private `blockConnection` records authentication or
+endpoint failures with the same login watchdog bookkeeping and toast suppression.
+Private `onWsMessage` checks socket identity before reading data, validates
+JSON/schema, and filters room messages before dispatch. Retry backoff and protocol
+payloads remain owned by the existing connection lifecycle.
 
 ### Message Handler (`handleMessage`)
 
@@ -521,7 +596,7 @@ Full cleanup for plugin unload:
 │        │                                                         │
 │        ├── Validates: is host?                                  │
 │        ├── Updates room.state                                   │
-│        ├── Sets last_command_ts (cooldown)                      │
+│        ├── Sets command_cooldown_until                          │
 │        │                                                         │
 │        ▼                                                         │
 │  Broadcasts with target_server_ts = now + PLAY_SCHEDULE_MS      │

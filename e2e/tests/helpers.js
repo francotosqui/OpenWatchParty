@@ -3,6 +3,7 @@ const { expect } = require('@playwright/test');
 const PASSWORD = process.env.OWP_DEV_PASSWORD || 'owp-dev-test';
 const HOST_USER = 'testhost';
 const GUEST_USER = 'testclient1';
+const THIRD_USER = 'testclient2';
 
 async function login(page, username) {
   await page.goto('/#/login');
@@ -45,6 +46,8 @@ async function owpState(page) {
       inRoom: state.inRoom,
       roomId: state.roomId,
       roomName: state.roomName,
+      clientId: state.clientId,
+      roomHostId: state.roomHostId,
       isHost: state.isHost,
       participants: state.participants,
       syncStatus: state.syncStatus,
@@ -126,7 +129,9 @@ async function togglePlayback(page) {
 }
 
 async function revealOsd(page) {
+  await page.bringToFront();
   const size = page.viewportSize();
+  await page.mouse.move(size.width / 2 - 20, size.height / 2 - 20);
   await page.mouse.move(size.width / 2, size.height / 2);
   await page.locator('#owp-osd-btn').waitFor({ state: 'visible', timeout: 10_000 });
 }
@@ -154,9 +159,11 @@ async function openPanelFromHeader(page) {
 
 async function ensureRoomBarVisible(page) {
   if (await panelHidden(page)) {
-    const osd = page.locator('#owp-osd-btn');
-    if (await osd.isVisible().catch(() => false)) {
-      await osd.click();
+    // During playback the app header is hidden and the OSD auto-hides.
+    // Reveal the player controls before choosing that entry point.
+    if (await page.evaluate(() => Boolean(window.OpenWatchParty.utils.getVideo()))) {
+      await revealOsd(page);
+      await page.locator('#owp-osd-btn').click();
     } else {
       await openPanelFromHeader(page);
     }
@@ -203,6 +210,15 @@ async function leaveIfInRoom(page) {
   }
 }
 
+// Unlike leaveRoom's existing host behavior (Close for everyone), this
+// clicks the host's separate Leave action and preserves the room for guests.
+async function leaveRoomKeepingRoom(page) {
+  await ensureRoomBarVisible(page);
+  await page.locator('#owp-btn-leave').click();
+  await page.locator('#owp-btn-leave-room').click();
+  await waitInRoom(page, false);
+}
+
 async function expectParticipants(page, count) {
   await expect.poll(async () => (await owpState(page)).participants.length, { timeout: 20_000 }).toBe(count);
 }
@@ -211,6 +227,7 @@ module.exports = {
   PASSWORD,
   HOST_USER,
   GUEST_USER,
+  THIRD_USER,
   login,
   waitForClient,
   findMovieId,
@@ -231,6 +248,7 @@ module.exports = {
   joinRoomFromHeader,
   joinRoomFromHomeCard,
   leaveRoom,
+  leaveRoomKeepingRoom,
   leaveIfInRoom,
   expectParticipants,
 };

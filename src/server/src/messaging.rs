@@ -1,4 +1,4 @@
-use crate::types::{Client, Room, SharedState, WsMessage};
+use crate::types::{Client, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
 use std::collections::HashMap;
 use tokio::sync::{mpsc, watch};
@@ -64,18 +64,29 @@ impl ClientSender {
     }
 }
 
+#[derive(serde::Serialize)]
+struct RoomListEntry<'a> {
+    id: &'a str,
+    name: &'a str,
+    count: usize,
+    media_id: &'a Option<String>,
+}
+
 fn build_room_list_msg(rooms: &HashMap<String, Room>) -> WsMessage {
-    let list: Vec<serde_json::Value> = rooms
+    let list: Vec<_> = rooms
         .values()
-        .map(|r| {
-            serde_json::json!({ "id": r.room_id, "name": r.name, "count": r.clients.len(), "media_id": r.media_id })
+        .map(|r| RoomListEntry {
+            id: &r.room_id,
+            name: &r.name,
+            count: r.clients.len(),
+            media_id: &r.media_id,
         })
         .collect();
     WsMessage {
-        msg_type: "room_list".to_string(),
+        msg_type: ServerMessageType::RoomList,
         room: None,
         client: None,
-        payload: Some(serde_json::json!(list)),
+        payload: Some(serde_json::to_value(list).expect("typed room list serializes")),
         ts: now_ms(),
         server_ts: Some(now_ms()),
     }
@@ -171,8 +182,9 @@ mod tests {
     use std::collections::HashSet;
 
     fn message(msg_type: &str) -> WsMessage {
+        let msg_type = serde_json::from_value(serde_json::json!(msg_type)).unwrap();
         WsMessage {
-            msg_type: msg_type.to_string(),
+            msg_type,
             room: None,
             client: None,
             payload: None,
@@ -185,7 +197,7 @@ mod tests {
     fn build_room_list_msg_empty() {
         let rooms = HashMap::new();
         let msg = build_room_list_msg(&rooms);
-        assert_eq!(msg.msg_type, "room_list");
+        assert_eq!(msg.msg_type, ServerMessageType::RoomList);
         let payload = msg.payload.unwrap();
         let list = payload.as_array().unwrap();
         assert!(list.is_empty());
@@ -207,7 +219,7 @@ mod tests {
                 pending_host_reconnect: None,
                 state: PlaybackState {
                     position: 0.0,
-                    play_state: "paused".to_string(),
+                    play_state: crate::types::PlayState::Paused,
                 },
                 state_server_ts: 0,
                 target_server_ts: None,
@@ -232,7 +244,7 @@ mod tests {
                 pending_host_reconnect: None,
                 state: PlaybackState {
                     position: 10.0,
-                    play_state: "playing".to_string(),
+                    play_state: crate::types::PlayState::Playing,
                 },
                 state_server_ts: 0,
                 target_server_ts: None,
@@ -256,7 +268,7 @@ mod tests {
         let mut clients = HashMap::new();
         clients.insert("c1".to_string(), client);
         let msg = WsMessage {
-            msg_type: "test".to_string(),
+            msg_type: ServerMessageType::PlayerEvent,
             room: None,
             client: None,
             payload: None,
@@ -267,13 +279,13 @@ mod tests {
         send_message(sender, &msg, Some("c1"));
         let received = test_helpers::recv_msg(&mut rx);
         assert!(received.is_some());
-        assert_eq!(received.unwrap().msg_type, "test");
+        assert_eq!(received.unwrap().msg_type, ServerMessageType::PlayerEvent);
     }
 
     #[test]
     fn send_to_client_not_found() {
         let msg = WsMessage {
-            msg_type: "test".to_string(),
+            msg_type: ServerMessageType::PlayerEvent,
             room: None,
             client: None,
             payload: None,
@@ -296,7 +308,7 @@ mod tests {
         let mut room = test_helpers::create_room("room-1", "a");
         room.clients = vec!["a".to_string(), "b".to_string(), "c".to_string()];
         let msg = WsMessage {
-            msg_type: "event".to_string(),
+            msg_type: ServerMessageType::PlayerEvent,
             room: None,
             client: None,
             payload: None,
@@ -322,7 +334,7 @@ mod tests {
         let mut room = test_helpers::create_room("room-1", "a");
         room.clients = vec!["a".to_string(), "b".to_string()];
         let msg = WsMessage {
-            msg_type: "event".to_string(),
+            msg_type: ServerMessageType::PlayerEvent,
             room: None,
             client: None,
             payload: None,
@@ -354,7 +366,7 @@ mod tests {
 
         let received =
             test_helpers::recv_msg(&mut auth_rx).expect("authenticated client gets rooms");
-        assert_eq!(received.msg_type, "room_list");
+        assert_eq!(received.msg_type, ServerMessageType::RoomList);
         assert!(
             anon_rx.try_recv().is_err(),
             "unauthenticated clients must not receive the room list"
@@ -404,7 +416,7 @@ mod tests {
             sent.map(|count| count + 1)
         );
         let received: Vec<_> = std::iter::from_fn(|| test_helpers::recv_msg(&mut fast_rx))
-            .map(|message| message.msg_type)
+            .map(|message| message.msg_type.as_str())
             .collect();
         assert_eq!(
             received,

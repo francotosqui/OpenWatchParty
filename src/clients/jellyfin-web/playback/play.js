@@ -151,6 +151,13 @@
     if (OWP.ui?.updateSyncIndicator) OWP.ui.updateSyncIndicator();
   };
 
+  // Retries keep the original generation: a room reset or newer media
+  // request must not turn a delayed retry into a new playback request.
+  const schedulePlaybackRetry = (itemId, attempt, requestAttempt, force) => {
+    if (!(attempt < 5)) return;
+    OWP.timers.setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt, force), 500, 'media');
+  };
+
   const ensurePlayback = async (itemId, attempt = 0, expectedRequestAttempt = null, force = false) => {
     const state = OWP.state;
     if (!state.inRoom || !itemId || !window.ApiClient) return false;
@@ -160,28 +167,22 @@
     if (!force && state.joiningItemId === itemId && expectedRequestAttempt === null) return false;
     const requestAttempt = expectedRequestAttempt ?? ++state.playbackRequestAttempt;
     if (requestAttempt !== state.playbackRequestAttempt) return false;
+    const isCurrent = () => requestAttempt === state.playbackRequestAttempt && state.inRoom;
     const userId = ApiClient.getCurrentUserId?.() || ApiClient._currentUserId;
     if (!userId) {
-      if (attempt < 5) {
-        OWP.timers.setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt, force), 500, 'media');
-      }
+      schedulePlaybackRetry(itemId, attempt, requestAttempt, force);
       return false;
     }
     state.joiningItemId = itemId;
     try {
       const item = await ApiClient.getItem(userId, itemId);
-      if (requestAttempt !== state.playbackRequestAttempt || !state.inRoom) return false;
-      const isCurrent = () => requestAttempt === state.playbackRequestAttempt && state.inRoom;
+      if (!isCurrent()) return false;
       const success = await playItem(item, { isCurrent, silent: attempt < 5 });
       if (!isCurrent()) return false;
-      if (!success && attempt < 5) {
-        OWP.timers.setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt, force), 500, 'media');
-      }
+      if (!success) schedulePlaybackRetry(itemId, attempt, requestAttempt, force);
       return success;
     } catch (err) {
-      if (requestAttempt === state.playbackRequestAttempt && state.inRoom && attempt < 5) {
-        OWP.timers.setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt, force), 500, 'media');
-      }
+      if (isCurrent()) schedulePlaybackRetry(itemId, attempt, requestAttempt, force);
       return false;
     } finally {
       if (requestAttempt === state.playbackRequestAttempt) state.joiningItemId = '';

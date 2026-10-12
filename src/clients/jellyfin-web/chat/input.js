@@ -6,7 +6,6 @@
   const MAX_MESSAGE_LENGTH = 500;
 
   const send = (text) => {
-    console.log('[OpenWatchParty] Chat.send called with:', text);
     if (!text || !text.trim()) return false;
     const trimmed = text.trim();
     // Count code points, like the message validator and the server, so a
@@ -16,16 +15,13 @@
       return false;
     }
     if (!OWP.state.ws || OWP.state.ws.readyState !== 1) {
-      console.log('[OpenWatchParty] Chat: Not connected');
       OWP.ui.showToast(t('notConnected'));
       return false;
     }
     if (!OWP.state.roomId) {
-      console.log('[OpenWatchParty] Chat: Not in a room');
       OWP.ui.showToast(t('notInRoom'));
       return false;
     }
-    console.log('[OpenWatchParty] Chat: Sending message to room', OWP.state.roomId);
     OWP.actions.send('chat_message', { text: trimmed });
     return true;
   };

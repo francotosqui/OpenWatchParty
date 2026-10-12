@@ -147,7 +147,7 @@ Host Browser                     Server                   Client Browser
      │                              │                            │
 ```
 
-### Leaving a Room (Normal Disconnect)
+### Leaving a Room (Explicit Leave)
 
 ```
 Participant                      Server                       Host
@@ -165,24 +165,33 @@ Participant                      Server                       Host
   [Back to lobby]                   │                           │
 ```
 
-### Host Disconnect (Room Closure)
+### Host Disconnect (Recovery or Transfer)
 
 ```
 Host                            Server                    Participants
   │                                │                            │
-  X (disconnect/leave)             │                            │
+  X (transport lost)               │                            │
   │                                │                            │
                               [Detect disconnect]               │
-                              [Close room]                      │
+                              [Hold eligible host for 10s]      │
                                    │                            │
-                                   ├── room_closed ────────────►│
+                              [Recovery or grace expires]       │
                                    │                            │
-                                   ├── room_list ──────────────►│
-                                   │   (room removed)           │
+                                   ├── host_changed ───────────►│
+                                   │   (reclaimed/transferred)   │
                                    │                            │
-                                   │                    [Show notification]
-                                   │                    [Return to lobby]
+                                   │                    [Update host controls]
 ```
+
+The grace period requires a JWT-authenticated host with a non-empty user ID
+and `host_transfer` support. A new authenticated connection for that user can
+reclaim the host role by joining the same room before the expiry task runs.
+Otherwise, the first remaining participant in join order that supports host
+transfer is promoted; the room closes if none is eligible. Hosts without grace
+eligibility follow the transfer-or-close path immediately.
+
+An explicit `leave_room` does not start this grace period. An explicit
+`close_room` closes the room for everyone. See [Room lifecycle](server.md#module-room).
 
 ## Technology Stack
 
@@ -200,18 +209,21 @@ Host                            Server                    Participants
 ### Server State
 
 ```
-Clients: HashMap<ClientId, Client>
-Rooms: HashMap<RoomId, Room>
+SharedState = Arc<RwLock<ServerState>>
+ServerState {
+  clients: HashMap<ClientId, Client>
+  rooms: HashMap<RoomId, Room>
+}
 
 Client {
   sender: Sender<Message>       // bounded channel
   room_id: Option<RoomId>
-  user_id: Option<String>
-  user_name: Option<String>
+  user_id: String
+  user_name: String
   authenticated: bool
   message_count: u32
-  last_reset: u64
-  last_seen: u64
+  last_reset: Instant
+  last_seen: Instant
 }
 
 Room {
@@ -222,10 +234,16 @@ Room {
   ready_clients: HashSet<ClientId>
   pending_play: Option<PendingPlay>
   state: PlaybackState
-  last_state_ts: u64
-  last_command_ts: u64
+  pending_host_reconnect: Option<PendingHostReconnect>
+  state_server_ts: u64
+  last_state_at: Option<Instant>
+  command_cooldown_until: Option<Instant>
 }
 ```
+
+This is an abbreviated view; `types.rs` defines the complete structs. Client
+membership and room membership are changed under the same write guard. Socket
+writes are handled by each client's bounded sender and writer task.
 
 ### Client State
 
@@ -247,7 +265,8 @@ OWP.state = {
 ## Security Model
 
 - **Authentication**: Optional JWT tokens validated by session server
-- **Authorization**: Only hosts can send playback commands
+- **Authorization**: Only hosts can seek or publish state updates. Guests can
+  play/pause the room when shared playback control is negotiated for the room.
 - **Transport**: WebSocket (ws://) or secure WebSocket (wss://)
 - **Rate limiting**: 30 tokens per fixed minute per user
 - **Message size**: 64KB maximum
@@ -261,7 +280,6 @@ See [Security Guide](../operations/security.md) for detailed security configurat
 | Resource | Limit | Configurable |
 |----------|-------|--------------|
 | Clients per room | 20 | Server constant `MAX_CLIENTS_PER_ROOM` |
-| Rooms per user | 3 | Server constant `MAX_ROOMS_PER_USER` |
 | Messages per second | 30 | Server constant `RATE_LIMIT_MESSAGES` |
 | Message size | 64 KB | Server constant |
 | Token requests | 30/min per user | Plugin constant |
@@ -282,12 +300,14 @@ See [Security Guide](../operations/security.md) for detailed security configurat
 
 When several clients join a room in quick succession:
 
-1. **Server handling**: Each join is processed sequentially with room lock
-2. **Participant updates**: Batched within 100ms to avoid message flood
-3. **Ready mechanism**: Host's play command waits up to 2s for all clients to be ready
-4. **Mitigation**: If clients aren't ready within timeout, play proceeds anyway
-
-**Recommendation**: Allow 2-3 seconds between mass joins for optimal sync.
+1. **Server handling**: Membership changes use the shared `ServerState` write lock.
+2. **Participant updates**: Joining sends the room state and updated participant
+   lists/statuses; these joins are not batched behind a 100ms timer.
+3. **Ready mechanism**: A play command waits up to `MAX_READY_WAIT_MS` (2s) for
+   every current room member to be ready.
+4. **Scheduling**: Once ready, or when the wait expires, play is scheduled
+   `PLAY_SCHEDULE_MS` (1s) ahead. Each client applies the server timestamp using
+   its clock offset.
 
 ### Host Network Disconnect
 
@@ -297,23 +317,27 @@ When the host loses connection:
 Host disconnects
        │
        ▼
-Server detects (60s timeout or WebSocket close)
+Server detects WebSocket close or stale connection
        │
        ▼
-Room is closed immediately
+Eligible authenticated host: hold role for 10 seconds
        │
        ▼
-All participants receive "room_closed" message
+Same user rejoins: reclaim host with new connection ID
+Otherwise: transfer to first eligible remaining participant
        │
        ▼
-Clients show "Room closed" notification
-Playback continues locally (not synced)
+No eligible participant: close room and notify members
 ```
 
 **Notes**:
-- Currently, rooms close when the host disconnects
-- Participants can create a new room to continue
-- Automatic host transfer is planned (see roadmap)
+- Each WebSocket receives a separate client ID, even for the same Jellyfin user.
+- The server sends WebSocket control-frame heartbeats every 20s. Browsers answer
+  these independently of JavaScript timers in background tabs.
+- Zombie cleanup checks every 30s for connections inactive for more than 60s;
+  these are detection intervals, not the host recovery window.
+- An eligible host's 10s grace begins when the server handles its disconnect.
+- Explicit leave transfers immediately; Close room closes for everyone.
 
 ### Clock Skew Tolerance
 
@@ -327,7 +351,9 @@ The system tolerates significant clock differences between clients:
 | > 2000ms | Poor - may trigger hard seek, visible jumps |
 
 **Clock sync mechanism**:
-- NTP-like ping/pong every 10 seconds
+- Application ping/pong every 2s initially, then every 30s after five valid
+  clock samples; an offset change greater than 50ms returns to the fast cadence
+- Minimum-RTT selection from the last eight samples, followed by EMA smoothing
 - EMA smoothing (α=0.4) prevents sudden jumps
 - Initial sync uses first measurement directly
 - Offset stored in `serverOffsetMs` state
@@ -387,12 +413,19 @@ When a client disconnects and reconnects:
 
 | Scenario | Behavior |
 |----------|----------|
-| Brief disconnect (< 60s) | Can rejoin same room |
-| Host reconnects | Must create new room (old room closed) |
-| Participant reconnects | Joins as new participant, re-syncs |
+| Eligible authenticated host rejoins during 10s grace | Reclaims host role with a new client ID |
+| Host grace expires | Transfers to first eligible remaining participant, or closes room |
+| Participant reconnects | Rejoins with a new client ID and re-syncs if the room still exists |
+| Older server without host transfer | Host disconnect closes the room; client does not try to recover it |
 | Server restart | All rooms lost, clients reconnect to empty server |
 
 **Auto-reconnect**:
-- Client retries every 3 seconds
+- Transport reconnect uses capped exponential backoff: 1s, 2s, 4s, 8s, 16s,
+  then 30s; opening a socket resets the attempt counter
 - Maintains `autoReconnect=true` state
-- Shows "Reconnecting..." in UI
+- Remembers `desiredRoomId` across an unexpected close, then reauthenticates and
+  rejoins; each authentication/rejoin wait has a 5s timeout
+- Explicit room leave cancels automatic room rejoin; client cleanup disables
+  transport reconnection and cancels pending work
+- Blocked authentication uses a separate retry policy; see
+  [Client connection lifecycle](client.md#connection-and-room-lifecycle)

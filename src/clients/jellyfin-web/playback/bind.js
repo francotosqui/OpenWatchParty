@@ -246,26 +246,7 @@
     }, STATE_UPDATE_MS, 'video');
   };
 
-  const cleanupVideoListeners = () => {
-    if (state.currentVideoElement && state.videoListeners) {
-      const video = state.currentVideoElement;
-      const listeners = state.videoListeners;
-      video.removeEventListener('waiting', listeners.waiting);
-      video.removeEventListener('canplay', listeners.canplay);
-      video.removeEventListener('playing', listeners.playing);
-      video.removeEventListener('play', listeners.play);
-      video.removeEventListener('pause', listeners.pause);
-      video.removeEventListener('seeked', listeners.seeked);
-      video.removeEventListener('emptied', listeners.emptied);
-      video.removeEventListener('timeupdate', listeners.timeupdate);
-    }
-    if (state.intervals.stateUpdate) {
-      OWP.timers.clear(state.intervals.stateUpdate);
-      state.intervals.stateUpdate = null;
-    }
-    state.videoListeners = null;
-    state.currentVideoElement = null;
-  };
+  const cleanupVideoListeners = () => OWP.stateLifecycle.releaseVideoBinding();
 
   Object.assign(playback, { bindVideo, cleanupVideoListeners, syncPromotedGuest });
 })();

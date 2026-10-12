@@ -233,7 +233,7 @@
       display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: #aaa;
     }
     .owp-checkbox-row input { accent-color: #388e3c; }
-    /* UX-P3: Sync status indicator styles */
+    /* Sync status indicator styles */
     .owp-sync-dot { width: 8px; height: 8px; border-radius: 50%; }
     .owp-sync-dot.synced { background: #69f0ae; }
     .owp-sync-dot.syncing { background: #ffd740; animation: owp-pulse 1s infinite; }

@@ -17,19 +17,8 @@
     }
   };
 
-  const cleanupVideo = () => {
-    if (state.currentVideoElement && state.videoListeners) {
-      const video = state.currentVideoElement;
-      const listeners = state.videoListeners;
-      if (listeners.waiting) video.removeEventListener('waiting', listeners.waiting);
-      if (listeners.canplay) video.removeEventListener('canplay', listeners.canplay);
-      if (listeners.playing) video.removeEventListener('playing', listeners.playing);
-      if (listeners.play) video.removeEventListener('play', listeners.play);
-      if (listeners.pause) video.removeEventListener('pause', listeners.pause);
-      if (listeners.seeked) video.removeEventListener('seeked', listeners.seeked);
-      state.videoListeners = null;
-      state.currentVideoElement = null;
-    }
+  const resetApplicationUI = () => {
+    state.initialized = false;
   };
 
   const cleanup = () => {
@@ -50,10 +39,9 @@
     }
     if (OWP.ui?.removeHeaderButtons) OWP.ui.removeHeaderButtons();
     cleanupPanel();
-    cleanupVideo();
+    OWP.stateLifecycle.releaseVideoBinding();
     if (OWP.ui?.updateGuestControls) OWP.ui.updateGuestControls();
-    state.bound = false;
-    state.initialized = false;
+    resetApplicationUI();
   };
 
   OWP.app = OWP.app || {};

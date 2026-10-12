@@ -114,7 +114,7 @@ test('a guest play resumes the paused room', async () => {
   await expect(host.locator('.owp-toast-system', { hasText: 'A guest resumed playback' })).toHaveCount(1);
 });
 
-test('the host leaving closes the room for the guest', async () => {
+test('the host choosing Close for everyone closes the room for the guest', async () => {
   await openRoomWithGuest('header');
 
   await helpers.leaveRoom(host);
