@@ -48,7 +48,14 @@ jobs:
           key: dev-media-${{ hashFiles('infra/scripts/download-dev-media.py', 'version.json') }}
 
       - name: Run the end-to-end suite
-        run: just e2e
+        env:
+          ALLOW_INSECURE_NO_AUTH: 'false'
+        run: |
+          # Host recovery requires an authenticated identity. This disposable
+          # key is shared only by the dev plugin and session server in this job.
+          JWT_SECRET="$(openssl rand -base64 32)"
+          export JWT_SECRET
+          just e2e
 
       - name: Upload Playwright report
         if: failure()

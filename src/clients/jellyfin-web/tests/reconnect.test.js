@@ -128,6 +128,32 @@ describe('room reconnection lifecycle', () => {
     OWP.state.ws = null;
   });
 
+  it('disconnect preserves identity and preferences while clearing the connection and recovery intent', async () => {
+    await OWP.actions.connect();
+    const socket = sockets[0];
+    socket.open();
+    Object.assign(OWP.state, { tokenExpiresAt: 1234, followHost: false, showSyncNudge: true,
+      inRoom: true, roomId: 'room-a', desiredRoomId: 'room-a', rejoinPending: true });
+    OWP.actions.disconnect();
+    await new Promise(resolve => queueMicrotask(resolve));
+    assert.equal(socket.readyState, FakeWebSocket.CLOSED);
+    assert.equal(OWP.state.ws, null);
+    assert.equal(OWP.state.connectionPhase, 'disconnected');
+    assert.equal(OWP.state.clientId, '');
+    assert.equal(OWP.state.desiredRoomId, '');
+    assert.equal(OWP.state.rejoinPending, false);
+    assert.equal(OWP.state.inRoom, false);
+    assert.equal(OWP.state.authToken, 'jwt-token');
+    assert.equal(OWP.state.userId, 'user');
+    assert.equal(OWP.state.userName, 'Guest');
+    assert.equal(OWP.state.tokenExpiresAt, 1234);
+    assert.equal(OWP.state.followHost, false);
+    assert.equal(OWP.state.showSyncNudge, true);
+    assert.equal(OWP.state.intervals.ping, null);
+    assert.equal(OWP.state.reconnectTimer, null);
+    assert.equal(OWP.state.roomRejoinTimer, null);
+  });
+
   it('reauthenticates before rejoining a guest room', async () => {
     await OWP.actions.connect();
     const first = sockets[0];
@@ -469,4 +495,30 @@ describe('room reconnection lifecycle', () => {
     const logged = JSON.stringify({ errors, warnings });
     assert.doesNotMatch(logged, /raw-message|schema-message|handler-message/);
   });
+  it('rejects every saved callback of a socket replaced during connection', async () => {
+    await OWP.actions.connect();
+    const first = sockets[0];
+    const callbacks = { open: first.onopen, error: first.onerror,
+      close: first.onclose, message: first.onmessage };
+    // A transport error permits a replacement before the old close arrives.
+    first.onerror(new Error('transport failed'));
+    await OWP.actions.connect();
+    const second = sockets[1];
+    second.open();
+    const phase = OWP.state.connectionPhase;
+    const sent = second.sent.length;
+    callbacks.open();
+    callbacks.error(new Error('late error'));
+    callbacks.close({ code: 1006, reason: 'late close' });
+    let staleDataReads = 0;
+    callbacks.message({ get data() { staleDataReads++; return '{}'; } });
+    assert.equal(staleDataReads, 0);
+    assert.equal(OWP.state.ws, second);
+    assert.equal(OWP.state.connectionPhase, phase);
+    assert.equal(second.sent.length, sent);
+    assert.equal(OWP.state.reconnectTimer, null);
+    assert.equal(first.onmessage, null);
+    assert.equal(first.onclose, null);
+  });
+
 });

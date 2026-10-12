@@ -1,6 +1,6 @@
 use super::constants::{MAX_READY_WAIT_MS, PLAY_SCHEDULE_MS};
 use crate::messaging::{collect_room_senders, send_to_senders, ClientSender};
-use crate::types::{Client, Room, SharedState, WsMessage};
+use crate::types::{Client, PlayState, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -24,7 +24,7 @@ pub(super) fn prepare_scheduled_play(
         .take()
         .map_or_else(|| room.host_id.clone(), |pending| pending.initiator_id);
     room.state.position = position;
-    room.state.play_state = "playing".to_string();
+    room.state.play_state = PlayState::Playing;
     let now = Instant::now();
     room.state_server_ts = event_server_ts;
     room.target_server_ts = Some(target_server_ts);
@@ -41,15 +41,18 @@ pub(super) fn prepare_scheduled_play(
         room.guest_command_until = room.command_cooldown_until;
     }
     let msg = WsMessage {
-        msg_type: "player_event".to_string(),
+        msg_type: ServerMessageType::PlayerEvent,
         room: Some(room.room_id.clone()),
         client: Some(initiator_id),
-        payload: Some(serde_json::json!({
-            "action": "play",
-            "position": position,
-            "play_state": "playing",
-            "target_server_ts": target_server_ts
-        })),
+        payload: Some(
+            serde_json::to_value(crate::types::ScheduledPlayerEventPayload {
+                action: crate::types::PlaybackAction::Play,
+                position,
+                play_state: PlayState::Playing,
+                target_server_ts,
+            })
+            .expect("typed payload serializes"),
+        ),
         ts: now_ms(),
         server_ts: Some(event_server_ts),
     };
@@ -239,7 +242,7 @@ mod tests {
 
         let room = &state.read().await.rooms["r1"];
         assert!(room.pending_play.is_some());
-        assert_eq!(room.state.play_state, "paused");
+        assert_eq!(room.state.play_state, PlayState::Paused);
     }
 
     #[tokio::test(start_paused = true)]
@@ -272,6 +275,6 @@ mod tests {
         let locked = state.read().await;
         let pending = locked.rooms["r1"].pending_play.as_ref().unwrap();
         assert_eq!(pending.position_ts, 9_000);
-        assert_eq!(locked.rooms["r1"].state.play_state, "paused");
+        assert_eq!(locked.rooms["r1"].state.play_state, PlayState::Paused);
     }
 }

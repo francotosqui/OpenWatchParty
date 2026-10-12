@@ -68,4 +68,47 @@ describe('playback request invalidation', () => {
       globalThis.setTimeout = realSetTimeout;
     }
   });
+  for (const failure of ['missing user', 'item lookup', 'playback']) {
+    it(`bounds ${failure} retries and retains the same request generation`, async () => {
+      const originalTimer = OWP.timers.setTimeout;
+      const originalUser = globalThis.ApiClient.getCurrentUserId;
+      const originalManager = OWP.utils.getPlaybackManager;
+      const retries = [];
+      const generations = [];
+      OWP.state.inRoom = true;
+      OWP.state.joiningItemId = '';
+      OWP.state.playbackRequestAttempt = 10;
+      globalThis.ApiClient.getCurrentUserId = () => failure === 'missing user' ? '' : 'user';
+      getItemCalls = 0;
+      getItemImpl = async () => {
+        if (failure === 'item lookup') throw new Error('lookup failed');
+        return { Id: 'item-a' };
+      };
+      OWP.utils.getPlaybackManager = () => ({ play: async () => { throw new Error('play failed'); } });
+      OWP.timers.setTimeout = (callback, delay, scope) => {
+        assert.equal(delay, 500);
+        assert.equal(scope, 'media');
+        generations.push(OWP.state.playbackRequestAttempt);
+        retries.push(callback);
+        return {};
+      };
+      try {
+        assert.equal(await OWP.playback.ensurePlayback('item-a'), false);
+        for (let attempt = 0; attempt < 5; attempt++) {
+          assert.equal(retries.length, 1);
+          await retries.shift()();
+        }
+        assert.equal(retries.length, 0);
+        assert.deepEqual(generations, [11, 11, 11, 11, 11]);
+        assert.equal(OWP.state.playbackRequestAttempt, 11);
+        assert.equal(OWP.state.joiningItemId, '');
+        assert.equal(getItemCalls, failure === 'missing user' ? 0 : 6);
+      } finally {
+        OWP.timers.setTimeout = originalTimer;
+        globalThis.ApiClient.getCurrentUserId = originalUser;
+        OWP.utils.getPlaybackManager = originalManager;
+      }
+    });
+  }
+
 });

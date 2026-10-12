@@ -72,14 +72,21 @@ if ((${#workflow_files[@]})); then
     for file in "${workflow_files[@]}"; do
         staged_workflows+=("$snapshot/$file")
     done
-    if command -v actionlint >/dev/null 2>&1; then
+    # actionlint silently skips shell-script checks when ShellCheck is absent.
+    # Keep local workflow checks equivalent to CI rather than accepting that gap.
+    if command -v actionlint >/dev/null 2>&1 && command -v shellcheck >/dev/null 2>&1; then
         actionlint "${staged_workflows[@]}" || fail 'actionlint rejected a staged workflow.'
     elif command -v docker >/dev/null 2>&1; then
         actionlint_image='rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9'
-        docker run --rm --volume "$snapshot:/repo:ro" --workdir /repo "$actionlint_image" \
+        snapshot_mount=$snapshot
+        if command -v cygpath >/dev/null 2>&1; then
+            snapshot_mount=$(cygpath -m "$snapshot")
+        fi
+        # Git Bash must convert the host mount, but not Docker's /repo path.
+        MSYS_NO_PATHCONV=1 docker run --rm --volume "$snapshot_mount:/repo:ro" --workdir /repo "$actionlint_image" \
             "${workflow_files[@]}" || fail 'actionlint rejected a staged workflow.'
     else
-        fail 'actionlint validation requires either actionlint or Docker.'
+        fail 'workflow validation requires actionlint and ShellCheck, or Docker with both tools.'
     fi
 fi
 

@@ -6,44 +6,14 @@ use super::super::dispatch::{send_error, ErrorCode};
 use super::super::pending_play::{all_ready, schedule_pending_play};
 use super::super::validation::is_valid_position;
 use crate::messaging::{collect_room_senders, send_to_senders};
-use crate::types::{ClientMessageType, IncomingMessage, PendingPlay, Room, SharedState, WsMessage};
+use crate::types::{
+    ClientMessageType, IncomingMessage, PendingPlay, PlayState, PlaybackAction, Room,
+    ScheduledPlayerEventPayload, ServerMessageType, SharedState, WsMessage,
+};
 use crate::utils::now_ms;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tokio::time::Instant;
-
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-enum PlaybackAction {
-    Play,
-    Pause,
-    Seek,
-    Buffering,
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-enum PlayState {
-    Playing,
-    Paused,
-}
-
-impl PlayState {
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Playing => "playing",
-            Self::Paused => "paused",
-        }
-    }
-
-    fn from_room(room: &Room) -> Self {
-        if room.state.play_state == "playing" {
-            Self::Playing
-        } else {
-            Self::Paused
-        }
-    }
-}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -134,7 +104,7 @@ impl PlaybackMessage {
 /// Where the room's video is now: its last known position, moved on by the
 /// time since it took effect while the room plays.
 fn room_position_now(room: &Room, current_ts: u64) -> f64 {
-    if room.state.play_state != "playing" {
+    if room.state.play_state != PlayState::Playing {
         return room.state.position;
     }
     let since = room
@@ -200,7 +170,7 @@ fn absorb_during_pending(
 
 fn should_process_state_update(room: &Room, payload: &StateUpdatePayload, now: Instant) -> bool {
     let new_pos = payload.position;
-    let new_play_state = payload.play_state.as_str();
+    let new_play_state = payload.play_state;
 
     if new_play_state != room.state.play_state {
         // A guest's play or pause holds against the host's updates sent
@@ -240,11 +210,9 @@ fn apply_state_changes(
             let canonical_play_state = match payload.action {
                 PlaybackAction::Play => PlayState::Playing,
                 PlaybackAction::Pause | PlaybackAction::Buffering => PlayState::Paused,
-                PlaybackAction::Seek => payload
-                    .play_state
-                    .unwrap_or_else(|| PlayState::from_room(room)),
+                PlaybackAction::Seek => payload.play_state.unwrap_or(room.state.play_state),
             };
-            room.state.play_state = canonical_play_state.as_str().to_string();
+            room.state.play_state = canonical_play_state;
             let schedule_delay = if payload.action == PlaybackAction::Play {
                 PLAY_SCHEDULE_MS
             } else {
@@ -255,20 +223,20 @@ fn apply_state_changes(
             room.target_at = now.checked_add(Duration::from_millis(schedule_delay));
             room.command_cooldown_until =
                 now.checked_add(Duration::from_millis(schedule_delay + COMMAND_COOLDOWN_MS));
-            let canonical_payload = PlayerEventPayload {
+            let canonical_payload = ScheduledPlayerEventPayload {
                 action: payload.action,
-                position: Some(room.state.position),
-                play_state: Some(canonical_play_state),
+                position: room.state.position,
+                play_state: canonical_play_state,
+                target_server_ts,
             };
-            let mut canonical =
+            let canonical =
                 serde_json::to_value(canonical_payload).expect("typed payload serializes");
-            canonical["target_server_ts"] = serde_json::json!(target_server_ts);
-            ("player_event", canonical)
+            (ServerMessageType::PlayerEvent, canonical)
         }
         PlaybackMessage::StateUpdate(payload) => {
-            room.state.play_state = payload.play_state.as_str().to_string();
+            room.state.play_state = payload.play_state;
             (
-                "state_update",
+                ServerMessageType::StateUpdate,
                 serde_json::to_value(payload).expect("typed payload serializes"),
             )
         }
@@ -277,7 +245,7 @@ fn apply_state_changes(
     room.last_state_at = Some(now);
 
     WsMessage {
-        msg_type: msg_type.to_string(),
+        msg_type,
         room: Some(room.room_id.clone()),
         client: Some(client_id.to_string()),
         payload: Some(payload),
@@ -472,7 +440,7 @@ mod tests {
     }
 
     fn assert_error_code(message: WsMessage, code: &str) {
-        assert_eq!(message.msg_type, "error");
+        assert_eq!(message.msg_type, ServerMessageType::Error);
         assert_eq!(message.payload.unwrap()["code"], code);
     }
 
@@ -677,9 +645,9 @@ mod tests {
         let now = now_ms();
         let outgoing = apply_state_changes(&mut room, &message, "host", now, Instant::now());
         assert!((room.state.position - 42.0).abs() < f64::EPSILON);
-        assert_eq!(room.state.play_state, "playing");
+        assert_eq!(room.state.play_state, PlayState::Playing);
         assert_eq!(room.state_server_ts, now);
-        assert_eq!(outgoing.msg_type, "state_update");
+        assert_eq!(outgoing.msg_type, ServerMessageType::StateUpdate);
         assert_eq!(outgoing.room.as_deref(), Some("r1"));
         assert_eq!(outgoing.client.as_deref(), Some("host"));
         assert_eq!(outgoing.ts, now);
@@ -700,7 +668,7 @@ mod tests {
         });
         let now = now_ms();
         let outgoing = apply_state_changes(&mut room, &message, "host", now, Instant::now());
-        assert_eq!(room.state.play_state, "playing");
+        assert_eq!(room.state.play_state, PlayState::Playing);
         assert_eq!(room.target_server_ts, Some(now + PLAY_SCHEDULE_MS));
         assert_eq!(
             outgoing.payload,
@@ -744,7 +712,7 @@ mod tests {
     #[test]
     fn seek_without_play_state_uses_canonical_room_state() {
         let mut room = test_helpers::create_room("r1", "host");
-        room.state.play_state = "playing".to_string();
+        room.state.play_state = PlayState::Playing;
         let message = PlaybackMessage::PlayerEvent(PlayerEventPayload {
             action: PlaybackAction::Seek,
             position: Some(10.0),
@@ -754,7 +722,7 @@ mod tests {
         let outgoing = apply_state_changes(&mut room, &message, "host", now_ms(), Instant::now());
 
         assert_eq!(outgoing.payload.unwrap()["play_state"], "playing");
-        assert_eq!(room.state.play_state, "playing");
+        assert_eq!(room.state.play_state, PlayState::Playing);
     }
 
     #[test]
@@ -847,7 +815,7 @@ mod tests {
 
         let locked = state.read().await;
         assert_eq!(locked.rooms["r1"].state.position, 0.0);
-        assert_eq!(locked.rooms["r1"].state.play_state, "paused");
+        assert_eq!(locked.rooms["r1"].state.play_state, PlayState::Paused);
         assert!(test_helpers::recv_msg(&mut guest_rx).is_none());
         assert_error_code(
             test_helpers::recv_msg(&mut host_rx).unwrap(),
@@ -951,7 +919,7 @@ mod tests {
         handle_playback("guest", pause(), &state, &crate::tasks::AppTasks::new()).await;
         assert_eq!(
             test_helpers::recv_msg(&mut old_host_rx).unwrap().msg_type,
-            "player_event"
+            ServerMessageType::PlayerEvent
         );
 
         // Back as a guest, the old host can still pause, but not seek.
@@ -970,7 +938,7 @@ mod tests {
         let mut locked = state.write().await;
         let room = locked.rooms.get_mut("r1").unwrap();
         room.state.position = position;
-        room.state.play_state = "playing".to_string();
+        room.state.play_state = PlayState::Playing;
         room.state_server_ts = now_ms();
         room.target_server_ts = None;
     }
@@ -1004,7 +972,7 @@ mod tests {
             let mut locked = state.write().await;
             let room = locked.rooms.get_mut("r1").unwrap();
             room.state.position = 25.0;
-            room.state.play_state = "paused".to_string();
+            room.state.play_state = PlayState::Paused;
         }
 
         handle_playback(
@@ -1029,13 +997,13 @@ mod tests {
     fn the_room_position_moves_on_from_when_it_took_effect() {
         let mut room = crate::test_helpers::create_room("r1", "host");
         room.state.position = 10.0;
-        room.state.play_state = "playing".to_string();
+        room.state.play_state = PlayState::Playing;
         room.state_server_ts = 1_000;
         room.target_server_ts = Some(1_500);
         assert_eq!(room_position_now(&room, 4_500), 13.0);
         room.target_server_ts = None;
         assert_eq!(room_position_now(&room, 4_500), 13.5);
-        room.state.play_state = "paused".to_string();
+        room.state.play_state = PlayState::Paused;
         assert_eq!(room_position_now(&room, 4_500), 10.0);
     }
 
@@ -1060,7 +1028,7 @@ mod tests {
         .await;
 
         let outgoing = test_helpers::recv_msg(&mut host_rx).expect("pause for the host");
-        assert_eq!(outgoing.msg_type, "player_event");
+        assert_eq!(outgoing.msg_type, ServerMessageType::PlayerEvent);
         assert_eq!(outgoing.client.as_deref(), Some("guest"));
         let payload = outgoing.payload.unwrap();
         assert_eq!(payload["action"], "pause");
@@ -1073,7 +1041,7 @@ mod tests {
         assert_eq!(acknowledgement.client.as_deref(), Some("guest"));
         assert_eq!(acknowledgement.payload.unwrap(), payload);
         let locked = state.read().await;
-        assert_eq!(locked.rooms["r1"].state.play_state, "paused");
+        assert_eq!(locked.rooms["r1"].state.play_state, PlayState::Paused);
         assert_eq!(locked.rooms["r1"].state.position, position);
         assert!(locked.rooms["r1"].guest_command_until.is_some());
         assert_eq!(
@@ -1100,7 +1068,10 @@ mod tests {
         assert_eq!(payload["action"], "play");
         assert_eq!(payload["play_state"], "playing");
         assert!(payload["target_server_ts"].as_u64().is_some());
-        assert_eq!(state.read().await.rooms["r1"].state.play_state, "playing");
+        assert_eq!(
+            state.read().await.rooms["r1"].state.play_state,
+            PlayState::Playing
+        );
     }
 
     #[tokio::test]
@@ -1130,7 +1101,10 @@ mod tests {
         handle_playback("host", stale, &state, &crate::tasks::AppTasks::new()).await;
 
         assert!(test_helpers::recv_msg(&mut guest_rx).is_none());
-        assert_eq!(state.read().await.rooms["r1"].state.play_state, "paused");
+        assert_eq!(
+            state.read().await.rooms["r1"].state.play_state,
+            PlayState::Paused
+        );
     }
 
     #[test]
@@ -1182,7 +1156,7 @@ mod tests {
         let outgoing = test_helpers::recv_msg(&mut guest_rx).expect("the host's play");
         assert_eq!(outgoing.payload.unwrap()["action"], "play");
         let locked = state.read().await;
-        assert_eq!(locked.rooms["r1"].state.play_state, "playing");
+        assert_eq!(locked.rooms["r1"].state.play_state, PlayState::Playing);
         assert!(locked.rooms["r1"].guest_command_until.is_none());
     }
 
@@ -1281,7 +1255,10 @@ mod tests {
             assert_eq!(second.payload.unwrap()["action"], "play");
             assert!(test_helpers::recv_msg(rx).is_none());
         }
-        assert_eq!(state.read().await.rooms["r1"].state.play_state, "playing");
+        assert_eq!(
+            state.read().await.rooms["r1"].state.play_state,
+            PlayState::Playing
+        );
     }
 
     #[tokio::test]

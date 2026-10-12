@@ -2,6 +2,7 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
   const state = OWP.state;
+  const t = OWP.i18n.t;
 
   const LOCKED_CLASS = 'owp-guest-locked';
   const PLAY_LOCKED_CLASS = 'owp-guest-play-locked';
@@ -10,8 +11,6 @@
   // volume slider, which uses the same container class.
   const POSITION_CONTAINER_CLASS = 'owp-position-slider-container';
   const TOAST_INTERVAL_MS = 2500;
-  const SEEK_LOCKED_TEXT = 'Only the host can seek';
-  const WAITING_TEXT = 'Waiting for the host…';
   const SEEK_BUTTON_SELECTOR = [
     '.btnPreviousTrack',
     '.btnNextTrack',
@@ -45,7 +44,7 @@
     if (OWP.ui?.showToast) OWP.ui.showToast(message);
   };
 
-  const blockEvent = (event, message = SEEK_LOCKED_TEXT) => {
+  const blockEvent = (event, message = t('hostOnlySeek')) => {
     event.preventDefault();
     event.stopImmediatePropagation();
     event.stopPropagation();
@@ -73,7 +72,7 @@
     }
     if (isPlayLocked(video)
       && (event.target?.closest?.('.btnPause') || isVideoSurface(event.target))) {
-      blockEvent(event, WAITING_TEXT);
+      blockEvent(event, t('waitingForHost'));
     }
   };
 
@@ -133,7 +132,7 @@
       event.stopPropagation();
       return;
     }
-    blockEvent(event, WAITING_TEXT);
+    blockEvent(event, t('waitingForHost'));
   };
 
   const removeLabel = () => document.getElementById(LABEL_ID)?.remove();
@@ -161,12 +160,14 @@
       label.append(icon, text);
     }
     const mode = state.roomWaiting ? 'waiting' : 'locked';
-    if (label.dataset.mode !== mode) {
+    const locale = OWP.i18n.locale();
+    if (label.dataset.mode !== mode || label.dataset.locale !== locale) {
       label.dataset.mode = mode;
+      label.dataset.locale = locale;
       label.querySelector('.owp-guest-lock-icon').textContent = state.roomWaiting ? 'hourglass_empty' : 'lock';
       label.querySelector('.owp-guest-lock-text').textContent = state.roomWaiting
-        ? WAITING_TEXT
-        : SEEK_LOCKED_TEXT;
+        ? t('waitingForHost')
+        : t('hostOnlySeek');
     }
     // Below the slider row on screen: Jellyfin stacks the OSD rows with
     // `column-reverse`, where the element before the row is drawn under it.

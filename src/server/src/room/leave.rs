@@ -1,7 +1,7 @@
 use crate::messaging::{broadcast_room_list, collect_room_senders, send_to_senders, ClientSender};
 use crate::room::{close_room_parts, participant_list_message, participant_statuses_message};
 use crate::tasks::AppTasks;
-use crate::types::{Client, PendingHostReconnect, Room, SharedState, WsMessage};
+use crate::types::{Client, PendingHostReconnect, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ enum LeaveOutcome {
 
 fn client_left_message(room_id: &str, client_id: &str, participant_count: usize) -> WsMessage {
     WsMessage {
-        msg_type: "client_left".to_string(),
+        msg_type: ServerMessageType::ClientLeft,
         room: Some(room_id.to_string()),
         client: Some(client_id.to_string()),
         payload: Some(serde_json::json!({ "participant_count": participant_count })),
@@ -30,7 +30,7 @@ fn client_left_message(room_id: &str, client_id: &str, participant_count: usize)
 
 pub(crate) fn host_changed_message(room_id: &str, host_id: &str, host_name: &str) -> WsMessage {
     WsMessage {
-        msg_type: "host_changed".to_string(),
+        msg_type: ServerMessageType::HostChanged,
         room: Some(room_id.to_string()),
         client: None,
         payload: Some(serde_json::json!({
@@ -205,7 +205,7 @@ fn close_and_notify(
 ) -> (Vec<ClientSender>, WsMessage) {
     let senders = close_room_parts(room_id, clients, rooms).unwrap_or_default();
     let msg = WsMessage {
-        msg_type: "room_closed".to_string(),
+        msg_type: ServerMessageType::RoomClosed,
         room: Some(room_id.to_string()),
         client: None,
         payload: Some(serde_json::json!({ "reason": "Host left the room" })),
@@ -371,7 +371,7 @@ mod tests {
         drop(locked);
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            "room_closed"
+            ServerMessageType::RoomClosed
         );
     }
 
@@ -398,16 +398,16 @@ mod tests {
 
         assert_eq!(
             test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
-            "client_left"
+            ServerMessageType::ClientLeft
         );
         let list = test_helpers::recv_msg(&mut host_rx).unwrap();
-        assert_eq!(list.msg_type, "participant_list");
+        assert_eq!(list.msg_type, ServerMessageType::ParticipantList);
         assert_eq!(
             list.payload.unwrap()["participants"],
             serde_json::json!([{ "name": "Franco", "is_host": true }])
         );
         let statuses = test_helpers::recv_msg(&mut host_rx).unwrap();
-        assert_eq!(statuses.msg_type, "participant_statuses");
+        assert_eq!(statuses.msg_type, ServerMessageType::ParticipantStatuses);
         assert_eq!(
             statuses.payload.unwrap()["statuses"],
             serde_json::json!(["playing"])
@@ -444,7 +444,7 @@ mod tests {
         ];
         room.media_id = Some("movie".to_string());
         room.state.position = 42.0;
-        room.state.play_state = "playing".to_string();
+        room.state.play_state = crate::types::PlayState::Playing;
         room.pending_play = Some(PendingPlay {
             initiator_id: "host".to_string(),
             position: 10.0,
@@ -460,7 +460,7 @@ mod tests {
         assert_eq!(room.host_id, "next");
         assert_eq!(room.media_id.as_deref(), Some("movie"));
         assert_eq!(room.state.position, 42.0);
-        assert_eq!(room.state.play_state, "playing");
+        assert_eq!(room.state.play_state, crate::types::PlayState::Playing);
         assert!(room.pending_play.is_none());
         let messages =
             std::iter::from_fn(|| test_helpers::recv_msg(&mut next_rx)).collect::<Vec<_>>();
@@ -526,19 +526,19 @@ mod tests {
         }
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            "client_left"
+            ServerMessageType::ClientLeft
         );
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            "participant_list"
+            ServerMessageType::ParticipantList
         );
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            "participant_statuses"
+            ServerMessageType::ParticipantStatuses
         );
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            "room_list"
+            ServerMessageType::RoomList
         );
 
         tokio::time::advance(HOST_RECONNECT_GRACE).await;
@@ -550,11 +550,11 @@ mod tests {
         drop(locked);
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            "host_changed"
+            ServerMessageType::HostChanged
         );
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            "participant_list"
+            ServerMessageType::ParticipantList
         );
 
         tasks.cancel();
@@ -569,7 +569,7 @@ mod tests {
 
         let (_, messages) = handle_leave("host", &mut clients, &mut rooms).unwrap();
 
-        assert_eq!(messages[0].msg_type, "room_closed");
+        assert_eq!(messages[0].msg_type, ServerMessageType::RoomClosed);
         assert!(!rooms.contains_key("room-1"));
     }
 

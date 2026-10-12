@@ -7,7 +7,7 @@ use crate::room::{
     handle_leave_without_transfer, host_changed_message, participant_list_message,
     participant_statuses_message, send_leave_notification,
 };
-use crate::types::{Client, IncomingMessage, Room, SharedState, WsMessage};
+use crate::types::{Client, IncomingMessage, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
 use std::collections::HashMap;
@@ -83,7 +83,7 @@ fn prepare_join_notifications_at(
     (
         locked_clients.get(client_id).map(|c| c.sender.clone()),
         WsMessage {
-            msg_type: "room_state".to_string(),
+            msg_type: ServerMessageType::RoomState,
             room: Some(room.room_id.clone()),
             client: Some(client_id.to_string()),
             payload: Some(serde_json::json!({
@@ -101,7 +101,7 @@ fn prepare_join_notifications_at(
         Some((
             collect_room_senders(room, locked_clients, Some(client_id)),
             WsMessage {
-                msg_type: "participants_update".to_string(),
+                msg_type: ServerMessageType::ParticipantsUpdate,
                 room: Some(room.room_id.clone()),
                 client: None,
                 payload: Some(serde_json::json!({ "participant_count": room.clients.len() })),
@@ -315,7 +315,7 @@ mod tests {
     use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 
     fn assert_error_code(message: WsMessage, code: &str) {
-        assert_eq!(message.msg_type, "error");
+        assert_eq!(message.msg_type, ServerMessageType::Error);
         assert_eq!(message.payload.unwrap()["code"], code);
     }
 
@@ -674,15 +674,15 @@ mod tests {
 
         assert_eq!(
             test_helpers::recv_msg(&mut host_a_rx).unwrap().msg_type,
-            "client_left"
+            ServerMessageType::ClientLeft
         );
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            "room_state"
+            ServerMessageType::RoomState
         );
         assert_eq!(
             test_helpers::recv_msg(&mut host_b_rx).unwrap().msg_type,
-            "participants_update"
+            ServerMessageType::ParticipantsUpdate
         );
     }
 
@@ -743,21 +743,21 @@ mod tests {
         });
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            "room_state"
+            ServerMessageType::RoomState
         );
         let guest_list = test_helpers::recv_msg(&mut guest_rx).unwrap();
-        assert_eq!(guest_list.msg_type, "participant_list");
+        assert_eq!(guest_list.msg_type, ServerMessageType::ParticipantList);
         assert_eq!(guest_list.payload.unwrap(), expected);
         assert_eq!(
             test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
-            "participants_update"
+            ServerMessageType::ParticipantsUpdate
         );
         let host_list = test_helpers::recv_msg(&mut host_rx).unwrap();
-        assert_eq!(host_list.msg_type, "participant_list");
+        assert_eq!(host_list.msg_type, ServerMessageType::ParticipantList);
         assert_eq!(host_list.payload.unwrap(), expected);
         for rx in [&mut guest_rx, &mut host_rx] {
             let statuses = test_helpers::recv_msg(rx).unwrap();
-            assert_eq!(statuses.msg_type, "participant_statuses");
+            assert_eq!(statuses.msg_type, ServerMessageType::ParticipantStatuses);
             assert_eq!(
                 statuses.payload.unwrap()["statuses"],
                 serde_json::json!([null, null])
@@ -894,7 +894,7 @@ mod tests {
         drop(locked);
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            "room_closed"
+            ServerMessageType::RoomClosed
         );
     }
 
@@ -938,7 +938,7 @@ mod tests {
         assert_eq!(locked.clients["host-a"].room_id.as_deref(), Some("room-b"));
         drop(locked);
         let message = test_helpers::recv_msg(&mut guest_rx).unwrap();
-        assert_eq!(message.msg_type, "room_closed");
+        assert_eq!(message.msg_type, ServerMessageType::RoomClosed);
         assert_eq!(message.room.as_deref(), Some("room-a"));
     }
 
@@ -994,7 +994,7 @@ mod tests {
         assert!(guest_joined(&state).await);
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            "room_state"
+            ServerMessageType::RoomState
         );
     }
 
@@ -1111,7 +1111,7 @@ mod tests {
         assert!(guest_joined(&state).await);
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            "room_state"
+            ServerMessageType::RoomState
         );
     }
 

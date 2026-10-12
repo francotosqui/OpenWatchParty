@@ -552,4 +552,47 @@ describe('authentication configuration', () => {
     assert.equal(OWP.state.authToken, null);
     assert.equal(OWP.state.authBlocked, false);
   });
+  for (const rejectJson of [false, true]) {
+    it(`preserves newer authentication when stale JSON ${rejectJson ? 'rejects' : 'resolves'}`, async () => {
+      let finishJson;
+      let startedJson;
+      const decoding = new Promise(resolve => { startedJson = resolve; });
+      globalThis.fetch = async () => ({
+        ok: true, status: 200,
+        json: () => new Promise((resolve, reject) => {
+          finishJson = rejectJson ? reject : resolve;
+          startedJson();
+        })
+      });
+      const stale = fetchAuthToken();
+      await decoding;
+      globalThis.fetch = async () => ({
+        ok: true, status: 200,
+        json: async () => ({ auth_enabled: true, token: 'new-token', expires_in: 120,
+          user_id: 'new-user', user_name: 'New', session_server_url: 'wss://new.example/ws',
+          hide_native_syncplay_button: true, show_sync_nudge_button: true, invite_ttl_seconds: 600 })
+      });
+      await fetchAuthToken();
+      const timer = OWP.state.tokenRefreshTimer;
+      const expiresAt = OWP.state.tokenExpiresAt;
+      finishJson(rejectJson ? new Error('stale JSON') : {
+        auth_enabled: false, insecure_mode: true, session_server_url: '',
+        hide_native_syncplay_button: false, show_sync_nudge_button: false
+      });
+      const result = await stale;
+      assert.equal(result.code, 'request_invalidated');
+      assert.equal(OWP.state.authToken, 'new-token');
+      assert.equal(OWP.state.userId, 'new-user');
+      assert.equal(OWP.state.wsUrl, 'wss://new.example/ws');
+      assert.equal(OWP.state.authBlocked, false);
+      assert.equal(OWP.state.hideNativeSyncPlayButton, true);
+      assert.equal(OWP.state.showSyncNudge, true);
+      assert.equal(OWP.state.inviteTtlSeconds, 600);
+      assert.equal(OWP.state.tokenRefreshTimer, timer);
+      assert.equal(OWP.state.tokenExpiresAt, expiresAt);
+      OWP.timers.clearAll();
+      OWP.state.tokenRefreshTimer = null;
+    });
+  }
+
 });
