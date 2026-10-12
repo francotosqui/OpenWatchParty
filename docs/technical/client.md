@@ -283,6 +283,14 @@ sends `auth` first, then flushes that diagnostic through `client_log`. A host th
 rejoins during the server's 10-second grace period regains the host role under its
 new connection ID.
 
+### Token request lifecycle
+
+`fetchAuthToken` owns request generation, ApiClient waiting, the abort deadline,
+HTTP/JSON errors, and timeout cleanup. Private `applyTokenResponse` validates the
+endpoint URL and applies the explicit authentication mode, identity, settings,
+and refresh schedule. The coordinator checks its generation after fetch and JSON
+decoding, before applying a response; obsolete failures cannot block a newer login.
+
 ### Functions
 
 #### `send(type: string, payload?: object, roomOverride?: string) -> void`
