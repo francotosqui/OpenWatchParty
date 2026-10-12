@@ -1,4 +1,4 @@
-use crate::types::{Client, PlaybackState, Room, ServerState, SharedState, WsMessage};
+use crate::types::{Client, PlayState, PlaybackState, Room, ServerState, SharedState, WsMessage};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
@@ -46,7 +46,7 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
         pending_host_reconnect: None,
         state: PlaybackState {
             position: 0.0,
-            play_state: "paused".to_string(),
+            play_state: PlayState::Paused,
         },
         state_server_ts: 0,
         target_server_ts: None,

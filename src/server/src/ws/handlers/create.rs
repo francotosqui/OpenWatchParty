@@ -5,7 +5,9 @@ use crate::room::close_room_in_state;
 use crate::room::{
     handle_leave, participant_list_message, participant_statuses_message, send_leave_notification,
 };
-use crate::types::{IncomingMessage, PlaybackState, Room, SharedState, WsMessage};
+use crate::types::{
+    IncomingMessage, PlayState, PlaybackState, Room, ServerMessageType, SharedState, WsMessage,
+};
 use crate::utils::now_ms;
 use log::info;
 use std::collections::{HashMap, HashSet};
@@ -62,7 +64,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         pending_host_reconnect: None,
         state: PlaybackState {
             position: start_pos,
-            play_state: "paused".to_string(),
+            play_state: PlayState::Paused,
         },
         state_server_ts,
         target_server_ts: None,
@@ -94,7 +96,7 @@ fn insert_and_notify(
     (
         locked_clients.get(client_id).map(|c| c.sender.clone()),
         WsMessage {
-            msg_type: "room_state".to_string(),
+            msg_type: ServerMessageType::RoomState,
             room: Some(room_id),
             client: Some(client_id.to_string()),
             payload: Some(serde_json::json!({
@@ -174,7 +176,7 @@ pub(in crate::ws) async fn handle_create_room(
             send_to_senders(
                 &closed_senders,
                 &WsMessage {
-                    msg_type: "room_closed".to_string(),
+                    msg_type: ServerMessageType::RoomClosed,
                     room: Some(closed_room_id),
                     client: None,
                     payload: Some(serde_json::json!({ "reason": "Host started a new room" })),
@@ -219,7 +221,7 @@ mod tests {
             Some("550e8400e29b41d4a716446655440000".to_string())
         );
         assert!((room.state.position - 42.5).abs() < f64::EPSILON);
-        assert_eq!(room.state.play_state, "paused");
+        assert_eq!(room.state.play_state, PlayState::Paused);
         assert!(room.clients.contains(&"host-1".to_string()));
     }
 
@@ -300,16 +302,16 @@ mod tests {
 
         assert_eq!(
             test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
-            "room_state"
+            ServerMessageType::RoomState
         );
         let list = test_helpers::recv_msg(&mut host_rx).unwrap();
-        assert_eq!(list.msg_type, "participant_list");
+        assert_eq!(list.msg_type, ServerMessageType::ParticipantList);
         assert_eq!(
             list.payload.unwrap()["participants"],
             serde_json::json!([{ "name": "Franco", "is_host": true }])
         );
         let statuses = test_helpers::recv_msg(&mut host_rx).unwrap();
-        assert_eq!(statuses.msg_type, "participant_statuses");
+        assert_eq!(statuses.msg_type, ServerMessageType::ParticipantStatuses);
         assert_eq!(
             statuses.payload.unwrap()["statuses"],
             serde_json::json!([null])
@@ -354,11 +356,11 @@ mod tests {
 
         assert_eq!(
             test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
-            "client_left"
+            ServerMessageType::ClientLeft
         );
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            "room_state"
+            ServerMessageType::RoomState
         );
     }
 }

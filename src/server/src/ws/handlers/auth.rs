@@ -3,7 +3,7 @@ use super::super::dispatch::{close_with_policy, send_error, ErrorCode};
 use super::super::validation::sanitize_name;
 use crate::auth::JwtConfig;
 use crate::messaging::{send_message, send_room_list};
-use crate::types::{IncomingMessage, SharedState, WsMessage};
+use crate::types::{IncomingMessage, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::{info, warn};
 use std::sync::Arc;
@@ -75,7 +75,7 @@ fn auth_success_message(
         payload["features"] = serde_json::json!(features);
     }
     WsMessage {
-        msg_type: "auth_success".to_string(),
+        msg_type: ServerMessageType::AuthSuccess,
         room: None,
         client: Some(client_id.to_string()),
         payload: Some(payload),
@@ -289,7 +289,7 @@ mod tests {
     use jsonwebtoken::{encode, EncodingKey, Header};
 
     fn assert_error_code(message: WsMessage, code: &str) {
-        assert_eq!(message.msg_type, "error");
+        assert_eq!(message.msg_type, ServerMessageType::Error);
         assert_eq!(message.payload.unwrap()["code"], code);
     }
 
@@ -335,11 +335,11 @@ mod tests {
 
         assert_eq!(
             test_helpers::recv_msg(&mut rx).unwrap().msg_type,
-            "auth_success"
+            ServerMessageType::AuthSuccess
         );
         assert_eq!(
             test_helpers::recv_msg(&mut rx).unwrap().msg_type,
-            "room_list"
+            ServerMessageType::RoomList
         );
         assert!(state.read().await.clients["client"].authenticated);
         assert_eq!(
@@ -571,7 +571,7 @@ mod tests {
             .await;
 
             let error = test_helpers::recv_msg(&mut rx).unwrap();
-            assert_eq!(error.msg_type, "error");
+            assert_eq!(error.msg_type, ServerMessageType::Error);
             let payload = error.payload.unwrap();
             assert_eq!(payload["code"], "PROTOCOL_VERSION_UNSUPPORTED");
             assert!(
@@ -657,7 +657,7 @@ mod tests {
             handle_auth("client", &auth_message(payload), &state, &jwt_config).await;
 
             let success = test_helpers::recv_msg(&mut rx).unwrap();
-            assert_eq!(success.msg_type, "auth_success");
+            assert_eq!(success.msg_type, ServerMessageType::AuthSuccess);
             assert_eq!(
                 success.payload.unwrap()["protocol_version"].as_u64(),
                 declared
@@ -736,7 +736,7 @@ mod tests {
                 expected
             );
             let success = test_helpers::recv_msg(&mut rx).unwrap();
-            assert_eq!(success.msg_type, "auth_success");
+            assert_eq!(success.msg_type, ServerMessageType::AuthSuccess);
             assert_eq!(
                 success.payload.unwrap()["features"],
                 if expected {

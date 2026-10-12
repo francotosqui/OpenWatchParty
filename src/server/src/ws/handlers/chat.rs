@@ -1,7 +1,7 @@
 use super::super::constants::MAX_CHAT_MESSAGE_LENGTH;
 use super::super::dispatch::{send_error, ErrorCode};
 use crate::messaging::ClientSender;
-use crate::types::{IncomingMessage, SharedState, WsMessage};
+use crate::types::{IncomingMessage, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
 
 fn validate_chat(text: &str) -> Result<(), &'static str> {
@@ -31,7 +31,7 @@ fn collect_chat_senders(
         return None;
     }
     let msg = WsMessage {
-        msg_type: "chat_message".to_string(),
+        msg_type: ServerMessageType::ChatMessage,
         room: Some(room_id.to_string()),
         client: Some(client_id.to_string()),
         payload: Some(serde_json::json!({
@@ -147,7 +147,7 @@ mod tests {
     }
 
     fn assert_error_code(message: WsMessage, code: &str) {
-        assert_eq!(message.msg_type, "error");
+        assert_eq!(message.msg_type, ServerMessageType::Error);
         assert_eq!(message.payload.unwrap()["code"], code);
     }
 

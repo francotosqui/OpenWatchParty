@@ -108,7 +108,11 @@ async function isPlaying(page) {
 
 async function startPlayback(page, itemId) {
   await page.goto(`/#/details?id=${itemId}`);
-  const playButton = page.locator('.mainDetailButtons .btnPlay').first();
+  // Jellyfin retains hidden pages; wait for this item's active details controls.
+  const details = page.locator('.page:not(.hide)').filter({
+    has: page.locator(`.mainDetailButtons [data-id="${itemId}"]`),
+  });
+  const playButton = details.locator('.mainDetailButtons .btnPlay:not(.hide)').first();
   await playButton.waitFor({ state: 'visible' });
   await playButton.click();
   await waitForPlaying(page);
@@ -116,9 +120,11 @@ async function startPlayback(page, itemId) {
 
 async function togglePlayback(page) {
   await page.evaluate(() => {
-    const button = document.querySelector('.videoOsdBottom .btnPause, .videoOsdBottom .btnPlay')
-      || document.querySelector('.btnPause, .btnPlay');
-    if (button) button.click();
+    // A cached player's button must not receive the action intended for this video.
+    const button = [...document.querySelectorAll('.videoOsdBottom .btnPause:not(.hide), .videoOsdBottom .btnPlay:not(.hide)')]
+      .find(control => !control.closest('.page.hide'));
+    if (!button) throw new Error('The active player control is not available');
+    button.click();
   });
 }
 

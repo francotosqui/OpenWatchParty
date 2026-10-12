@@ -43,7 +43,7 @@ pub async fn close_room(room_id: &str, state: &SharedState) {
         send_to_senders(
             &senders,
             &WsMessage {
-                msg_type: "room_closed".to_string(),
+                msg_type: crate::types::ServerMessageType::RoomClosed,
                 room: Some(room_id.to_string()),
                 client: None,
                 payload: Some(serde_json::json!({ "reason": "Host started a new room" })),

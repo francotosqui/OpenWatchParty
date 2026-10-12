@@ -3,7 +3,7 @@ use super::dispatch::{client_msg, close_with_policy, is_authenticated, send_erro
 use crate::auth::JwtConfig;
 use crate::messaging::{send_message, send_room_list, ClientSender};
 use crate::metrics::{metrics, CloseReason, InvalidMessage};
-use crate::types::{SharedState, WsMessage};
+use crate::types::{ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
 use futures::StreamExt;
 use log::{info, warn};
@@ -55,7 +55,7 @@ fn send_client_hello(client_id: &str, sender: Option<crate::messaging::ClientSen
     send_message(
         sender,
         &WsMessage {
-            msg_type: "client_hello".to_string(),
+            msg_type: ServerMessageType::ClientHello,
             room: None,
             client: Some(client_id.to_string()),
             payload: Some(serde_json::json!({ "client_id": client_id })),

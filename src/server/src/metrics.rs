@@ -269,8 +269,8 @@ impl Metrics {
     /// Counts a message once it is queued to a client: by type, and by code
     /// for an `error` message.
     pub fn message_delivered(&self, msg: &crate::types::WsMessage) {
-        self.messages_sent.inc(&msg.msg_type);
-        if msg.msg_type == "error" {
+        self.messages_sent.inc(msg.msg_type.as_str());
+        if msg.msg_type == crate::types::ServerMessageType::Error {
             if let Some(code) = msg
                 .payload
                 .as_ref()
@@ -484,22 +484,23 @@ mod tests {
     #[test]
     fn unknown_label_values_fall_into_other() {
         let metrics = Metrics::new();
-        let message = |msg_type: &str, payload| crate::types::WsMessage {
-            msg_type: msg_type.to_string(),
-            room: None,
-            client: None,
-            payload,
-            ts: 0,
-            server_ts: None,
-        };
-        metrics.message_delivered(&message("future_message", None));
-        metrics.message_delivered(&message("pong", None));
+        let message =
+            |msg_type: crate::types::ServerMessageType, payload| crate::types::WsMessage {
+                msg_type,
+                room: None,
+                client: None,
+                payload,
+                ts: 0,
+                server_ts: None,
+            };
+        metrics.messages_sent.inc("future_message");
+        metrics.message_delivered(&message(crate::types::ServerMessageType::Pong, None));
         metrics.message_delivered(&message(
-            "error",
+            crate::types::ServerMessageType::Error,
             Some(serde_json::json!({ "code": "ROOM_FULL", "message": "Room is full" })),
         ));
         metrics.message_delivered(&message(
-            "error",
+            crate::types::ServerMessageType::Error,
             Some(serde_json::json!({ "code": "FUTURE_CODE", "message": "Later" })),
         ));
         assert_eq!(metrics.messages_sent.get("other"), 1);
