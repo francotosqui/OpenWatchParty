@@ -31,6 +31,7 @@ const createHarness = () => {
   window.clearInterval = clearInterval;
   const context = vm.createContext({ window, document, console, setTimeout, clearTimeout, setInterval, clearInterval });
   runModule(context, 'state.js');
+  runModule(context, 'utils/i18n.js');
   const OWP = window.OpenWatchParty;
 
   const player = document.createElement('div');
@@ -385,6 +386,16 @@ describe('room waiting state', () => {
     runModule(h.context, 'ws/send.js');
     runModule(h.context, 'ws/handlers/sync.js');
     runModule(h.context, 'ws/handlers/playback.js');
+  });
+
+  it('keeps seek locks and waiting messages localized after shared controls are loaded', () => {
+    h.document.documentElement.lang = 'es';
+    h.setGuest({ paused: false, playState: 'playing' });
+    assert.equal(h.document.getElementById('owp-guest-lock-label').textContent, 'lockSolo el anfitrión puede adelantar o atrasar');
+    h.dispatch('keydown', h.document.body, { code: 'KeyJ' });
+    assert.equal(h.toasts.at(-1), 'Solo el anfitrión puede adelantar o atrasar');
+    h.setGuest({ paused: true, waiting: true });
+    assert.equal(h.document.getElementById('owp-guest-lock-label').textContent, 'hourglass_emptyEsperando al anfitrión…');
   });
 
   const playerEvent = action => ({

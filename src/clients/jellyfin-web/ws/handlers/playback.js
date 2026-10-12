@@ -4,6 +4,7 @@
   const state = OWP.state;
   const utils = OWP.utils;
   const ui = OWP.ui;
+  const t = OWP.i18n.t;
   const { SEEK_THRESHOLD, VIDEO_ACTION_RETRY_MS, VIDEO_ACTION_MAX_WAIT_MS } = OWP.constants;
 
   const applyPosition = (video, position, projectPlaying = false, eventServerTs = null, seekVideo = true) => {
@@ -49,7 +50,7 @@
         state.syncCooldownUntil = utils.nowMs() + 2000;
         state.syncStatus = 'syncing';
         if (applyToVideo) OWP.playback.safePlay(video, 'host play command');
-        if (ui.showToast) ui.showToast(fromGuest(msg) ? 'A guest resumed playback' : 'Host resumed playback');
+        if (ui.showToast) ui.showToast(t(fromGuest(msg) ? 'guestResumed' : 'hostResumed'));
         break;
       case 'pause':
         state.roomWaiting = false;
@@ -58,7 +59,7 @@
         state.syncCooldownUntil = 0;
         state.syncStatus = 'synced';
         if (applyToVideo) video.pause();
-        if (ui.showToast) ui.showToast(fromGuest(msg) ? 'A guest paused playback' : 'Host paused playback');
+        if (ui.showToast) ui.showToast(t(fromGuest(msg) ? 'guestPaused' : 'hostPaused'));
         break;
       case 'seek':
         state.roomWaiting = false;
@@ -104,7 +105,7 @@
     if (changed && playing) OWP.playback.safePlay(video, 'guest play command');
     else if (changed) video.pause();
     // Scheduled play retains its initiator; only guest actions get this toast.
-    if (changed && ui.showToast && fromGuest(msg)) ui.showToast(playing ? 'A guest resumed playback' : 'A guest paused playback');
+    if (changed && ui.showToast && fromGuest(msg)) ui.showToast(t(playing ? 'guestResumed' : 'guestPaused'));
     return true;
   };
 
