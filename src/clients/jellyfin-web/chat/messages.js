@@ -40,7 +40,6 @@
   };
 
   const receive = (msg) => {
-    console.log('[OpenWatchParty] Chat.receive called with:', msg);
     const message = {
       clientId: msg.client,
       username: msg.payload?.username || 'Anonymous',
