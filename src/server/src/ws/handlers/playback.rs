@@ -3,7 +3,7 @@ use super::super::constants::{
     PLAY_SCHEDULE_MS, POSITION_JITTER_THRESHOLD,
 };
 use super::super::dispatch::{send_error, ErrorCode};
-use super::super::pending_play::{all_ready, schedule_pending_play};
+use super::super::pending_play::{all_ready, schedule_pending_play, starting_queue_item};
 use super::super::validation::is_valid_position;
 use crate::messaging::{collect_room_senders, send_to_senders};
 use crate::types::{
@@ -145,14 +145,6 @@ fn handle_play_not_ready(
             room.pending_play.as_ref().unwrap().generation,
         ))
     }
-}
-
-/// Whether the pending play is the one a queue advance armed to start the new
-/// item from 0. Until it starts, the host may still report its previous item.
-fn starting_queue_item(room: &Room) -> bool {
-    room.pending_play
-        .as_ref()
-        .is_some_and(|pending| room.queue.advance_generation == Some(pending.generation))
 }
 
 fn absorb_during_pending(
