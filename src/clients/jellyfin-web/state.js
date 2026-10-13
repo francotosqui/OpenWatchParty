@@ -110,6 +110,7 @@
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
     SUPPRESS_MS: 2000,
     SEEK_THRESHOLD: 1.0,          // Minimum position change for broadcasting a seek or correcting received playback
+    QUEUE_COUNTDOWN_MS: 10000,    // How long the server shows "up next" before the room moves to the next queue item
     OWN_COMMAND_HOLD_MS: 1500,    // A guest's own play or pause holds against room updates already on their way
     STATE_UPDATE_MS: 1000,        // Playback status cadence; the sender also throttles updates to this interval
     SYNC_LEAD_MS: 300,            // Compensates processing + initial HLS buffer

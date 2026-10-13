@@ -53,6 +53,7 @@ public class OpenWatchPartyController : ControllerBase
         "ui/participants.js",
         "ui/leave-confirm.js",
         "ui/room.js",
+        "ui/queue.js",
         "ui/render.js",
         "ui/header.js",
         "playback/play.js",
