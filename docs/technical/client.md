@@ -23,7 +23,7 @@ plugin.js                    # Loader - loads modules in parallel waves
     ├── ui/                  # User interface
     │   ├── cards.js, guest-controls.js, header.js, home.js, indicators.js
     │   ├── panel-elements.js, lobby.js, participants.js, leave-confirm.js, room.js
-    │   ├── render.js, styles.js, toasts.js
+    │   ├── queue.js, render.js, styles.js, toasts.js
     ├── playback/            # Video playback management
     │   ├── bind.js, play.js, sync.js
     ├── chat/                # Text chat
@@ -33,7 +33,7 @@ plugin.js                    # Loader - loads modules in parallel waves
     │   └── handlers/
     │       ├── clock.js, playback.js, room.js, sync.js
     └── app/                 # Initialization and cleanup
-        ├── cleanup.js, lifecycle.js
+        ├── cleanup.js, invite.js, lifecycle.js, queue.js
 ```
 
 Modules are loaded in dependency waves, parallelizing where possible:
@@ -44,7 +44,9 @@ Modules are loaded in dependency waves, parallelizing where possible:
 `render.js` coordinates redraws. Shared controls and
 focus helpers live in `panel-elements.js`; lobby and help in `lobby.js`;
 participant presentation in `participants.js`; leave confirmation in
-`leave-confirm.js`; room sections and chat input setup in `room.js`.
+`leave-confirm.js`; room sections and chat input setup in `room.js`; the room
+queue's section and up-next strip in `queue.js`, whose host logic (filling the
+queue, starting the countdown at the credits) is `app/queue.js`.
 
 The loader initializes shared elements first, then lobby, participants and leave
 confirmation in parallel, then room controls, and finally the renderer. The
@@ -123,7 +125,11 @@ Defines global shared state and configuration constants.
 | `roomName` | string | Current room name |
 | `participantCount` | number | Room participant count |
 | `participants` | array | `{ name, isHost, status }` entries from `participant_list` and `participant_statuses`; empty until the server sends one |
-| `roomBarSection` | string | Drop-down open under the room bar: `'people'`, `'chat'`, `'leave'` or `''` |
+| `roomBarSection` | string | Drop-down open under the room bar: `'people'`, `'chat'`, `'sync'`, `'queue'`, `'leave'` or `''` |
+| `roomMediaId` | string | The room's item from `room_state`; a change in the same room is a move to another queue item |
+| `queueItems` | array | `{ id, title }` entries from `queue_state` |
+| `queueCurrent` | number\|null | Index of the room's item in `queueItems` |
+| `queueCountdownUntil` | number | Server time (ms) at which the room moves to the next item; 0 without a countdown |
 | `lastSyncServerTs` | number | Server timestamp of last sync |
 | `lastSyncPosition` | number | Position of last sync (seconds) |
 | `lastSyncPlayState` | string | Play state of last sync |

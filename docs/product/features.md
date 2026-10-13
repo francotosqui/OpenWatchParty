@@ -15,6 +15,7 @@ nav_order: 2
 - **Room list** - See all active rooms on the server
 - **Participant count** - Track how many people are watching
 - **Invite links** - Hosts copy a short-lived link (`?owp_invite=<ticket>`); opening it joins the room automatically. The ticket is room-scoped, expires, and stops working when the room closes
+- **Room queue** - While the room watches a series, the host's player queues the next episodes; at the credits an up-next countdown moves everyone to the next one together
 
 ### Playback Synchronization
 - **Play/Pause sync** - Anyone in the room can pause or resume it for everyone
