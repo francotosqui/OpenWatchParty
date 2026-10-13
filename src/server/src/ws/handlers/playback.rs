@@ -122,6 +122,9 @@ fn handle_play_not_ready(
     current_ts: u64,
     now: Instant,
 ) -> Option<(String, u64)> {
+    if starting_queue_item(room) {
+        return None;
+    }
     room.state.position = position;
     if let Some(pending) = room.pending_play.as_mut() {
         pending.initiator_id = client_id.to_string();
@@ -144,6 +147,14 @@ fn handle_play_not_ready(
     }
 }
 
+/// Whether the pending play is the one a queue advance armed to start the new
+/// item from 0. Until it starts, the host may still report its previous item.
+fn starting_queue_item(room: &Room) -> bool {
+    room.pending_play
+        .as_ref()
+        .is_some_and(|pending| room.queue.advance_generation == Some(pending.generation))
+}
+
 fn absorb_during_pending(
     room: &mut Room,
     message: &PlaybackMessage,
@@ -155,6 +166,9 @@ fn absorb_during_pending(
     }
     if message.action() == Some(PlaybackAction::Pause) {
         return false;
+    }
+    if starting_queue_item(room) {
+        return true;
     }
 
     let position = message.position().unwrap_or(room.state.position);
@@ -636,6 +650,57 @@ mod tests {
         assert!(result.is_none()); // Returns None when pending already exists
         assert!((room.pending_play.as_ref().unwrap().position - 15.0).abs() < f64::EPSILON);
         assert_eq!(room.pending_play.as_ref().unwrap().position_ts, update_ts);
+    }
+
+    #[test]
+    fn the_host_cannot_move_a_queue_advance_off_the_start() {
+        let mut room = test_helpers::create_room("r1", "host");
+        let generation = crate::types::next_pending_play_generation();
+        room.pending_play = Some(PendingPlay {
+            initiator_id: "host".to_string(),
+            position: 0.0,
+            generation,
+            position_ts: now_ms(),
+        });
+        room.queue.advance_generation = Some(generation);
+
+        // Reports from the previous item are absorbed without moving it.
+        let previous_item = state_update(1300.0, PlayState::Playing);
+        assert!(absorb_during_pending(
+            &mut room,
+            &previous_item,
+            now_ms(),
+            Instant::now()
+        ));
+        assert_eq!(
+            handle_play_not_ready(&mut room, "host", 1300.0, now_ms(), Instant::now()),
+            None
+        );
+        assert_eq!(room.state.position, 0.0);
+        assert_eq!(room.pending_play.as_ref().unwrap().position, 0.0);
+
+        // A pause still reaches the room.
+        let pause = PlaybackMessage::PlayerEvent(PlayerEventPayload {
+            action: PlaybackAction::Pause,
+            position: None,
+            play_state: None,
+        });
+        assert!(!absorb_during_pending(
+            &mut room,
+            &pause,
+            now_ms(),
+            Instant::now()
+        ));
+
+        // Any other pending play still follows the host.
+        room.queue.advance_generation = Some(generation + 1);
+        assert!(absorb_during_pending(
+            &mut room,
+            &state_update(12.0, PlayState::Playing),
+            now_ms(),
+            Instant::now()
+        ));
+        assert_eq!(room.pending_play.as_ref().unwrap().position, 12.0);
     }
 
     #[test]

@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::types::ServerState;
 
 /// Message types a client can send, as named on the wire.
-pub const CLIENT_MESSAGE_TYPES: [&str; 14] = [
+pub const CLIENT_MESSAGE_TYPES: [&str; 18] = [
     "auth",
     "list_rooms",
     "create_room",
@@ -25,11 +25,15 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 14] = [
     "client_log",
     "chat_message",
     "participant_status",
+    "queue_add",
+    "queue_remove",
+    "queue_move",
+    "queue_advance",
     "unknown",
 ];
 
 /// Message types the server sends, plus `other` for anything not listed.
-pub const SERVER_MESSAGE_TYPES: [&str; 16] = [
+pub const SERVER_MESSAGE_TYPES: [&str; 17] = [
     "client_hello",
     "auth_success",
     "error",
@@ -45,11 +49,12 @@ pub const SERVER_MESSAGE_TYPES: [&str; 16] = [
     "client_left",
     "room_closed",
     "chat_message",
+    "queue_state",
     "other",
 ];
 
 /// Error codes the server sends, plus `other` for anything not listed.
-pub const ERROR_CODES: [&str; 22] = [
+pub const ERROR_CODES: [&str; 23] = [
     "AUTHENTICATION_REQUIRED",
     "AUTHENTICATION_FAILED",
     "AUTHENTICATION_EXPIRED",
@@ -71,6 +76,7 @@ pub const ERROR_CODES: [&str; 22] = [
     "INVALID_CHAT_PAYLOAD",
     "CHAT_MESSAGE_EMPTY",
     "CHAT_MESSAGE_TOO_LONG",
+    "INVALID_QUEUE_PAYLOAD",
     "other",
 ];
 
@@ -208,7 +214,7 @@ pub struct Metrics {
     messages_sent: LabeledCounter<{ SERVER_MESSAGE_TYPES.len() }>,
     send_failures: AtomicU64,
     invalid_messages: LabeledCounter<3>,
-    errors_sent: LabeledCounter<22>,
+    errors_sent: LabeledCounter<{ ERROR_CODES.len() }>,
     rate_limited: LabeledCounter<2>,
     closes: LabeledCounter<10>,
     zombies_removed: AtomicU64,

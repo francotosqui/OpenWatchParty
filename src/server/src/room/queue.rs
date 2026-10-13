@@ -26,6 +26,10 @@ pub(crate) struct Countdown {
 pub(crate) struct MediaQueue {
     pub items: Vec<QueueItem>,
     pub countdown: Option<Countdown>,
+    /// The generation of the pending play the last advance armed. While that
+    /// play is pending, the host may still report its previous item, which
+    /// mustn't move the new item's start.
+    pub advance_generation: Option<u64>,
 }
 
 impl MediaQueue {
@@ -118,7 +122,7 @@ mod tests {
     fn queue(ids: &[&str]) -> MediaQueue {
         MediaQueue {
             items: ids.iter().map(|id| item(id)).collect(),
-            countdown: None,
+            ..Default::default()
         }
     }
 

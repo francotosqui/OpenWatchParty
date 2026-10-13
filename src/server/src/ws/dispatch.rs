@@ -2,7 +2,7 @@ use super::constants::MAX_MESSAGE_SIZE;
 use super::handlers::{
     handle_auth, handle_chat_message, handle_client_log, handle_close_room, handle_create_room,
     handle_join_room, handle_leave_room, handle_participant_status, handle_ping, handle_playback,
-    handle_ready, handle_unknown,
+    handle_queue, handle_ready, handle_unknown,
 };
 use crate::auth::JwtConfig;
 use crate::messaging::{send_room_list, send_to_client};
@@ -61,6 +61,7 @@ pub(super) enum ErrorCode {
     InvalidChatPayload,
     ChatMessageEmpty,
     ChatMessageTooLong,
+    InvalidQueuePayload,
 }
 
 pub(super) fn error_message(
@@ -284,6 +285,10 @@ pub(super) async fn client_msg(
         ClientMessageType::ParticipantStatus => {
             handle_participant_status(client_id, &parsed, state).await
         }
+        ClientMessageType::QueueAdd
+        | ClientMessageType::QueueRemove
+        | ClientMessageType::QueueMove
+        | ClientMessageType::QueueAdvance => handle_queue(client_id, &parsed, state, tasks).await,
         ClientMessageType::Unknown => handle_unknown(client_id, state).await,
     }
     false
@@ -367,6 +372,7 @@ mod tests {
             (ErrorCode::InvalidChatPayload, "INVALID_CHAT_PAYLOAD"),
             (ErrorCode::ChatMessageEmpty, "CHAT_MESSAGE_EMPTY"),
             (ErrorCode::ChatMessageTooLong, "CHAT_MESSAGE_TOO_LONG"),
+            (ErrorCode::InvalidQueuePayload, "INVALID_QUEUE_PAYLOAD"),
         ];
         for (code, expected) in cases {
             assert_eq!(serde_json::to_value(code).unwrap(), expected);

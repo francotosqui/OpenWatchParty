@@ -3,7 +3,7 @@ use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
 use super::super::pending_play::{all_ready, prepare_scheduled_play};
 use crate::messaging::{broadcast_room_list, send_to_client, send_to_senders};
 use crate::room::{close_room_parts, handle_leave, send_leave_notification};
-use crate::types::{IncomingMessage, ServerMessageType, SharedState, WsMessage};
+use crate::types::{IncomingMessage, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::{info, warn};
 
@@ -90,6 +90,20 @@ pub(in crate::ws) async fn handle_unknown(client_id: &str, state: &SharedState) 
     .await;
 }
 
+/// A `ready` names the item its member loaded. One for another item was sent
+/// before the room moved to the next queue item, so it doesn't count.
+fn ready_matches_room_media(parsed: &IncomingMessage, room: &Room) -> bool {
+    let reported = parsed
+        .payload
+        .as_ref()
+        .and_then(|payload| payload.get("media_id"))
+        .and_then(|media_id| media_id.as_str());
+    match (reported, room.media_id.as_deref()) {
+        (Some(reported), Some(current)) => reported == current,
+        _ => true,
+    }
+}
+
 pub(in crate::ws) async fn handle_ready(
     client_id: &str,
     parsed: &IncomingMessage,
@@ -132,8 +146,11 @@ pub(in crate::ws) async fn handle_ready(
             let room = rooms
                 .get_mut(room_id)
                 .expect("membership check requires an existing room");
-            room.ready_clients.insert(client_id.to_string());
-            if room.pending_play.is_some() && all_ready(room) {
+            let current = ready_matches_room_media(parsed, room);
+            if current {
+                room.ready_clients.insert(client_id.to_string());
+            }
+            if current && room.pending_play.is_some() && all_ready(room) {
                 let target_server_ts = now_ms() + PLAY_SCHEDULE_MS;
                 let pending = room.pending_play.clone();
                 let position = pending
@@ -479,6 +496,47 @@ mod tests {
         assert!(locked.rooms["room-1"].pending_play.is_some());
         drop(locked);
         assert!(test_helpers::recv_msg(&mut rx).is_none());
+    }
+
+    #[tokio::test]
+    async fn a_ready_for_another_item_does_not_count() {
+        let (state, _guest_rx) = ready_test_state(true, true).await;
+        let ready_for = |media_id: &str| {
+            let mut parsed = ready_message("room-1");
+            parsed.payload = Some(serde_json::json!({ "media_id": media_id }));
+            parsed
+        };
+        let guest_ready = |state: &SharedState| {
+            let state = state.clone();
+            async move {
+                state.read().await.rooms["room-1"]
+                    .ready_clients
+                    .contains("guest")
+            }
+        };
+        let (previous, current) = ("a".repeat(32), "b".repeat(32));
+        state
+            .write()
+            .await
+            .rooms
+            .get_mut("room-1")
+            .unwrap()
+            .media_id = Some(current.clone());
+
+        handle_ready("guest", &ready_for(&previous), &state).await;
+        assert!(!guest_ready(&state).await);
+        handle_ready("guest", &ready_for(&current), &state).await;
+        assert!(guest_ready(&state).await);
+
+        // A room without an item takes any ready.
+        {
+            let mut locked = state.write().await;
+            let room = locked.rooms.get_mut("room-1").unwrap();
+            room.media_id = None;
+            room.ready_clients.clear();
+        }
+        handle_ready("guest", &ready_for(&previous), &state).await;
+        assert!(guest_ready(&state).await);
     }
 
     async fn ready_test_state(

@@ -1,0 +1,599 @@
+//! Room queue messages (#69). Only the host changes the queue. Members that
+//! negotiated `media_queue` get `queue_state` after each change and when they
+//! join. Moving to another item is also announced with `room_state`, so
+//! members without the feature still follow it.
+
+use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
+use super::super::pending_play::schedule_pending_play;
+use super::super::validation::{is_valid_media_id, sanitize_name};
+use super::join::room_state_message;
+use crate::messaging::{broadcast_room_list, send_message, send_to_senders};
+use crate::room::{QueueItem, MAX_QUEUE_ITEMS};
+use crate::types::{
+    Client, ClientMessageType, IncomingMessage, PendingPlay, PlayState, PlaybackState, Room,
+    ServerMessageType, ServerState, SharedState, WsMessage,
+};
+use crate::utils::now_ms;
+use serde::Deserialize;
+use std::collections::HashMap;
+use tokio::time::Instant;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AddPayload {
+    items: Vec<ItemPayload>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ItemPayload {
+    id: String,
+    title: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct IdPayload {
+    id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MovePayload {
+    id: String,
+    to: usize,
+}
+
+#[derive(Debug, PartialEq)]
+enum QueueCommand {
+    Add(Vec<QueueItem>),
+    Remove(String),
+    Move(String, usize),
+    Advance(String),
+}
+
+#[derive(Debug, PartialEq)]
+enum Outcome {
+    Unchanged,
+    Changed,
+    /// The room moved to another item and armed the pending play with this
+    /// generation.
+    Advanced(u64),
+}
+
+fn valid_id(id: String) -> Option<String> {
+    is_valid_media_id(&id).then_some(id)
+}
+
+impl QueueCommand {
+    fn parse(parsed: &IncomingMessage) -> Option<Self> {
+        let payload = parsed.payload.clone()?;
+        let command = match parsed.msg_type {
+            ClientMessageType::QueueAdd => {
+                let AddPayload { items } = serde_json::from_value(payload).ok()?;
+                if items.is_empty() || items.len() > MAX_QUEUE_ITEMS {
+                    return None;
+                }
+                let items = items
+                    .into_iter()
+                    .map(|item| {
+                        Some(QueueItem {
+                            id: valid_id(item.id)?,
+                            title: sanitize_name(&item.title)?,
+                        })
+                    })
+                    .collect::<Option<_>>()?;
+                Self::Add(items)
+            }
+            ClientMessageType::QueueRemove => {
+                let IdPayload { id } = serde_json::from_value(payload).ok()?;
+                Self::Remove(valid_id(id)?)
+            }
+            ClientMessageType::QueueMove => {
+                let MovePayload { id, to } = serde_json::from_value(payload).ok()?;
+                Self::Move(valid_id(id)?, to)
+            }
+            ClientMessageType::QueueAdvance => {
+                let IdPayload { id } = serde_json::from_value(payload).ok()?;
+                Self::Advance(valid_id(id)?)
+            }
+            _ => return None,
+        };
+        Some(command)
+    }
+}
+
+/// Moves the room to a queued item from the start, as on joining: every
+/// member loads it and reports `ready`, and the pending play starts it at 0
+/// once they all have or the wait runs out.
+fn advance(room: &mut Room, id: String, current_ts: u64, now: Instant) -> u64 {
+    let generation = crate::types::next_pending_play_generation();
+    room.media_id = Some(id);
+    room.state = PlaybackState {
+        position: 0.0,
+        play_state: PlayState::Paused,
+    };
+    room.state_server_ts = current_ts;
+    room.target_server_ts = None;
+    room.target_at = None;
+    room.last_state_at = Some(now);
+    room.command_cooldown_until = None;
+    room.guest_command_until = None;
+    room.ready_clients.clear();
+    room.pending_play = Some(PendingPlay {
+        initiator_id: room.host_id.clone(),
+        position: 0.0,
+        generation,
+        position_ts: current_ts,
+    });
+    room.queue.countdown = None;
+    room.queue.advance_generation = Some(generation);
+    generation
+}
+
+fn apply(room: &mut Room, command: QueueCommand, current_ts: u64, now: Instant) -> Outcome {
+    let media_id = room.media_id.as_deref();
+    let changed = match command {
+        QueueCommand::Add(items) => room.queue.add(items, media_id),
+        QueueCommand::Remove(id) => room.queue.remove(&id, media_id),
+        QueueCommand::Move(id, to) => room.queue.move_to(&id, to, media_id),
+        QueueCommand::Advance(id) => {
+            if !room.queue.contains(&id) || media_id == Some(id.as_str()) {
+                return Outcome::Unchanged;
+            }
+            return Outcome::Advanced(advance(room, id, current_ts, now));
+        }
+    };
+    if changed {
+        Outcome::Changed
+    } else {
+        Outcome::Unchanged
+    }
+}
+
+/// Sends `queue_state` to the members that negotiated `media_queue`, or only
+/// to `only` when given.
+pub(super) fn send_queue_state(room: &Room, clients: &HashMap<String, Client>, only: Option<&str>) {
+    let senders: Vec<_> = room
+        .clients
+        .iter()
+        .filter(|id| only.is_none_or(|only| only == id.as_str()))
+        .filter_map(|id| clients.get(id))
+        .filter(|client| client.supports_media_queue)
+        .map(|client| client.sender.clone())
+        .collect();
+    if senders.is_empty() {
+        return;
+    }
+    let message = WsMessage {
+        msg_type: ServerMessageType::QueueState,
+        room: Some(room.room_id.clone()),
+        client: None,
+        payload: Some(room.queue.payload(room.media_id.as_deref())),
+        ts: now_ms(),
+        server_ts: Some(now_ms()),
+    };
+    send_to_senders(&senders, &message, "queue state");
+}
+
+fn send_room_state_to_members(room: &Room, clients: &HashMap<String, Client>) {
+    let now = Instant::now();
+    let wall_now_ms = now_ms();
+    for id in &room.clients {
+        if let Some(client) = clients.get(id) {
+            send_message(
+                Some(client.sender.clone()),
+                &room_state_message(id, room, now, wall_now_ms),
+                Some(id),
+            );
+        }
+    }
+}
+
+/// `queue_add`, `queue_remove`, `queue_move` and `queue_advance`. A command
+/// that changes nothing (a queued item, an unknown id, the current item) is
+/// ignored without an error.
+pub(in crate::ws) async fn handle_queue(
+    client_id: &str,
+    parsed: &IncomingMessage,
+    state: &SharedState,
+    tasks: &crate::tasks::AppTasks,
+) {
+    if !is_authenticated(client_id, state).await {
+        send_error(
+            client_id,
+            state,
+            ErrorCode::AuthenticationRequired,
+            "Authentication required",
+        )
+        .await;
+        return;
+    }
+    let Some(command) = QueueCommand::parse(parsed) else {
+        send_error(
+            client_id,
+            state,
+            ErrorCode::InvalidQueuePayload,
+            "Invalid queue payload",
+        )
+        .await;
+        return;
+    };
+    let result = {
+        let mut state = state.write().await;
+        let ServerState { clients, rooms } = &mut *state;
+        let room = clients
+            .get(client_id)
+            .and_then(|client| client.room_id.as_ref())
+            .and_then(|room_id| rooms.get_mut(room_id));
+        match room {
+            None => Err((ErrorCode::NotInRoom, "Client is not in a room")),
+            Some(room) if room.host_id != client_id => Err((
+                ErrorCode::HostPermissionRequired,
+                "Only the room host can change the queue",
+            )),
+            Some(room) => match apply(room, command, now_ms(), Instant::now()) {
+                Outcome::Unchanged => Ok(None),
+                Outcome::Changed => {
+                    send_queue_state(room, clients, None);
+                    Ok(None)
+                }
+                Outcome::Advanced(generation) => {
+                    send_room_state_to_members(room, clients);
+                    send_queue_state(room, clients, None);
+                    Ok(Some((room.room_id.clone(), generation)))
+                }
+            },
+        }
+    };
+    match result {
+        Err((code, message)) => send_error(client_id, state, code, message).await,
+        Ok(None) => {}
+        Ok(Some((room_id, generation))) => {
+            std::mem::drop(schedule_pending_play(
+                room_id,
+                generation,
+                state.clone(),
+                tasks,
+            ));
+            // The room list shows each room's item.
+            broadcast_room_list(state).await;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tasks::AppTasks;
+    use crate::test_helpers;
+    use tokio::sync::mpsc::Receiver;
+
+    const A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const C: &str = "cccccccccccccccccccccccccccccccc";
+
+    fn message(msg_type: ClientMessageType, payload: serde_json::Value) -> IncomingMessage {
+        IncomingMessage {
+            msg_type,
+            room: Some("room".to_string()),
+            client: None,
+            payload: Some(payload),
+            ts: now_ms(),
+            server_ts: None,
+        }
+    }
+
+    fn add(ids: &[&str]) -> IncomingMessage {
+        let items: Vec<_> = ids
+            .iter()
+            .map(|id| serde_json::json!({ "id": id, "title": format!("Episode {}", &id[..1]) }))
+            .collect();
+        message(
+            ClientMessageType::QueueAdd,
+            serde_json::json!({ "items": items }),
+        )
+    }
+
+    fn drain(rx: &mut Receiver<crate::messaging::OutboundMessage>) -> Vec<WsMessage> {
+        std::iter::from_fn(|| test_helpers::recv_msg(rx)).collect()
+    }
+
+    fn types(messages: &[WsMessage]) -> Vec<ServerMessageType> {
+        messages.iter().map(|msg| msg.msg_type.clone()).collect()
+    }
+
+    /// A room playing `A` with a host and a guest that negotiated
+    /// `media_queue`, and a guest that didn't.
+    async fn room_with_members() -> (
+        SharedState,
+        Vec<Receiver<crate::messaging::OutboundMessage>>,
+    ) {
+        let state = test_helpers::create_state();
+        let mut receivers = Vec::new();
+        {
+            let mut locked = state.write().await;
+            for (id, supports_queue) in [("host", true), ("guest", true), ("legacy", false)] {
+                let (mut client, rx) = test_helpers::create_client_with_rx(id, id, true);
+                client.room_id = Some("room".to_string());
+                client.supports_media_queue = supports_queue;
+                locked.clients.insert(id.to_string(), client);
+                receivers.push(rx);
+            }
+            let mut room = test_helpers::create_room("room", "host");
+            room.clients = vec!["host".into(), "guest".into(), "legacy".into()];
+            room.media_id = Some(A.to_string());
+            locked.rooms.insert("room".to_string(), room);
+        }
+        (state, receivers)
+    }
+
+    #[test]
+    fn parse_validates_ids_titles_and_shape() {
+        let parsed = QueueCommand::parse(&message(
+            ClientMessageType::QueueAdd,
+            serde_json::json!({ "items": [{ "id": A, "title": "  Pilot\u{7}  " }] }),
+        ));
+        assert_eq!(
+            parsed,
+            Some(QueueCommand::Add(vec![QueueItem {
+                id: A.to_string(),
+                title: "Pilot".to_string(),
+            }]))
+        );
+        assert_eq!(
+            QueueCommand::parse(&message(
+                ClientMessageType::QueueMove,
+                serde_json::json!({ "id": B, "to": 2 }),
+            )),
+            Some(QueueCommand::Move(B.to_string(), 2))
+        );
+
+        let too_many: Vec<_> = (0..=MAX_QUEUE_ITEMS)
+            .map(|_| serde_json::json!({ "id": A, "title": "x" }))
+            .collect();
+        for (msg_type, payload) in [
+            (
+                ClientMessageType::QueueAdd,
+                serde_json::json!({ "items": [] }),
+            ),
+            (
+                ClientMessageType::QueueAdd,
+                serde_json::json!({ "items": too_many }),
+            ),
+            (
+                ClientMessageType::QueueAdd,
+                serde_json::json!({ "items": [{ "id": "not-hex", "title": "x" }] }),
+            ),
+            (
+                ClientMessageType::QueueAdd,
+                serde_json::json!({ "items": [{ "id": A, "title": "   " }] }),
+            ),
+            (
+                ClientMessageType::QueueAdd,
+                serde_json::json!({ "items": [{ "id": A, "title": "x", "extra": 1 }] }),
+            ),
+            (
+                ClientMessageType::QueueRemove,
+                serde_json::json!({ "id": A, "extra": 1 }),
+            ),
+            (
+                ClientMessageType::QueueMove,
+                serde_json::json!({ "id": A, "to": -1 }),
+            ),
+            (
+                ClientMessageType::QueueAdvance,
+                serde_json::json!({ "id": 7 }),
+            ),
+        ] {
+            assert_eq!(
+                QueueCommand::parse(&message(msg_type, payload.clone())),
+                None,
+                "{payload}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn only_the_host_of_a_room_changes_the_queue() {
+        let (state, mut receivers) = room_with_members().await;
+        let tasks = AppTasks::new();
+        handle_queue("guest", &add(&[B]), &state, &tasks).await;
+        let guest_messages = drain(&mut receivers[1]);
+        assert_eq!(guest_messages.len(), 1);
+        assert_eq!(
+            guest_messages[0].payload.as_ref().unwrap()["code"],
+            "HOST_PERMISSION_REQUIRED"
+        );
+
+        let (outsider, mut outsider_rx) =
+            test_helpers::create_client_with_rx("outsider", "Outsider", true);
+        state
+            .write()
+            .await
+            .clients
+            .insert("outsider".to_string(), outsider);
+        handle_queue("outsider", &add(&[B]), &state, &tasks).await;
+        assert_eq!(
+            drain(&mut outsider_rx)[0].payload.as_ref().unwrap()["code"],
+            "NOT_IN_ROOM"
+        );
+
+        handle_queue(
+            "host",
+            &message(ClientMessageType::QueueAdd, serde_json::json!({})),
+            &state,
+            &tasks,
+        )
+        .await;
+        assert_eq!(
+            drain(&mut receivers[0])[0].payload.as_ref().unwrap()["code"],
+            "INVALID_QUEUE_PAYLOAD"
+        );
+        assert!(state.read().await.rooms["room"].queue.items.is_empty());
+    }
+
+    #[tokio::test]
+    async fn unauthenticated_clients_are_refused() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("anon", "Anon", false);
+        state
+            .write()
+            .await
+            .clients
+            .insert("anon".to_string(), client);
+        handle_queue("anon", &add(&[A]), &state, &AppTasks::new()).await;
+        assert_eq!(
+            drain(&mut rx)[0].payload.as_ref().unwrap()["code"],
+            "AUTHENTICATION_REQUIRED"
+        );
+    }
+
+    #[tokio::test]
+    async fn changes_reach_the_members_that_negotiated_the_queue() {
+        let (state, mut receivers) = room_with_members().await;
+        let tasks = AppTasks::new();
+        handle_queue("host", &add(&[A, B, C]), &state, &tasks).await;
+
+        for rx in &mut receivers[..2] {
+            let messages = drain(rx);
+            assert_eq!(types(&messages), [ServerMessageType::QueueState]);
+            let payload = messages[0].payload.as_ref().unwrap();
+            assert_eq!(payload["items"].as_array().unwrap().len(), 3);
+            assert_eq!(payload["current"], 0);
+        }
+        assert!(drain(&mut receivers[2]).is_empty());
+
+        // Nothing changes: nobody hears about it.
+        handle_queue("host", &add(&[B]), &state, &tasks).await;
+        handle_queue(
+            "host",
+            &message(
+                ClientMessageType::QueueRemove,
+                serde_json::json!({ "id": A }),
+            ),
+            &state,
+            &tasks,
+        )
+        .await;
+        assert!(receivers.iter_mut().all(|rx| drain(rx).is_empty()));
+
+        handle_queue(
+            "host",
+            &message(
+                ClientMessageType::QueueMove,
+                serde_json::json!({ "id": C, "to": 1 }),
+            ),
+            &state,
+            &tasks,
+        )
+        .await;
+        let payload = drain(&mut receivers[1])[0].payload.clone().unwrap();
+        assert_eq!(payload["items"][1]["id"], C);
+
+        handle_queue(
+            "host",
+            &message(
+                ClientMessageType::QueueRemove,
+                serde_json::json!({ "id": B }),
+            ),
+            &state,
+            &tasks,
+        )
+        .await;
+        let payload = drain(&mut receivers[1])[0].payload.clone().unwrap();
+        assert_eq!(payload["items"].as_array().unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn advancing_restarts_the_room_on_the_new_item_for_everyone() {
+        let (state, mut receivers) = room_with_members().await;
+        let tasks = AppTasks::new();
+        handle_queue("host", &add(&[A, B]), &state, &tasks).await;
+        {
+            let mut locked = state.write().await;
+            let room = locked.rooms.get_mut("room").unwrap();
+            room.state = PlaybackState {
+                position: 1300.0,
+                play_state: PlayState::Playing,
+            };
+            room.ready_clients
+                .extend(["guest".to_string(), "legacy".to_string()]);
+        }
+        receivers.iter_mut().for_each(|rx| {
+            drain(rx);
+        });
+
+        handle_queue(
+            "host",
+            &message(
+                ClientMessageType::QueueAdvance,
+                serde_json::json!({ "id": B }),
+            ),
+            &state,
+            &tasks,
+        )
+        .await;
+
+        {
+            let locked = state.read().await;
+            let room = &locked.rooms["room"];
+            assert_eq!(room.media_id.as_deref(), Some(B));
+            assert_eq!(room.state.position, 0.0);
+            assert_eq!(room.state.play_state, PlayState::Paused);
+            assert!(room.ready_clients.is_empty());
+            let pending = room.pending_play.as_ref().unwrap();
+            assert_eq!(pending.position, 0.0);
+            assert_eq!(pending.initiator_id, "host");
+            assert_eq!(room.queue.advance_generation, Some(pending.generation));
+        }
+        let with_queue = vec![
+            ServerMessageType::RoomState,
+            ServerMessageType::QueueState,
+            ServerMessageType::RoomList,
+        ];
+        let without_queue = vec![ServerMessageType::RoomState, ServerMessageType::RoomList];
+        for (rx, (id, expected)) in receivers.iter_mut().zip([
+            ("host", &with_queue),
+            ("guest", &with_queue),
+            ("legacy", &without_queue),
+        ]) {
+            let messages = drain(rx);
+            assert_eq!(&types(&messages), expected, "{id}");
+            assert_eq!(messages[0].client.as_deref(), Some(id));
+            let payload = messages[0].payload.as_ref().unwrap();
+            assert_eq!(payload["media_id"], B);
+            assert_eq!(payload["state"]["position"], 0.0);
+            assert_eq!(payload["state"]["play_state"], "paused");
+        }
+    }
+
+    #[tokio::test]
+    async fn advancing_to_the_current_or_an_unknown_item_does_nothing() {
+        let (state, mut receivers) = room_with_members().await;
+        let tasks = AppTasks::new();
+        handle_queue("host", &add(&[A, B]), &state, &tasks).await;
+        receivers.iter_mut().for_each(|rx| {
+            drain(rx);
+        });
+
+        for id in [A, C] {
+            handle_queue(
+                "host",
+                &message(
+                    ClientMessageType::QueueAdvance,
+                    serde_json::json!({ "id": id }),
+                ),
+                &state,
+                &tasks,
+            )
+            .await;
+        }
+
+        let locked = state.read().await;
+        assert_eq!(locked.rooms["room"].media_id.as_deref(), Some(A));
+        assert!(locked.rooms["room"].pending_play.is_none());
+        drop(locked);
+        assert!(receivers.iter_mut().all(|rx| drain(rx).is_empty()));
+    }
+}
