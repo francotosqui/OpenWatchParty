@@ -137,7 +137,13 @@ impl QueueCommand {
 /// Moves the room to a queued item from the start, as on joining: every
 /// member loads it and reports `ready`, and the pending play starts it at 0
 /// once they all have or the wait runs out.
-fn advance(room: &mut Room, id: String, current_ts: u64, now: Instant) -> u64 {
+fn advance(
+    room: &mut Room,
+    clients: &HashMap<String, Client>,
+    id: String,
+    current_ts: u64,
+    now: Instant,
+) -> u64 {
     let generation = crate::types::next_pending_play_generation();
     room.media_id = Some(id);
     room.state = PlaybackState {
@@ -150,7 +156,18 @@ fn advance(room: &mut Room, id: String, current_ts: u64, now: Instant) -> u64 {
     room.last_state_at = Some(now);
     room.command_cooldown_until = None;
     room.guest_command_until = None;
-    room.ready_clients.clear();
+    // Members without the queue (an older client) never report ready for the
+    // new item: waiting for them would hold this play and every later one.
+    room.ready_clients = room
+        .clients
+        .iter()
+        .filter(|id| {
+            clients
+                .get(*id)
+                .is_some_and(|client| !client.supports_media_queue)
+        })
+        .cloned()
+        .collect();
     room.pending_play = Some(PendingPlay {
         initiator_id: room.host_id.clone(),
         position: 0.0,
@@ -162,7 +179,13 @@ fn advance(room: &mut Room, id: String, current_ts: u64, now: Instant) -> u64 {
     generation
 }
 
-fn apply(room: &mut Room, command: QueueCommand, current_ts: u64, now: Instant) -> Outcome {
+fn apply(
+    room: &mut Room,
+    clients: &HashMap<String, Client>,
+    command: QueueCommand,
+    current_ts: u64,
+    now: Instant,
+) -> Outcome {
     let media_id = room.media_id.as_deref();
     let changed = match command {
         QueueCommand::Add(items) => room.queue.add(items, media_id),
@@ -172,7 +195,7 @@ fn apply(room: &mut Room, command: QueueCommand, current_ts: u64, now: Instant) 
             if !room.queue.contains(&id) || media_id == Some(id.as_str()) {
                 return Outcome::Unchanged;
             }
-            return Outcome::Advanced(advance(room, id, current_ts, now));
+            return Outcome::Advanced(advance(room, clients, id, current_ts, now));
         }
         QueueCommand::Countdown(true) => {
             if room.queue.countdown.is_some() || room.queue.next(media_id).is_none() {
@@ -292,7 +315,7 @@ fn schedule_countdown(
                 return;
             };
             let next = next.id.clone();
-            let pending_play = advance(room, next, now_ms(), Instant::now());
+            let pending_play = advance(room, clients, next, now_ms(), Instant::now());
             announce_advance(room, clients);
             pending_play
         };
@@ -343,7 +366,7 @@ pub(in crate::ws) async fn handle_queue(
                 ErrorCode::HostPermissionRequired,
                 "Only the room host can change the queue",
             )),
-            Some(room) => match apply(room, command, now_ms(), Instant::now()) {
+            Some(room) => match apply(room, clients, command, now_ms(), Instant::now()) {
                 Outcome::Unchanged => Ok(None),
                 Outcome::Changed => {
                     send_queue_state(room, clients, None);
@@ -660,7 +683,11 @@ mod tests {
             assert_eq!(room.media_id.as_deref(), Some(B));
             assert_eq!(room.state.position, 0.0);
             assert_eq!(room.state.play_state, PlayState::Paused);
-            assert!(room.ready_clients.is_empty());
+            // Only the member without the queue, which never reports ready.
+            assert_eq!(
+                room.ready_clients,
+                std::collections::HashSet::from(["legacy".to_string()])
+            );
             let pending = room.pending_play.as_ref().unwrap();
             assert_eq!(pending.position, 0.0);
             assert_eq!(pending.initiator_id, "host");
