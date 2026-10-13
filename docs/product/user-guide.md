@@ -173,7 +173,7 @@ While the room plays an episode, the host's player fills the room's queue with t
 
 - **Queue** (list icon in the bar) opens the list: watched episodes dimmed with a check, the one playing highlighted as **Watching**, and the upcoming ones numbered.
 - The host can go to the **Previous** or **Next** episode, and play, move up, move down or remove an upcoming one. Guests see the list only.
-- **Up next:** when the host's video reaches the credits (an *Outro* segment, as Intro Skipper marks them), or the end of an episode without them, everyone sees the next title and a 10-second countdown: below the bar, or on its own over the video while the panel is closed. The host can **Cancel** it or go to the **Next** episode at once. Pausing the room or going back before the credits cancels it; it starts again if the room plays on in the credits, unless the host cancelled it on that episode.
+- **Up next:** when the host's video reaches the credits (an *Outro* segment, as Intro Skipper marks them), or 15 seconds before the end of an episode without them, everyone sees the next title and a 10-second countdown: below the bar, or on its own over the video while the panel is closed. The host can **Cancel** it or go to the **Next** episode at once. Pausing the room or going back before the credits cancels it; it starts again if the room plays on in the credits, unless the host cancelled it on that episode.
 - When the room moves to another episode, everyone loads it and starts from the beginning together, as when joining a room.
 
 The queue needs a session server and clients with this feature. People on an older version still follow the room to the next episode, without seeing the queue.
