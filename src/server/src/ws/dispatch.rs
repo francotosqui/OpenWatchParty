@@ -288,7 +288,8 @@ pub(super) async fn client_msg(
         ClientMessageType::QueueAdd
         | ClientMessageType::QueueRemove
         | ClientMessageType::QueueMove
-        | ClientMessageType::QueueAdvance => handle_queue(client_id, &parsed, state, tasks).await,
+        | ClientMessageType::QueueAdvance
+        | ClientMessageType::QueueCountdown => handle_queue(client_id, &parsed, state, tasks).await,
         ClientMessageType::Unknown => handle_unknown(client_id, state).await,
     }
     false

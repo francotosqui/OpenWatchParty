@@ -157,6 +157,7 @@ pub enum ClientMessageType {
     QueueRemove,
     QueueMove,
     QueueAdvance,
+    QueueCountdown,
     #[serde(other)]
     Unknown,
 }
@@ -182,6 +183,7 @@ impl ClientMessageType {
             Self::QueueRemove => "queue_remove",
             Self::QueueMove => "queue_move",
             Self::QueueAdvance => "queue_advance",
+            Self::QueueCountdown => "queue_countdown",
             Self::Unknown => "unknown",
         }
     }
@@ -450,6 +452,7 @@ mod tests {
             QueueRemove,
             QueueMove,
             QueueAdvance,
+            QueueCountdown,
         ] {
             let wire = serde_json::to_string(&message_type).unwrap();
             assert_eq!(wire, format!("\"{}\"", message_type.as_str()));

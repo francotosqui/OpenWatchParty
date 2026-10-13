@@ -2,13 +2,19 @@
 //! negotiated `media_queue` get `queue_state` after each change and when they
 //! join. Moving to another item is also announced with `room_state`, so
 //! members without the feature still follow it.
+//!
+//! The "up next" countdown runs on the server, so it doesn't depend on the
+//! host's tab timers, which browsers slow down in the background. The host's
+//! client cancels it when the room pauses or seeks back out of the credits.
 
+use super::super::constants::QUEUE_COUNTDOWN_MS;
 use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
 use super::super::pending_play::schedule_pending_play;
 use super::super::validation::{is_valid_media_id, sanitize_name};
 use super::join::room_state_message;
 use crate::messaging::{broadcast_room_list, send_message, send_to_senders};
-use crate::room::{QueueItem, MAX_QUEUE_ITEMS};
+use crate::room::{Countdown, QueueItem, MAX_QUEUE_ITEMS};
+use crate::tasks::AppTasks;
 use crate::types::{
     Client, ClientMessageType, IncomingMessage, PendingPlay, PlayState, PlaybackState, Room,
     ServerMessageType, ServerState, SharedState, WsMessage,
@@ -16,7 +22,13 @@ use crate::types::{
 use crate::utils::now_ms;
 use serde::Deserialize;
 use std::collections::HashMap;
-use tokio::time::Instant;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
+use tokio::task::JoinHandle;
+use tokio::time::{sleep, Instant};
+
+/// Tells countdowns apart, so a cancelled one's timer can't advance the room.
+static NEXT_COUNTDOWN: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -44,12 +56,19 @@ struct MovePayload {
     to: usize,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CountdownPayload {
+    start: bool,
+}
+
 #[derive(Debug, PartialEq)]
 enum QueueCommand {
     Add(Vec<QueueItem>),
     Remove(String),
     Move(String, usize),
     Advance(String),
+    Countdown(bool),
 }
 
 #[derive(Debug, PartialEq)]
@@ -59,6 +78,14 @@ enum Outcome {
     /// The room moved to another item and armed the pending play with this
     /// generation.
     Advanced(u64),
+    /// A countdown with this generation started.
+    CountdownStarted(u64),
+}
+
+/// What to start once the state lock is released.
+enum FollowUp {
+    PendingPlay(String, u64),
+    Countdown(String, u64),
 }
 
 fn valid_id(id: String) -> Option<String> {
@@ -96,6 +123,10 @@ impl QueueCommand {
             ClientMessageType::QueueAdvance => {
                 let IdPayload { id } = serde_json::from_value(payload).ok()?;
                 Self::Advance(valid_id(id)?)
+            }
+            ClientMessageType::QueueCountdown => {
+                let CountdownPayload { start } = serde_json::from_value(payload).ok()?;
+                Self::Countdown(start)
             }
             _ => return None,
         };
@@ -143,7 +174,23 @@ fn apply(room: &mut Room, command: QueueCommand, current_ts: u64, now: Instant) 
             }
             return Outcome::Advanced(advance(room, id, current_ts, now));
         }
+        QueueCommand::Countdown(true) => {
+            if room.queue.countdown.is_some() || room.queue.next(media_id).is_none() {
+                return Outcome::Unchanged;
+            }
+            let generation = NEXT_COUNTDOWN.fetch_add(1, Ordering::Relaxed);
+            room.queue.countdown = Some(Countdown {
+                until: current_ts + QUEUE_COUNTDOWN_MS,
+                generation,
+            });
+            return Outcome::CountdownStarted(generation);
+        }
+        QueueCommand::Countdown(false) => room.queue.countdown.take().is_some(),
     };
+    // A countdown runs toward the next item, so it ends with it.
+    if room.queue.next(room.media_id.as_deref()).is_none() {
+        room.queue.countdown = None;
+    }
     if changed {
         Outcome::Changed
     } else {
@@ -176,7 +223,9 @@ pub(super) fn send_queue_state(room: &Room, clients: &HashMap<String, Client>, o
     send_to_senders(&senders, &message, "queue state");
 }
 
-fn send_room_state_to_members(room: &Room, clients: &HashMap<String, Client>) {
+/// Tells every member the room moved: `room_state` to all of them, then
+/// `queue_state` to those with the queue.
+fn announce_advance(room: &Room, clients: &HashMap<String, Client>) {
     let now = Instant::now();
     let wall_now_ms = now_ms();
     for id in &room.clients {
@@ -188,16 +237,78 @@ fn send_room_state_to_members(room: &Room, clients: &HashMap<String, Client>) {
             );
         }
     }
+    send_queue_state(room, clients, None);
 }
 
-/// `queue_add`, `queue_remove`, `queue_move` and `queue_advance`. A command
-/// that changes nothing (a queued item, an unknown id, the current item) is
-/// ignored without an error.
+/// After an advance, once the state lock is released: waits for the members'
+/// `ready`, and shows the new item in the room list.
+async fn start_pending_play(
+    room_id: String,
+    generation: u64,
+    state: &SharedState,
+    tasks: &AppTasks,
+) {
+    std::mem::drop(schedule_pending_play(
+        room_id,
+        generation,
+        state.clone(),
+        tasks,
+    ));
+    broadcast_room_list(state).await;
+}
+
+/// Moves the room to the next item when its countdown ends, unless the
+/// countdown was cancelled or replaced first.
+fn schedule_countdown(
+    room_id: String,
+    generation: u64,
+    delay: Duration,
+    state: SharedState,
+    tasks: &AppTasks,
+) -> JoinHandle<()> {
+    let cancellation = tasks.cancellation_token();
+    let advance_tasks = tasks.clone();
+    tasks.spawn(async move {
+        tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return,
+            _ = sleep(delay) => {}
+        }
+        let pending_play = {
+            let mut state = state.write().await;
+            if cancellation.is_cancelled() {
+                return;
+            }
+            let ServerState { clients, rooms } = &mut *state;
+            let Some(room) = rooms.get_mut(&room_id) else {
+                return;
+            };
+            if room.queue.countdown.map(|countdown| countdown.generation) != Some(generation) {
+                return;
+            }
+            room.queue.countdown = None;
+            let Some(next) = room.queue.next(room.media_id.as_deref()) else {
+                send_queue_state(room, clients, None);
+                return;
+            };
+            let next = next.id.clone();
+            let pending_play = advance(room, next, now_ms(), Instant::now());
+            announce_advance(room, clients);
+            pending_play
+        };
+        start_pending_play(room_id, pending_play, &state, &advance_tasks).await;
+    })
+}
+
+/// `queue_add`, `queue_remove`, `queue_move`, `queue_advance` and
+/// `queue_countdown`. A command that changes nothing (a queued item, an
+/// unknown id, the current item, a countdown already running) is ignored
+/// without an error.
 pub(in crate::ws) async fn handle_queue(
     client_id: &str,
     parsed: &IncomingMessage,
     state: &SharedState,
-    tasks: &crate::tasks::AppTasks,
+    tasks: &AppTasks,
 ) {
     if !is_authenticated(client_id, state).await {
         send_error(
@@ -239,9 +350,15 @@ pub(in crate::ws) async fn handle_queue(
                     Ok(None)
                 }
                 Outcome::Advanced(generation) => {
-                    send_room_state_to_members(room, clients);
+                    announce_advance(room, clients);
+                    Ok(Some(FollowUp::PendingPlay(
+                        room.room_id.clone(),
+                        generation,
+                    )))
+                }
+                Outcome::CountdownStarted(generation) => {
                     send_queue_state(room, clients, None);
-                    Ok(Some((room.room_id.clone(), generation)))
+                    Ok(Some(FollowUp::Countdown(room.room_id.clone(), generation)))
                 }
             },
         }
@@ -249,15 +366,17 @@ pub(in crate::ws) async fn handle_queue(
     match result {
         Err((code, message)) => send_error(client_id, state, code, message).await,
         Ok(None) => {}
-        Ok(Some((room_id, generation))) => {
-            std::mem::drop(schedule_pending_play(
+        Ok(Some(FollowUp::PendingPlay(room_id, generation))) => {
+            start_pending_play(room_id, generation, state, tasks).await;
+        }
+        Ok(Some(FollowUp::Countdown(room_id, generation))) => {
+            std::mem::drop(schedule_countdown(
                 room_id,
                 generation,
+                Duration::from_millis(QUEUE_COUNTDOWN_MS),
                 state.clone(),
                 tasks,
             ));
-            // The room list shows each room's item.
-            broadcast_room_list(state).await;
         }
     }
 }
@@ -595,5 +714,183 @@ mod tests {
         assert!(locked.rooms["room"].pending_play.is_none());
         drop(locked);
         assert!(receivers.iter_mut().all(|rx| drain(rx).is_empty()));
+    }
+
+    fn countdown(start: bool) -> IncomingMessage {
+        message(
+            ClientMessageType::QueueCountdown,
+            serde_json::json!({ "start": start }),
+        )
+    }
+
+    async fn countdown_until(state: &SharedState) -> Option<u64> {
+        state.read().await.rooms["room"]
+            .queue
+            .countdown
+            .map(|countdown| countdown.until)
+    }
+
+    /// Lets the spawned timers that are due run.
+    async fn run_due_timers(state: &SharedState, until_media: &str) {
+        for _ in 0..50 {
+            if state.read().await.rooms["room"].media_id.as_deref() == Some(until_media) {
+                return;
+            }
+            tokio::task::yield_now().await;
+        }
+    }
+
+    #[test]
+    fn parse_reads_the_countdown_command() {
+        assert_eq!(
+            QueueCommand::parse(&countdown(true)),
+            Some(QueueCommand::Countdown(true))
+        );
+        assert_eq!(
+            QueueCommand::parse(&message(
+                ClientMessageType::QueueCountdown,
+                serde_json::json!({ "start": "yes" }),
+            )),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn a_countdown_needs_a_next_item_and_runs_once() {
+        let (state, mut receivers) = room_with_members().await;
+        let tasks = AppTasks::new();
+        handle_queue("host", &add(&[A]), &state, &tasks).await;
+        receivers.iter_mut().for_each(|rx| {
+            drain(rx);
+        });
+
+        handle_queue("host", &countdown(true), &state, &tasks).await;
+        assert_eq!(countdown_until(&state).await, None);
+        assert!(receivers.iter_mut().all(|rx| drain(rx).is_empty()));
+
+        handle_queue("host", &add(&[B]), &state, &tasks).await;
+        receivers.iter_mut().for_each(|rx| {
+            drain(rx);
+        });
+        let before = now_ms();
+        handle_queue("host", &countdown(true), &state, &tasks).await;
+        let until = countdown_until(&state).await.expect("countdown started");
+        assert!((before + QUEUE_COUNTDOWN_MS..=now_ms() + QUEUE_COUNTDOWN_MS).contains(&until));
+        for rx in &mut receivers[..2] {
+            let messages = drain(rx);
+            assert_eq!(types(&messages), [ServerMessageType::QueueState]);
+            assert_eq!(
+                messages[0].payload.as_ref().unwrap()["countdown_until"],
+                until
+            );
+        }
+        assert!(drain(&mut receivers[2]).is_empty());
+
+        // Starting again keeps the running countdown.
+        handle_queue("host", &countdown(true), &state, &tasks).await;
+        assert_eq!(countdown_until(&state).await, Some(until));
+        assert!(receivers.iter_mut().all(|rx| drain(rx).is_empty()));
+
+        handle_queue("host", &countdown(false), &state, &tasks).await;
+        assert_eq!(countdown_until(&state).await, None);
+        let messages = drain(&mut receivers[1]);
+        assert_eq!(
+            messages[0].payload.as_ref().unwrap()["countdown_until"],
+            serde_json::Value::Null
+        );
+        drain(&mut receivers[0]);
+        handle_queue("host", &countdown(false), &state, &tasks).await;
+        assert!(receivers.iter_mut().all(|rx| drain(rx).is_empty()));
+    }
+
+    #[tokio::test]
+    async fn removing_the_next_item_ends_the_countdown() {
+        let (state, mut receivers) = room_with_members().await;
+        let tasks = AppTasks::new();
+        handle_queue("host", &add(&[A, B]), &state, &tasks).await;
+        handle_queue("host", &countdown(true), &state, &tasks).await;
+        drain(&mut receivers[1]);
+
+        handle_queue(
+            "host",
+            &message(
+                ClientMessageType::QueueRemove,
+                serde_json::json!({ "id": B }),
+            ),
+            &state,
+            &tasks,
+        )
+        .await;
+
+        assert_eq!(countdown_until(&state).await, None);
+        let payload = drain(&mut receivers[1])[0].payload.clone().unwrap();
+        assert_eq!(payload["countdown_until"], serde_json::Value::Null);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_countdown_moves_the_room_to_the_next_item_once() {
+        let (state, mut receivers) = room_with_members().await;
+        let tasks = AppTasks::new();
+        handle_queue("host", &add(&[A, B, C]), &state, &tasks).await;
+        // A cancelled countdown's timer must not advance the room again.
+        handle_queue("host", &countdown(true), &state, &tasks).await;
+        handle_queue("host", &countdown(false), &state, &tasks).await;
+        handle_queue("host", &countdown(true), &state, &tasks).await;
+        receivers.iter_mut().for_each(|rx| {
+            drain(rx);
+        });
+
+        sleep(Duration::from_millis(QUEUE_COUNTDOWN_MS + 1)).await;
+        run_due_timers(&state, B).await;
+
+        {
+            let locked = state.read().await;
+            let room = &locked.rooms["room"];
+            assert_eq!(room.media_id.as_deref(), Some(B));
+            assert_eq!(room.queue.countdown, None);
+            let pending = room.pending_play.as_ref().expect("advance arms a play");
+            assert_eq!(room.queue.advance_generation, Some(pending.generation));
+        }
+        let messages = drain(&mut receivers[1]);
+        assert_eq!(
+            types(&messages),
+            [
+                ServerMessageType::RoomState,
+                ServerMessageType::QueueState,
+                ServerMessageType::RoomList,
+            ]
+        );
+        assert_eq!(messages[0].payload.as_ref().unwrap()["media_id"], B);
+        assert_eq!(
+            messages[1].payload.as_ref().unwrap()["countdown_until"],
+            serde_json::Value::Null
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_cancelled_countdown_does_not_cut_the_next_one_short() {
+        let (state, _receivers) = room_with_members().await;
+        let tasks = AppTasks::new();
+        let half = Duration::from_millis(QUEUE_COUNTDOWN_MS / 2);
+        handle_queue("host", &add(&[A, B]), &state, &tasks).await;
+        handle_queue("host", &countdown(true), &state, &tasks).await;
+        handle_queue("host", &countdown(false), &state, &tasks).await;
+        sleep(half).await;
+        handle_queue("host", &countdown(true), &state, &tasks).await;
+
+        // The cancelled countdown would have ended here.
+        sleep(half + Duration::from_millis(1)).await;
+        run_due_timers(&state, B).await;
+        assert_eq!(
+            state.read().await.rooms["room"].media_id.as_deref(),
+            Some(A)
+        );
+
+        sleep(half).await;
+        run_due_timers(&state, B).await;
+        assert_eq!(
+            state.read().await.rooms["room"].media_id.as_deref(),
+            Some(B)
+        );
     }
 }
