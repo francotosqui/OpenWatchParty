@@ -71,6 +71,8 @@ test('the host moves the room to the next item and the guest follows it from the
   for (const page of [host, guest]) {
     await expect.poll(() => playingItem(page), { timeout: 60_000 }).toBe(secondId);
     await helpers.waitForPlaying(page);
+    // From the start: not the seconds spent loading it.
+    expect((await helpers.videoState(page)).time).toBeLessThan(2.5);
   }
   await expect
     .poll(async () => {
@@ -80,8 +82,6 @@ test('the host moves the room to the next item and the guest follows it from the
       return Math.abs(hostVideo.time - guestVideo.time);
     }, { timeout: 20_000 })
     .toBeLessThan(3);
-  // Both started the new item from its beginning.
-  expect((await helpers.videoState(guest)).time).toBeLessThan(30);
 });
 
 test('the up-next countdown moves the room to the next item before the end', async () => {
