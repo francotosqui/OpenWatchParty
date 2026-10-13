@@ -4,7 +4,8 @@ const OWP = require('./setup.js');
 
 let queueUpdates = 0;
 let refreshes = 0;
-OWP.queue = { refresh: () => { refreshes++; } };
+let queueStates = 0;
+OWP.queue = { refresh: () => { refreshes++; }, onQueueState: () => { queueStates++; } };
 OWP.ui = { render: () => {}, updateQueue: () => { queueUpdates++; } };
 OWP.utils.getVideo = () => null;
 OWP.utils.log = () => {};
@@ -36,15 +37,17 @@ const roomState = (room, mediaId) => ({
 describe('room queue', () => {
   let started;
   let watched;
+  let ready;
 
   beforeEach(() => {
     queueUpdates = 0;
     refreshes = 0;
+    queueStates = 0;
     started = [];
     watched = [];
     OWP.playback = {
       ensurePlayback: mediaId => { started.push(mediaId); },
-      watchReady: options => { watched.push(options.mediaId); }
+      watchReady: options => { watched.push(options.mediaId); ready = options.onReady; }
     };
     Object.assign(OWP.state, OWP.stateFactories.createRoomState(), {
       clientId: 'host',
@@ -74,7 +77,7 @@ describe('room queue', () => {
     h.handleQueueState(queueState('room-2', { items: [], current: null, countdown_until: null }));
     assert.deepEqual(OWP.state.queueItems, [item('a')]);
     assert.equal(queueUpdates, 2);
-    assert.equal(refreshes, 2);
+    assert.equal(queueStates, 2);
   });
 
   it('lets the host logic look again after each room state and on becoming the host', () => {
@@ -105,6 +108,22 @@ describe('room queue', () => {
     assert.equal(OWP.state.pendingMediaId, 'b');
     assert.equal(OWP.state.readyRoomId, '');
     assert.equal(OWP.state.roomMediaId, 'b');
+  });
+
+  it('lets a play that came while the next item loaded stand over the paused room state', () => {
+    let pauses = 0;
+    const video = { currentTime: 0, isConnected: true, pause: () => { pauses++; } };
+    Object.assign(OWP.state, { currentVideoElement: null, hasTimeSync: true, serverOffsetMs: 0 });
+    OWP.utils.startSyncing = () => {};
+
+    h.handleRoomState(roomState('room-1', 'b'), null);
+    ready(video);
+    assert.equal(pauses, 1);
+
+    h.handleRoomState(roomState('room-1', 'c'), null);
+    OWP.state.playbackActionAttempt++; // the room's scheduled play arrived
+    ready(video);
+    assert.equal(pauses, 1);
   });
 
   it('keeps a host on its item when the room state names the same one', () => {

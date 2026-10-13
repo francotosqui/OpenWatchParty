@@ -80,20 +80,31 @@
 
   const report = (what, err) => utils.log('QUEUE', { what, error: err?.name || 'Error' });
 
-  // The item whose countdown the host cancelled: it doesn't start again on it.
+  // The room and item whose countdown the host cancelled: it doesn't start
+  // again on that item in that room.
   let cancelledFor = '';
+  const cancelKey = () => `${state.roomId}|${state.roomMediaId}`;
   // The last countdown request, until a queue_state answers it.
   let countdownRequest = '';
 
   // After room_state and queue_state, and when this client becomes the host.
   queue.refresh = () => {
-    countdownRequest = '';
     if (!isQueueHost() || !state.roomMediaId || !window.ApiClient) return;
     if (credits.mediaId !== state.roomMediaId) loadCredits(state.roomMediaId).catch(err => report('credits', err));
     fill().catch((err) => {
       fillAttempt = '';
       report('fill', err);
     });
+  };
+
+  // A queue_state answers the last countdown request. The host's video is
+  // looked at again: it may have paused or gone back meanwhile, with no other
+  // event to tell while it stays paused.
+  queue.onQueueState = () => {
+    countdownRequest = '';
+    queue.refresh();
+    const video = utils.getVideo?.();
+    if (video) queue.onVideoTime(video);
   };
 
   const requestCountdown = (start) => {
@@ -125,7 +136,7 @@
     const stopped = video.paused && !video.ended;
     if (state.queueCountdownUntil) {
       if (!inCredits || stopped) requestCountdown(false);
-    } else if (inCredits && !stopped && nextItem() && cancelledFor !== state.roomMediaId) {
+    } else if (inCredits && !stopped && nextItem() && cancelledFor !== cancelKey()) {
       requestCountdown(true);
     }
   };
@@ -137,7 +148,7 @@
     remove: id => send('queue_remove', { id }),
     move: (id, to) => send('queue_move', { id, to }),
     cancelCountdown: () => {
-      cancelledFor = state.roomMediaId;
+      cancelledFor = cancelKey();
       requestCountdown(false);
     }
   });

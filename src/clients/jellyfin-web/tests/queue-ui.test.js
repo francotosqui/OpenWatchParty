@@ -110,6 +110,18 @@ describe('room queue view', () => {
     assert.equal(byId('owp-queue-section').querySelector('.owp-queue-note').textContent, 'The next episodes are added automatically.');
   });
 
+  it('keeps the list as it is when only the countdown changes', () => {
+    enterRoom({ queueItems: ['a', 'b', 'c'].map(item) });
+    const [first] = rows();
+    OWP.state.queueCountdownUntil = Date.now() + 5000;
+    OWP.ui.updateQueue();
+    assert.equal(rows()[0], first);
+    OWP.state.queueItems = ['a', 'b', 'c', 'd'].map(item);
+    OWP.ui.updateQueue();
+    assert.notEqual(rows()[0], first);
+    assert.equal(rows().length, 4);
+  });
+
   it('shows guests the queue without controls', () => {
     enterRoom({ isHost: false, clientId: 'guest', queueItems: ['a', 'b', 'c'].map(item) });
     assert.equal(byId('owp-queue-section').querySelectorAll('button').length, 0);

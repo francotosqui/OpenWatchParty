@@ -114,7 +114,13 @@
       const drop = document.getElementById('owp-room-drop');
       drop?.insertBefore(section, document.getElementById('owp-leave-confirm'));
     }
-    fillSection(section);
+    // A queue_state that only starts or stops the countdown leaves the list,
+    // and the button that has the focus, as they are.
+    const key = JSON.stringify([state.queueItems, state.roomMediaId, state.isHost]);
+    if (section.dataset.key !== key) {
+      section.dataset.key = key;
+      fillSection(section);
+    }
   };
 
   // "Up next" while the server counts down: under the bar when the panel is

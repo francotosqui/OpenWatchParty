@@ -140,11 +140,17 @@
       if (OWP.playback && OWP.playback.ensurePlayback) {
         OWP.playback.ensurePlayback(msg.payload.media_id);
       }
+      // After an advance, a play or pause that came while the item loaded is
+      // newer than this room state, paused at 0, and stands.
+      const actionAttempt = state.playbackActionAttempt;
       if (OWP.playback?.watchReady) {
         OWP.playback.watchReady({
           roomId: msg.room,
           mediaId: msg.payload.media_id,
-          onReady: readyVideo => scheduleRoomSync(msg, readyVideo, acceptedAsGuest)
+          onReady: (readyVideo) => {
+            if (advanced && state.playbackActionAttempt !== actionAttempt) return;
+            scheduleRoomSync(msg, readyVideo, acceptedAsGuest);
+          }
         });
       }
       return;

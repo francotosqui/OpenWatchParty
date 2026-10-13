@@ -10,6 +10,8 @@ let segmentRequests = 0;
 OWP.actions = { send: (type, payload) => sent.push({ type, payload }) };
 OWP.utils.log = () => {};
 OWP.utils.getPlayingItemId = () => playing;
+let hostVideo = null;
+OWP.utils.getVideo = () => hostVideo;
 
 // A series of nine episodes, the fourth missing from the library, and a movie.
 const series = Array.from({ length: 9 }, (_, i) => ({
@@ -69,6 +71,7 @@ describe('host queue', () => {
     itemRequests = 0;
     segments = {};
     segmentRequests = 0;
+    hostVideo = null;
   });
 
   it('fills an empty queue with the room episode and the next five in the library', async () => {
@@ -140,14 +143,14 @@ describe('host queue', () => {
 
     // The server's queue_state answers each request.
     Object.assign(OWP.state, { queueCountdownUntil: 1 });
-    OWP.queue.refresh();
+    OWP.queue.onQueueState();
     OWP.queue.onVideoTime(video(1202, { paused: true }));
     Object.assign(OWP.state, { queueCountdownUntil: 0 });
-    OWP.queue.refresh();
+    OWP.queue.onQueueState();
     OWP.queue.onVideoTime(video(1202, { paused: true }));
     OWP.queue.onVideoTime(video(1203));
     Object.assign(OWP.state, { queueCountdownUntil: 1 });
-    OWP.queue.refresh();
+    OWP.queue.onQueueState();
     OWP.queue.onVideoTime(video(900));
     assert.deepEqual(countdowns(), [true, false, true, false]);
   });
@@ -161,12 +164,39 @@ describe('host queue', () => {
     OWP.queue.onVideoTime(video(1250));
     // The host removes e8, which ends the countdown, and e9 is queued after.
     Object.assign(OWP.state, { queueItems: ['e6', 'e7'].map(item), queueCountdownUntil: 0 });
-    OWP.queue.refresh();
+    OWP.queue.onQueueState();
     OWP.queue.onVideoTime(video(1251));
     Object.assign(OWP.state, { queueItems: ['e6', 'e7', 'e9'].map(item) });
-    OWP.queue.refresh();
+    OWP.queue.onQueueState();
     OWP.queue.onVideoTime(video(1252));
     assert.deepEqual(countdowns(), [true, true]);
+  });
+
+  it('stops a countdown the room paused before the server confirmed it', async () => {
+    segments = { e2: [{ Type: 'Outro', StartTicks: 1200 * 10000000 }] };
+    enterRoom({ roomMediaId: 'e2', queueItems: ['e1', 'e2', 'e3'].map(item) });
+    playing = 'e2';
+    OWP.queue.refresh();
+    await settle();
+    OWP.queue.onVideoTime(video(1201));
+    // The host pauses; then the server's queue_state confirms the countdown.
+    hostVideo = video(1202, { paused: true });
+    OWP.queue.onVideoTime(hostVideo);
+    Object.assign(OWP.state, { queueCountdownUntil: 1 });
+    OWP.queue.onQueueState();
+    assert.deepEqual(countdowns(), [true, false]);
+  });
+
+  it('counts down again in another room after a cancel', async () => {
+    segments = { e1: [{ Type: 'Outro', StartTicks: 1200 * 10000000 }] };
+    enterRoom({ roomMediaId: 'e1', queueItems: ['e1', 'e2'].map(item), queueCountdownUntil: 1 });
+    playing = 'e1';
+    OWP.queue.cancelCountdown();
+    enterRoom({ roomMediaId: 'e1', queueItems: ['e1', 'e2'].map(item) });
+    OWP.queue.refresh();
+    await settle();
+    OWP.queue.onVideoTime(video(1250));
+    assert.deepEqual(countdowns(), [false, true]);
   });
 
   it('does not count down again on an item whose countdown the host cancelled', async () => {
@@ -177,7 +207,7 @@ describe('host queue', () => {
     await settle();
     OWP.queue.cancelCountdown();
     Object.assign(OWP.state, { queueCountdownUntil: 0 });
-    OWP.queue.refresh();
+    OWP.queue.onQueueState();
     OWP.queue.onVideoTime(video(1250));
     assert.deepEqual(countdowns(), [false]);
   });
@@ -197,7 +227,7 @@ describe('host queue', () => {
 
     // The browser pauses at the end: the countdown keeps going.
     Object.assign(OWP.state, { queueCountdownUntil: 1 });
-    OWP.queue.refresh();
+    OWP.queue.onQueueState();
     OWP.queue.onVideoTime(video(1400, { duration: 1400, paused: true, ended: true }));
     assert.deepEqual(countdowns(), [true]);
 

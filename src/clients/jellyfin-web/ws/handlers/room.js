@@ -59,7 +59,7 @@
     state.queueCurrent = msg.payload.current;
     state.queueCountdownUntil = msg.payload.countdown_until || 0;
     if (ui.updateQueue) ui.updateQueue();
-    if (OWP.queue?.refresh) OWP.queue.refresh();
+    if (OWP.queue?.onQueueState) OWP.queue.onQueueState();
   };
 
   h.handleParticipantList = (msg) => {
