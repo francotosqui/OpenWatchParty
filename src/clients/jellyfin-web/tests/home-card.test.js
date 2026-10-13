@@ -7,6 +7,7 @@ globalThis.document = new FakeDocument();
 OWP.ui = {};
 require('../ui/toasts.js');
 require('../ui/cards.js');
+require('../ui/home.js');
 require('../playback/play.js');
 
 const MEDIA_ID = '0123456789abcdef0123456789abcdef';
@@ -117,6 +118,30 @@ describe('home Watch Parties card', () => {
     OWP.ui.updateRoomCardCount(card, 3);
     assert.equal(card.dataset.count, '3');
     assert.equal(card.querySelector('.owp-card-count').textContent, 'groups 3 watching');
+  });
+
+  it('keeps a card for a new head count and replaces it, in place, for a new item', async () => {
+    window.ApiClient = { getCurrentUserId: () => 'user', serverAddress: () => '', getItem: async () => ({ Name: 'Episode' }) };
+    OWP.utils.isHomeView = () => true;
+    const home = document.createElement('div');
+    home.className = 'homeSectionsContainer';
+    document.body.appendChild(home);
+    const NEXT = 'fedcba9876543210fedcba9876543210';
+    const cards = () => home.querySelectorAll('.owp-room-card');
+    const show = rooms => {
+      OWP.state.rooms = rooms;
+      OWP.ui.renderHomeWatchParties();
+    };
+
+    show([room, { ...room, id: 'room-2' }]);
+    const [first] = cards();
+    show([{ ...room, count: 3 }, { ...room, id: 'room-2' }]);
+    assert.equal(cards()[0], first);
+    assert.equal(first.dataset.count, '3');
+
+    show([{ ...room, count: 3, media_id: NEXT }, { ...room, id: 'room-2' }]);
+    assert.notEqual(cards()[0], first);
+    assert.deepEqual(cards().map(card => [card.dataset.roomId, card.dataset.mediaId]), [['room-1', NEXT], ['room-2', MEDIA_ID]]);
   });
 });
 
