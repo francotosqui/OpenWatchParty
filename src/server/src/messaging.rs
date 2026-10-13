@@ -229,6 +229,7 @@ mod tests {
                 statuses: HashMap::new(),
                 status_broadcast: Default::default(),
                 guest_command_until: None,
+                queue: Default::default(),
             },
         );
         rooms.insert(
@@ -254,6 +255,7 @@ mod tests {
                 statuses: HashMap::new(),
                 status_broadcast: Default::default(),
                 guest_command_until: None,
+                queue: Default::default(),
             },
         );
         let msg = build_room_list_msg(&rooms);

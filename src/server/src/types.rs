@@ -63,6 +63,8 @@ pub struct Room {
     /// updates sent before the host applied it.
     #[serde(skip)]
     pub guest_command_until: Option<Instant>,
+    #[serde(skip)]
+    pub queue: crate::room::MediaQueue,
 }
 
 #[derive(Debug, Clone)]

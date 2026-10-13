@@ -74,6 +74,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         statuses: HashMap::new(),
         status_broadcast: Default::default(),
         guest_command_until: None,
+        queue: Default::default(),
     }
 }
 
