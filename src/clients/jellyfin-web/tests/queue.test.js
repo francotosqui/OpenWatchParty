@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const OWP = require('./setup.js');
 
 let queueUpdates = 0;
+let refreshes = 0;
+OWP.queue = { refresh: () => { refreshes++; } };
 OWP.ui = { render: () => {}, updateQueue: () => { queueUpdates++; } };
 OWP.utils.getVideo = () => null;
 OWP.utils.log = () => {};
@@ -37,6 +39,7 @@ describe('room queue', () => {
 
   beforeEach(() => {
     queueUpdates = 0;
+    refreshes = 0;
     started = [];
     watched = [];
     OWP.playback = {
@@ -71,6 +74,19 @@ describe('room queue', () => {
     h.handleQueueState(queueState('room-2', { items: [], current: null, countdown_until: null }));
     assert.deepEqual(OWP.state.queueItems, [item('a')]);
     assert.equal(queueUpdates, 2);
+    assert.equal(refreshes, 2);
+  });
+
+  it('lets the host logic look again after each room state and on becoming the host', () => {
+    h.handleRoomState(roomState('room-1', 'a'), null);
+    assert.equal(refreshes, 1);
+    OWP.ui.updateRoomRoleControls = () => {};
+    OWP.ui.showToast = () => {};
+    Object.assign(OWP.state, { isHost: false, clientId: 'guest' });
+    h.handleHostChanged({ room: 'room-1', payload: { host_id: 'other', host_name: 'Other' } });
+    assert.equal(refreshes, 1);
+    h.handleHostChanged({ room: 'room-1', payload: { host_id: 'guest', host_name: 'Guest' } });
+    assert.equal(refreshes, 2);
   });
 
   it('forgets the queue on entering another room', () => {

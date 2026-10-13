@@ -59,6 +59,7 @@
     state.queueCurrent = msg.payload.current;
     state.queueCountdownUntil = msg.payload.countdown_until || 0;
     if (ui.updateQueue) ui.updateQueue();
+    if (OWP.queue?.refresh) OWP.queue.refresh();
   };
 
   h.handleParticipantList = (msg) => {
@@ -96,6 +97,7 @@
     if (becameHost && OWP.playback?.syncPromotedGuest) {
       OWP.playback.syncPromotedGuest(state.currentVideoElement || OWP.utils.getVideo());
     }
+    if (becameHost && OWP.queue?.refresh) OWP.queue.refresh();
     ui.render();
     if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();
     ui.showToast(becameHost ? t('youAreHost') : t('nowHost', { name: msg.payload.host_name }));

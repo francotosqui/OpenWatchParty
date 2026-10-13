@@ -133,6 +133,7 @@
     state.inviteJoinPending = false;
     if (OWP.actions?.completeRoomRejoin) OWP.actions.completeRoomRejoin(msg.room);
     ui.render();
+    if (OWP.queue?.refresh) OWP.queue.refresh();
     if (acceptedAsGuest && msg.payload?.media_id) {
       state.pendingMediaId = msg.payload.media_id;
       state.pendingMediaUntil = 0;

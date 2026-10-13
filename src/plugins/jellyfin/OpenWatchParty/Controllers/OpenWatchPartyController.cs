@@ -69,6 +69,7 @@ public class OpenWatchPartyController : ControllerBase
         "ws/handlers/clock.js",
         "ws/connection.js",
         "app/invite.js",
+        "app/queue.js",
         "app/lifecycle.js",
         "app/cleanup.js"
     };

@@ -191,6 +191,7 @@
         if (state.inRoom && !state.isHost && !state.sharedPlaybackControl && state.lastSyncPlayState === 'playing') state.guestPaused = true;
         onGuestEvent('pause', video);
         onHostEvent('pause', video);
+        if (OWP.queue?.onVideoTime) OWP.queue.onVideoTime(video);
       },
       seeked: () => {
         utils.log('VIDEO', { event: 'seeked', pos: video.currentTime });
@@ -213,6 +214,7 @@
         if (video.readyState < 2 || video.seeking) return;
         state.lastPlayedPosition = video.currentTime;
         state.lastPlayedPlaying = !video.paused;
+        if (OWP.queue?.onVideoTime) OWP.queue.onVideoTime(video);
       }
     };
   };

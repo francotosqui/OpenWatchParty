@@ -904,6 +904,19 @@ describe('host transfer client support', () => {
     assert.equal(sent.some(message => message.type === 'player_event' && message.payload.action === 'play'), true);
   });
 
+  it('passes the video time and pauses on to the room queue', () => {
+    const seen = [];
+    OWP.queue = { onVideoTime: video => seen.push(video.currentTime) };
+    const video = new FakeVideo({ currentTime: 3 });
+    OWP.state.currentVideoElement = video;
+    OWP.playback.bindVideo();
+    video.listeners.get('timeupdate')();
+    video.currentTime = 4;
+    video.pause();
+    delete OWP.queue;
+    assert.deepEqual(seen, [3, 4]);
+  });
+
   it('does not gate a regular host for a future room state', async () => {
     const sent = [];
     const video = new FakeVideo({ currentTime: 10 });
