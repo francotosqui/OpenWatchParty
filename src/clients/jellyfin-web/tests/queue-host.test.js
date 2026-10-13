@@ -45,7 +45,7 @@ const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 const item = id => ({ id, title: `S1:E${id.slice(1)} · Ep ${id.slice(1)}` });
 const ids = message => message.payload.items.map(entry => entry.id);
 const countdowns = () => sent.filter(message => message.type === 'queue_countdown').map(message => message.payload.start);
-const video = (currentTime, { paused = false, ended = false } = {}) => ({ currentTime, paused, ended });
+const video = (currentTime, { paused = false, ended = false, duration = NaN } = {}) => ({ currentTime, paused, ended, duration });
 
 let room = 0;
 const enterRoom = (fields = {}) => {
@@ -182,13 +182,23 @@ describe('host queue', () => {
     assert.deepEqual(countdowns(), [false]);
   });
 
-  it('counts down at the end of an item without credits, and only toward a next item', async () => {
+  // Jellyfin closes the player at the end, so the room must move on before it.
+  it('counts down 15 seconds before the end of an item without credits, and only toward a next item', async () => {
     enterRoom({ roomMediaId: 'e6', queueItems: ['e1', 'e2', 'e3', 'e5', 'e6', 'e7'].map(item) });
     playing = 'e6';
     OWP.queue.refresh();
     await settle();
-    OWP.queue.onVideoTime(video(1300));
-    OWP.queue.onVideoTime(video(1400, { paused: true, ended: true }));
+    // Nothing to go by until the video knows its duration.
+    OWP.queue.onVideoTime(video(1385));
+    assert.deepEqual(countdowns(), []);
+    OWP.queue.onVideoTime(video(1384, { duration: 1400 }));
+    OWP.queue.onVideoTime(video(1385, { duration: 1400 }));
+    assert.deepEqual(countdowns(), [true]);
+
+    // The browser pauses at the end: the countdown keeps going.
+    Object.assign(OWP.state, { queueCountdownUntil: 1 });
+    OWP.queue.refresh();
+    OWP.queue.onVideoTime(video(1400, { duration: 1400, paused: true, ended: true }));
     assert.deepEqual(countdowns(), [true]);
 
     sent = [];
@@ -196,8 +206,19 @@ describe('host queue', () => {
     playing = 'e9';
     OWP.queue.refresh();
     await settle();
-    OWP.queue.onVideoTime(video(1400, { paused: true, ended: true }));
+    OWP.queue.onVideoTime(video(1390, { duration: 1400 }));
     assert.deepEqual(countdowns(), []);
+  });
+
+  it('counts down before credits shorter than the countdown', async () => {
+    segments = { e8: [{ Type: 'Outro', StartTicks: 1395 * 10000000 }] };
+    enterRoom({ roomMediaId: 'e8', queueItems: ['e7', 'e8', 'e9'].map(item) });
+    playing = 'e8';
+    OWP.queue.refresh();
+    await settle();
+    OWP.queue.onVideoTime(video(1384, { duration: 1400 }));
+    OWP.queue.onVideoTime(video(1385, { duration: 1400 }));
+    assert.deepEqual(countdowns(), [true]);
   });
 
   it('waits for the room item to play before counting down', async () => {
@@ -205,7 +226,7 @@ describe('host queue', () => {
     playing = 'e1';
     OWP.queue.refresh();
     await settle();
-    OWP.queue.onVideoTime(video(1400, { paused: true, ended: true }));
+    OWP.queue.onVideoTime(video(1390, { duration: 1400 }));
     assert.deepEqual(countdowns(), []);
   });
 });

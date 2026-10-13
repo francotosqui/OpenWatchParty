@@ -61,6 +61,7 @@ describe('the host switches an audio or subtitle track', () => {
       currentVideoElement: null,
       videoListeners: null,
       streamReloadUntil: 0,
+      pendingMediaId: '',
       lastPlayedPosition: 0,
       lastPlayedPlaying: false,
       lastSentPosition: 0,
@@ -101,6 +102,14 @@ describe('the host switches an audio or subtitle track', () => {
       'player_event play 738.13'
     ]);
     assert.equal(OWP.state.streamReloadUntil, 0);
+  });
+
+  it("does not take opening the room's next queue item for a reload", () => {
+    video.fire('timeupdate', { currentTime: 600, readyState: 4, paused: false });
+    OWP.state.pendingMediaId = 'next-item';
+    video.fire('emptied', { currentTime: 0, readyState: 0, paused: true });
+    assert.equal(OWP.state.streamReloadUntil, 0);
+    assert.deepEqual(events(), []);
   });
 
   it('broadcasts the host again once the reload has played', () => {

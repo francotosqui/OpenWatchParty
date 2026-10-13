@@ -103,13 +103,25 @@
     send('queue_countdown', { start });
   };
 
-  // From the host's video events: the countdown starts at the credits, or at
-  // the end without them, and stops when the room pauses or the host goes back
-  // before them. The browser also pauses at the end, which keeps it going.
+  // Jellyfin closes the player when a video ends, which takes everyone out of
+  // the room, so the countdown starts this long before the end at the latest
+  // and the room moves on while the video still plays.
+  const END_MARGIN_S = OWP.constants.QUEUE_COUNTDOWN_MS / 1000 + 5;
+
+  const countdownStart = (video) => {
+    const outro = credits.mediaId === state.roomMediaId ? credits.start : null;
+    const latest = Number.isFinite(video.duration) ? video.duration - END_MARGIN_S : null;
+    if (outro === null || latest === null) return outro ?? latest;
+    return Math.min(outro, latest);
+  };
+
+  // From the host's video events: the countdown starts at the credits, and
+  // stops when the room pauses or the host goes back before them. The browser
+  // also pauses at the end, which keeps it going.
   queue.onVideoTime = (video) => {
     if (!isQueueHost() || !state.roomMediaId || utils.getPlayingItemId?.() !== state.roomMediaId) return;
-    const creditsStart = credits.mediaId === state.roomMediaId ? credits.start : null;
-    const inCredits = video.ended || (creditsStart !== null && video.currentTime >= creditsStart);
+    const start = countdownStart(video);
+    const inCredits = start !== null && video.currentTime >= start;
     const stopped = video.paused && !video.ended;
     if (state.queueCountdownUntil) {
       if (!inCredits || stopped) requestCountdown(false);
