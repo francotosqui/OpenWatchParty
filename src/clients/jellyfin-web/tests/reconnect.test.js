@@ -164,6 +164,9 @@ describe('room reconnection lifecycle', () => {
       roomId: 'room-a',
       isHost: false,
       participants: [{ name: 'Old', isHost: true }],
+      queueItems: [{ id: 'old', title: 'Old' }],
+      queueCurrent: 0,
+      queueCountdownUntil: 1234,
       roomBarSection: 'leave',
       lastRttMs: 12,
       currentVideoElement: video
@@ -174,6 +177,9 @@ describe('room reconnection lifecycle', () => {
     assert.equal(video.playbackRate, 1);
     assert.equal(OWP.state.inRoom, false);
     assert.deepEqual(OWP.state.participants, []);
+    assert.deepEqual(OWP.state.queueItems, []);
+    assert.equal(OWP.state.queueCurrent, null);
+    assert.equal(OWP.state.queueCountdownUntil, 0);
     assert.equal(OWP.state.roomBarSection, '');
     assert.equal(OWP.state.desiredRoomId, 'room-a');
     assert.equal(OWP.state.rejoinPending, true);
@@ -202,6 +208,11 @@ describe('room reconnection lifecycle', () => {
       { name: 'Host', isHost: true, status: null },
       { name: 'Guest', isHost: false, status: null }
     ]);
+
+    const items = [{ id: 'a', title: 'Pilot' }, { id: 'b', title: 'Second' }];
+    second.receive({ type: 'queue_state', room: 'room-a', payload: { items, current: 0, countdown_until: null } });
+    assert.deepEqual(OWP.state.queueItems, items);
+    assert.equal(OWP.state.queueCurrent, 0);
   });
 
   it('reports the previous WebSocket close after reconnecting', async () => {

@@ -7,6 +7,7 @@
   const MAX_ROOM_NAME_LENGTH = 128;
   const MAX_CHAT_LENGTH = 500;
   const MAX_ID_LENGTH = 128;
+  const MAX_QUEUE_ITEMS = 20;
   const PLAY_STATES = new Set(['playing', 'paused']);
   const PLAYER_ACTIONS = new Set(['play', 'pause', 'seek', 'buffering']);
   const PARTICIPANT_STATUSES = new Set(['playing', 'paused', 'in_sync', 'catching_up', 'buffering', 'loading', 'blocked', 'not_watching']);
@@ -150,6 +151,21 @@
     return string(message.payload.text, MAX_CHAT_LENGTH) ? null : 'chat text is invalid';
   };
 
+  // The room's queue, with the room's item at `current` (null when it isn't
+  // queued) and the server time of the next advance, if one is counting down.
+  const validateQueueState = (message) => {
+    if (!payloadObject(message)) return 'payload must be an object';
+    const { items, current, countdown_until: countdownUntil } = message.payload;
+    if (!onlyKeys(message.payload, ['items', 'current', 'countdown_until'])) return 'queue_state has unknown fields';
+    if (!Array.isArray(items) || items.length > MAX_QUEUE_ITEMS) return 'items is invalid';
+    for (const item of items) {
+      if (!object(item) || !onlyKeys(item, ['id', 'title'])) return 'queue item is invalid';
+      if (!string(item.id, MAX_ID_LENGTH) || !string(item.title, MAX_NAME_LENGTH)) return 'queue item is invalid';
+    }
+    if (!nullable(current, value => Number.isInteger(value) && value >= 0 && value < items.length)) return 'current is invalid';
+    return nullable(countdownUntil, timestamp) ? null : 'countdown_until is invalid';
+  };
+
   const validateError = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
     if (!onlyKeys(message.payload, ['code', 'message'])) return 'error has unknown fields';
@@ -174,6 +190,7 @@
     state_update: validateStateUpdate,
     pong: validatePong,
     chat_message: validateChat,
+    queue_state: validateQueueState,
     error: validateError
   };
   const roomRequired = new Set([
@@ -187,7 +204,8 @@
     'room_closed',
     'player_event',
     'state_update',
-    'chat_message'
+    'chat_message',
+    'queue_state'
   ]);
   const envelopeKeys = ['type', 'room', 'client', 'payload', 'ts', 'server_ts'];
 

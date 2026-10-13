@@ -11,10 +11,12 @@
     if (msg.room !== state.roomId) {
       state.participants = [];
       state.sharedPlaybackControl = false;
+      Object.assign(state, OWP.stateFactories.createQueueState());
     }
     state.inRoom = true;
     state.roomId = msg.room;
     state.roomName = msg.payload.name;
+    state.roomMediaId = msg.payload.media_id || '';
     state.participantCount = msg.payload.participant_count;
     if (!state.clientId && msg.client) {
       state.clientId = msg.client;
@@ -121,8 +123,13 @@
   h.handleRoomState = (msg, video) => {
     if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) return;
     if (!state.rejoinPending && state.rejectedRejoinRoomIds.includes(msg.room)) return;
+    // The room moved from its item to another queue item: everyone, the host
+    // too, loads it as on joining and reports ready again.
+    const advanced = msg.room === state.roomId && Boolean(state.roomMediaId)
+      && Boolean(msg.payload?.media_id) && msg.payload.media_id !== state.roomMediaId;
     applyRoomState(msg);
-    const acceptedAsGuest = !state.isHost;
+    if (advanced) state.readyRoomId = '';
+    const acceptedAsGuest = !state.isHost || advanced;
     state.inviteJoinPending = false;
     if (OWP.actions?.completeRoomRejoin) OWP.actions.completeRoomRejoin(msg.room);
     ui.render();

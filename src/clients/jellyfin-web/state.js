@@ -104,7 +104,7 @@
     SYNCPLAY_HIDE_STYLE_ID: 'owp-hide-native-syncplay',
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -156,6 +156,13 @@
   // Factories are the sole defaults for each domain; resets never copy credentials
   // or reset monotonic attempt counters from a whole-state snapshot.
 
+  // The room's queue, from queue_state when the server has media_queue.
+  const createQueueState = () => ({
+    queueItems: [],         // [{ id, title }]
+    queueCurrent: null,     // Index of the room's item in queueItems, or null
+    queueCountdownUntil: 0, // Server time the room moves to the next item, 0 without a countdown
+  });
+
   const createRoomState = () => ({
     roomId: '',
     isHost: false,
@@ -173,8 +180,10 @@
     lastSyncPlayState: '',
     roomWaiting: false,
     roomHostId: '',
+    roomMediaId: '',       // The room's item, from room_state: a change is a queue advance
     sharedPlaybackControl: false,
     readyRoomId: '',
+    ...createQueueState(),
   });
 
   const createRoomPlaybackState = () => ({
@@ -313,7 +322,7 @@
   });
 
   OWP.stateFactories = {
-    createState, createRoomState, createRoomPlaybackState, createConnectionSessionState,
+    createState, createRoomState, createQueueState, createRoomPlaybackState, createConnectionSessionState,
     createRoomUIState, createInviteWorkState
   };
   // A loader retry can encounter state from an already loaded module. Install

@@ -53,6 +53,14 @@
     }
   };
 
+  h.handleQueueState = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId) return;
+    state.queueItems = msg.payload.items;
+    state.queueCurrent = msg.payload.current;
+    state.queueCountdownUntil = msg.payload.countdown_until || 0;
+    if (ui.updateQueue) ui.updateQueue();
+  };
+
   h.handleParticipantList = (msg) => {
     if (!state.inRoom || msg.room !== state.roomId) return;
     // The statuses for this list follow in participant_statuses.

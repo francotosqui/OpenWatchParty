@@ -24,6 +24,27 @@ describe('WebSocket message schema validation', () => {
     }
     invalid(envelope('room_capabilities', { features: [] }));
   });
+
+  it('validates the room queue strictly', () => {
+    const item = { id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', title: 'Pilot' };
+    const queue = payload => envelope('queue_state', payload, { room: 'room-1' });
+    valid(queue({ items: [item], current: 0, countdown_until: 1_700_000_010_000 }));
+    valid(queue({ items: [], current: null, countdown_until: null }));
+    for (const payload of [
+      { items: [item], current: 0 },
+      { items: [item], current: 1, countdown_until: null },
+      { items: [item], current: -1, countdown_until: null },
+      { items: [item], current: 0.5, countdown_until: null },
+      { items: [{ ...item, extra: true }], current: 0, countdown_until: null },
+      { items: [{ id: item.id, title: '' }], current: 0, countdown_until: null },
+      { items: Array(21).fill(item), current: null, countdown_until: null },
+      { items: [item], current: 0, countdown_until: -1 },
+      { items: [item], current: 0, countdown_until: null, extra: true }
+    ]) {
+      invalid(queue(payload));
+    }
+    invalid(envelope('queue_state', { items: [], current: null, countdown_until: null }));
+  });
   const nominal = [
     envelope('room_list', [{ id: 'room-1', name: 'Movie night', count: 2, media_id: null }]),
     envelope('client_hello', { client_id: 'client-1' }, { client: 'client-1' }),
