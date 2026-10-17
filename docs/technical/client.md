@@ -41,7 +41,7 @@ Modules are loaded in dependency waves, parallelizing where possible:
 
 ### Panel views
 
-`render.js` coordinates redraws and the OSD entry point. Shared controls and
+`render.js` coordinates redraws. Shared controls and
 focus helpers live in `panel-elements.js`; lobby and help in `lobby.js`;
 participant presentation in `participants.js`; leave confirmation in
 `leave-confirm.js`; room sections and chat input setup in `room.js`.
@@ -62,7 +62,6 @@ Defines global shared state and configuration constants.
 | Constant | Type | Value | Description |
 |----------|------|-------|-------------|
 | `PANEL_ID` | string | `'owp-panel'` | Panel element ID |
-| `BTN_ID` | string | `'owp-osd-btn'` | OSD button ID |
 | `HEADER_BTN_CLASS` | string | `'owp-header-btn'` | Class of the header buttons |
 | `LEGACY_HEADER_BTN_ID` | string | `'owp-header-btn-legacy'` | Header button ID (legacy `.headerRight`) |
 | `MODERN_HEADER_BTN_ID` | string | `'owp-header-btn-modern'` | Header button ID (MUI app bar) |
@@ -478,17 +477,14 @@ Main panel render:
 - **Lobby**: Room list + creation form
 - **In-room**: Compact bar with the sync dot, latency, room name, participants, chat and leave buttons, plus their drop-downs
 
-#### `injectOsdButton() -> void`
-Injects "Watch Party" button into the OSD controls of the shown player page, and moves it there from a player page Jellyfin has hidden.
-
 #### `injectHeaderButtons() -> void`
-Puts a "Watch Party" button first in each Jellyfin 12 header: the legacy `.skinHeader .headerRight` and the MUI app bar box holding SyncPlay, Cast and Search. A `MutationObserver` coalesced per animation frame puts it back when Jellyfin rebuilds a header and keeps a panel opened from the header placed below it (falling back to the default placement while no header button is shown, as in the player). Unless such a panel is open, only changes inside a header or a newly added header trigger the lookup, so busy pages (the player, chat, library grids) don't; the periodic UI check catches anything else.
+Puts a "Watch Party" button first in each Jellyfin 12 header: the legacy `.skinHeader .headerRight` and the MUI box holding SyncPlay and Cast, in the app bar (with Search) or in the player's own header. A `MutationObserver` coalesced per animation frame puts it back when Jellyfin rebuilds a header and keeps a panel opened from the header placed below it (falling back to the default placement while no header button is shown, as in the player). Unless such a panel is open, only changes inside a header or a newly added header trigger the lookup, so busy pages (the player, chat, library grids) don't; the periodic UI check catches anything else.
 
 #### `removeHeaderButtons() -> void`
 Removes the header buttons and stops their observers and listeners.
 
 #### `resetPanelPlacement(panel) -> void`
-Restores the default panel placement used by the player button.
+Restores the default panel placement, away from the header.
 
 #### `updateCreateRoomButton() -> void`
 Enables "Create Room" only while something is playing; otherwise shows a hint.
@@ -535,7 +531,7 @@ Main entry point, initialization loops, and cleanup management.
 
 | Interval | Frequency | Action |
 |----------|-----------|--------|
-| UI check | 2000ms | Inject header and OSD buttons, update "Create Room", bind video, detect video player exit |
+| UI check | 2000ms | Inject header buttons, update "Create Room", bind video, detect video player exit |
 | Ping | 10000ms | Send ping for RTT measurement |
 | Home render | 5000ms | Refresh watch parties on home page |
 | Sync loop | 500ms | Execute synchronization loop (non-hosts only) |
