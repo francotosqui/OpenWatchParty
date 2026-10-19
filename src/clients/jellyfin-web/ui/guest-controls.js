@@ -178,8 +178,20 @@
     }
   };
 
+  // Outside a room there is nothing to lock: the locks a room left are cleared
+  // once, and the 500 ms tick then does nothing until the next room.
+  let clearedOutsideRoom = false;
+
   const updateGuestControls = () => {
     const root = document.documentElement;
+    if (!state.inRoom) {
+      if (clearedOutsideRoom) return;
+      clearedOutsideRoom = true;
+      root.classList.remove(LOCKED_CLASS, PLAY_LOCKED_CLASS);
+      removeLabel();
+      return;
+    }
+    clearedOutsideRoom = false;
     const video = getVideo();
     const locked = isGuestLocked(video);
     root.classList.toggle(LOCKED_CLASS, locked);
