@@ -19,7 +19,7 @@ Before using OpenWatchParty, ensure your Jellyfin administrator has:
 ## Creating a Watch Party
 
 1. **Start playing a video** - Open any movie or TV episode in Jellyfin
-2. **Find the Watch Party button** - Open the player controls and select the **Watch Party** icon (a screen with two viewers)
+2. **Find the Watch Party button** - Move the pointer over the video to reveal the player header, then select the **Watch Party** icon (a screen with two viewers) next to **Cast**
 3. **Click to open the panel** - A slide-out panel appears
 4. **Click "Create Room"** - The room is created and named after you (`<you>'s room`)
 5. **Wait for participants** - The room appears in everyone's "Available rooms" list and on the Jellyfin home page
@@ -35,7 +35,7 @@ As the host, you control playback for everyone. When you play, pause, or seek, a
 ## Joining a Watch Party
 
 ### From the Header
-1. **Click the Watch Party button in the Jellyfin header** - Next to SyncPlay, Cast and Search, on the pages that show the header (in the player, use the OSD button); nothing needs to be playing
+1. **Click the Watch Party button in the Jellyfin header** - Next to SyncPlay and Cast, with Search on the pages that show the app bar; nothing needs to be playing
 2. **Find the room** - Rooms appear in the list with participant counts
 3. **Click "Join"** - OpenWatchParty starts the room's movie and syncs you to the host's position
 
