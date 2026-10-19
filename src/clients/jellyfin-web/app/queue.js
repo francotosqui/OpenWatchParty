@@ -32,13 +32,20 @@
     ? t('queueEpisodeTitle', { season: episode.ParentIndexNumber, episode: episode.IndexNumber, name: episode.Name || '' })
     : episode.Name || episode.Id);
 
-  // Filling goes on from the episode this client added last in the room, so
-  // one the host removed doesn't come back. Each starting point is fetched once.
+  // The host fills an empty queue, then tops it up only when the room moves on
+  // from an item this client saw as host. Filling goes on from the episode this
+  // client added last in the room, so one the host removed doesn't come back.
+  // Each room item is looked at once.
   let filled = { roomId: '', id: '' };
-  let fillAttempt = '';
+  let seenItem = '';
 
   const fill = async () => {
     const roomId = state.roomId;
+    const item = `${roomId}|${state.roomMediaId}`;
+    const previous = seenItem;
+    if (previous === item) return;
+    seenItem = item;
+    if (state.queueItems.length && !previous.startsWith(`${roomId}|`)) return;
     const index = roomIndex();
     // A room item that isn't queued leaves the host's list as it is.
     if (state.queueItems.length && index < 0) return;
@@ -46,15 +53,20 @@
     if (upcoming >= UPCOMING) return;
     const lastQueued = state.queueItems[state.queueItems.length - 1]?.id;
     const startId = (filled.roomId === roomId && filled.id) || lastQueued || state.roomMediaId;
-    const attempt = `${roomId}|${startId}`;
-    if (attempt === fillAttempt) return;
-    fillAttempt = attempt;
     const userId = window.ApiClient.getCurrentUserId();
-    const start = await window.ApiClient.getItem(userId, startId);
-    if (start?.Type !== 'Episode' || !start.SeriesId) return;
-    const result = await window.ApiClient.getJSON(window.ApiClient.getUrl(`Shows/${start.SeriesId}/Episodes`, {
-      userId, startItemId: startId, limit: UPCOMING + 10
-    }));
+    let start;
+    let result;
+    try {
+      start = await window.ApiClient.getItem(userId, startId);
+      if (start?.Type !== 'Episode' || !start.SeriesId) return;
+      result = await window.ApiClient.getJSON(window.ApiClient.getUrl(`Shows/${start.SeriesId}/Episodes`, {
+        userId, startItemId: startId, limit: UPCOMING + 10
+      }));
+    } catch (err) {
+      // The next room_state or queue_state tries this item again.
+      if (seenItem === item) seenItem = previous;
+      throw err;
+    }
     if (!isQueueHost() || state.roomId !== roomId) return;
     const episodes = (result?.Items || [])
       .filter(episode => episode.Id !== startId && episode.LocationType !== 'Virtual')
@@ -91,10 +103,7 @@
   queue.refresh = () => {
     if (!isQueueHost() || !state.roomMediaId || !window.ApiClient) return;
     if (credits.mediaId !== state.roomMediaId) loadCredits(state.roomMediaId).catch(err => report('credits', err));
-    fill().catch((err) => {
-      fillAttempt = '';
-      report('fill', err);
-    });
+    fill().catch(err => report('fill', err));
   };
 
   // A queue_state answers the last countdown request. The host's video is

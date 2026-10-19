@@ -7,6 +7,7 @@ let playing = '';
 let itemRequests = 0;
 let segments = {};
 let segmentRequests = 0;
+let failItem = false;
 OWP.actions = { send: (type, payload) => sent.push({ type, payload }) };
 OWP.utils.log = () => {};
 OWP.utils.getPlayingItemId = () => playing;
@@ -29,6 +30,10 @@ globalThis.ApiClient = {
   getCurrentUserId: () => 'user',
   getItem: async (userId, id) => {
     itemRequests++;
+    if (failItem) {
+      failItem = false;
+      throw new Error('offline');
+    }
     return library[id];
   },
   getUrl: (path, params) => ({ path, params }),
@@ -83,16 +88,43 @@ describe('host queue', () => {
     assert.deepEqual(adds[0].payload.items, ['e1', 'e2', 'e3', 'e5', 'e6', 'e7'].map(item));
   });
 
-  it('tops up from the episode it added last, so a removed one stays out', async () => {
+  it('tops up only when the room moves on, from the episode it added last', async () => {
     enterRoom();
     OWP.queue.refresh();
     await settle();
     sent = [];
-    // The room moved on to e2 and the host removed e7.
-    Object.assign(OWP.state, { roomMediaId: 'e2', queueItems: ['e1', 'e2', 'e3', 'e5', 'e6'].map(item) });
+    // The host removed e7: the queue stays one short until the room moves on.
+    Object.assign(OWP.state, { queueItems: ['e1', 'e2', 'e3', 'e5', 'e6'].map(item) });
+    OWP.queue.refresh();
+    await settle();
+    assert.deepEqual(sent, []);
+    Object.assign(OWP.state, { roomMediaId: 'e2' });
     OWP.queue.refresh();
     await settle();
     assert.deepEqual(sent.map(ids), [['e8', 'e9']]);
+  });
+
+  it('leaves the queue it inherits as host alone until the room moves on', async () => {
+    enterRoom({ queueItems: ['e1', 'e2', 'e3'].map(item) });
+    OWP.queue.refresh();
+    await settle();
+    assert.equal(itemRequests, 0);
+    assert.deepEqual(sent, []);
+    Object.assign(OWP.state, { roomMediaId: 'e2' });
+    OWP.queue.refresh();
+    await settle();
+    assert.deepEqual(sent.map(ids), [['e5', 'e6', 'e7', 'e8']]);
+  });
+
+  it('tries the room item again after the library fails to answer', async () => {
+    enterRoom();
+    failItem = true;
+    OWP.queue.refresh();
+    await settle();
+    assert.deepEqual(sent, []);
+    OWP.queue.refresh();
+    await settle();
+    assert.deepEqual(sent.map(ids), [['e1', 'e2', 'e3', 'e5', 'e6', 'e7']]);
   });
 
   it('asks the library once per starting point', async () => {
