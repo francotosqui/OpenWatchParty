@@ -128,8 +128,12 @@ fn validate_secret_quality(secret: &str) -> Result<(), String> {
 
 fn has_obvious_sequence(decoded: &[u8]) -> bool {
     decoded.windows(4).any(|window| {
-        window.windows(2).all(|pair| pair[1] == pair[0] + 1)
-            || window.windows(2).all(|pair| pair[0] == pair[1] + 1)
+        window
+            .windows(2)
+            .all(|pair| pair[0].checked_add(1) == Some(pair[1]))
+            || window
+                .windows(2)
+                .all(|pair| pair[1].checked_add(1) == Some(pair[0]))
     })
 }
 
@@ -468,6 +472,31 @@ mod tests {
             entropy < MIN_ENTROPY_BITS,
             "Weak pattern should have low entropy: {entropy}"
         );
+    }
+
+    #[test]
+    fn test_has_obvious_sequence_does_not_overflow_at_byte_boundary() {
+        for data in [[0xFE, 0xFF, 0x00, 0x01], [0xFF, 0xFF, 0xFF, 0xFF]] {
+            assert!(
+                !has_obvious_sequence(&data),
+                "boundary bytes must not panic or match a sequence: {data:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_has_obvious_sequence_detects_ascending_and_descending_runs() {
+        for (data, expected) in [
+            ([1, 2, 3, 4], true),
+            ([4, 3, 2, 1], true),
+            ([1, 2, 3, 5], false),
+        ] {
+            assert_eq!(
+                has_obvious_sequence(&data),
+                expected,
+                "unexpected sequence detection for {data:?}"
+            );
+        }
     }
 
     #[test]
