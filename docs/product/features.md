@@ -24,8 +24,7 @@ nav_order: 2
 - **HLS support** - Works with Jellyfin's adaptive streaming
 
 ### User Interface
-- **OSD button** - Watch Party button in the video player controls
-- **Header button** - Watch Party button in both Jellyfin 12 headers (MUI and legacy), on the pages that show the header (the player keeps its OSD button); joining from it starts the room's media
+- **Header button** - Watch Party button in the Jellyfin app bar (next to SyncPlay, Cast and Search) and in the player header (next to SyncPlay and Cast); joining from it starts the room's media
 - **Hide native SyncPlay** - Optional admin setting that hides Jellyfin's SyncPlay button
 - **Slide-out panel** - Room list and controls; opened from the header, it hangs from the button like a speech bubble
 - **First-run help** - The panel opens by itself once per browser, with a short help that its **?** button brings back
