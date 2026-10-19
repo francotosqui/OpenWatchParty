@@ -169,7 +169,7 @@ A status changes after it has held for about a second. People on an older versio
 
 ## Watching a series
 
-While the room plays an episode, the host's player fills the room's queue with the next episodes of the series, in Jellyfin's order across seasons, and keeps five of them ahead. Episodes missing from the library are skipped, and one the host removes doesn't come back. A room playing a movie has no queue and works as before.
+While the room plays an episode, the host's player fills the room's queue with the next episodes of the series, in Jellyfin's order across seasons, five ahead, and tops it up each time the room moves to the next one. Episodes missing from the library are skipped, and one the host removes doesn't come back. A room playing a movie has no queue and works as before.
 
 - **Queue** (list icon in the bar) opens the list: watched episodes dimmed with a check, the one playing highlighted as **Watching**, and the upcoming ones numbered.
 - The host can go to the **Previous** or **Next** episode, and play, move up, move down or remove an upcoming one. Guests see the list only.
