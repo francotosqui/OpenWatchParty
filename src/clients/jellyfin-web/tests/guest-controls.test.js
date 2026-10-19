@@ -202,6 +202,36 @@ describe('guest playback controls', () => {
     assert.equal(volume.classList.contains('owp-position-slider-container'), false);
   });
 
+  it('looks the video up only for a guest in a room', () => {
+    let lookups = 0;
+    h.OWP.utils.getVideo = () => {
+      lookups++;
+      return h.video;
+    };
+    const slider = h.sliderRow.querySelector('.osdPositionSlider');
+    const pressAll = () => [
+      h.dispatch('pointerdown', slider),
+      h.dispatch('mousedown', slider),
+      h.dispatch('touchstart', slider),
+      h.dispatch('click', h.buttons.btnRewind),
+      h.dispatch('keydown', h.document.body, { code: 'ArrowLeft' })
+    ];
+
+    for (const fields of [{ inRoom: false, isHost: false }, { inRoom: true, isHost: true }]) {
+      Object.assign(h.OWP.state, fields);
+      const events = pressAll();
+      assert.equal(lookups, 0);
+      assert.ok(events.every(event => !event.defaultPrevented));
+    }
+
+    // A guest's press off the slider doesn't need the video either.
+    Object.assign(h.OWP.state, { inRoom: true, isHost: false });
+    h.dispatch('pointerdown', h.buttons.btnSubtitles);
+    assert.equal(lookups, 0);
+    assert.ok(pressAll().every(event => event.defaultPrevented));
+    assert.equal(lookups, 5);
+  });
+
   it('installs one capture listener of each kind', () => {
     runModule(h.context, 'ui/guest-controls.js');
     assert.equal(h.window.listeners.click.length, 1);
