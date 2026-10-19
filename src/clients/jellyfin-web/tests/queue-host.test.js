@@ -116,6 +116,23 @@ describe('host queue', () => {
     assert.deepEqual(sent.map(ids), [['e5', 'e6', 'e7', 'e8']]);
   });
 
+  it('waits for the queue after reconnecting before topping it up', async () => {
+    enterRoom();
+    OWP.queue.refresh();
+    await settle();
+    sent = [];
+    // The room moved on to e2 while the connection was down: room_state comes
+    // before the queue, which then shows four episodes ahead.
+    Object.assign(OWP.state, { roomMediaId: 'e2', queueItems: [] });
+    OWP.queue.refresh();
+    await settle();
+    assert.deepEqual(sent, []);
+    Object.assign(OWP.state, { queueItems: ['e1', 'e2', 'e3', 'e5', 'e6', 'e7'].map(item) });
+    OWP.queue.refresh();
+    await settle();
+    assert.deepEqual(sent.map(ids), [['e8']]);
+  });
+
   it('tries the room item again after the library fails to answer', async () => {
     enterRoom();
     failItem = true;

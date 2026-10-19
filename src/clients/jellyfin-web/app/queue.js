@@ -44,8 +44,13 @@
     const item = `${roomId}|${state.roomMediaId}`;
     const previous = seenItem;
     if (previous === item) return;
+    const seenRoom = previous.startsWith(`${roomId}|`);
+    // The room's item only changes through the queue, so in a room this
+    // client already saw, an empty queue is one that hasn't arrived yet
+    // after reconnecting: the queue_state that follows decides.
+    if (!state.queueItems.length && seenRoom) return;
     seenItem = item;
-    if (state.queueItems.length && !previous.startsWith(`${roomId}|`)) return;
+    if (state.queueItems.length && !seenRoom) return;
     const index = roomIndex();
     // A room item that isn't queued leaves the host's list as it is.
     if (state.queueItems.length && index < 0) return;
