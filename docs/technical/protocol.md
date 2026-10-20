@@ -144,6 +144,7 @@ Join an existing room.
 - Client removed from `room.ready_clients`
 - Broadcast `participants_update` to other participants
 - Broadcast `participant_list`, then `participant_statuses`, to everyone in the room, including the new client (after its `room_state`)
+- Broadcast `room_list` to all clients, with the room's new count (and the previous room's, when the client moved)
 
 ### `leave_room`
 
@@ -169,7 +170,8 @@ keyed by the authenticated Jellyfin user ID. A new connection for that user can 
 the room during the grace period and reclaim the role with its new client ID. If the
 grace period expires first, the server promotes the earliest transfer-capable member,
 or closes the room when no such member remains. An explicit `leave_room` still
-transfers or closes the room immediately.
+transfers or closes the room immediately. A disconnect broadcasts `room_list` only
+when the client was in a room.
 
 ### `close_room`
 
@@ -701,6 +703,7 @@ Client A                    Server                    Client B
     │                          │◄── join_room ────────────┤
     │◄─ participants_update ───┤─── room_state ──────────►│
     │◄─ participant_list ──────┼─── participant_list ────►│
+    │◄─── room_list ───────────┼─── room_list ───────────►│
     │                          │                          │
     │                          │◄── ready ────────────────┤
     │                          │                          │
