@@ -1523,6 +1523,9 @@ mod tests {
             .unwrap();
         client.recv().await.unwrap(); // client_hello
         let id = state.read().await.clients.keys().next().unwrap().clone();
+        // Silent for longer than the zombie timeout.
+        state.write().await.clients.get_mut(&id).unwrap().last_seen =
+            tokio::time::Instant::now() - Duration::from_secs(61);
 
         crate::tasks::remove_zombie(&id, &state, &tasks).await;
         // A second sweep that finds it gone does not count it again.
