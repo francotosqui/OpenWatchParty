@@ -46,12 +46,12 @@
     }
     #owp-guest-lock-label .owp-guest-lock-icon { font-size: 1.15em; }
     /* Appearance settings: text scale and surface opacity (applyAppearance) */
-    #${PANEL_ID}, .owp-toast-container, .owp-toast-system {
+    #${PANEL_ID}, .owp-toast-container, .owp-toast-system, .owp-queue-next {
       --owp-scale: ${APPEARANCE.textSize.default / APPEARANCE.baseTextSize};
       --owp-surface-alpha: ${APPEARANCE.opacity.default / 100};
     }
     @media (prefers-reduced-transparency: reduce) {
-      #${PANEL_ID}, .owp-toast-container, .owp-toast-system { --owp-surface-alpha: 1 !important; }
+      #${PANEL_ID}, .owp-toast-container, .owp-toast-system, .owp-queue-next { --owp-surface-alpha: 1 !important; }
     }
     /* Same look as the room bar: dark grey, soft border, Jellyfin's font */
     #${PANEL_ID} {
@@ -147,36 +147,37 @@
     .owp-pill-btn.primary:hover { background: #2274c7; color: #fff; }
     .owp-pill-btn.primary[aria-disabled="true"] { background: rgba(255,255,255,0.06); color: #85847e; cursor: not-allowed; }
     .owp-pill-btn.secondary[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
-    .owp-pill-btn.owp-pill-icon { display: inline-flex; align-items: center; gap: 4px; }
-    .owp-pill-btn .owp-icon { width: 12px; height: 12px; }
+    .owp-pill-btn.owp-pill-icon { display: inline-flex; align-items: center; gap: ${px(4)}; }
+    .owp-pill-btn .owp-icon { width: ${px(12)}; height: ${px(12)}; }
     /* The room queue: watched items dimmed, the room's item in blue */
-    .owp-queue-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .owp-queue-head { display: flex; align-items: center; gap: ${px(6)}; margin-bottom: ${px(4)}; }
     .owp-queue-title { flex: 1; font-weight: 500; }
     .owp-queue-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
-    .owp-queue-item { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 3px 4px; border-radius: 6px; }
+    .owp-queue-item { display: flex; align-items: center; gap: ${px(6)}; min-width: 0; padding: ${px(3)} ${px(4)}; border-radius: ${px(6)}; }
     .owp-queue-mark {
-      width: 15px; display: flex; justify-content: center; flex-shrink: 0;
-      color: #85847e; font-size: 11px; font-variant-numeric: tabular-nums;
+      width: ${px(15)}; display: flex; justify-content: center; flex-shrink: 0;
+      color: #85847e; font-size: ${px(11)}; font-variant-numeric: tabular-nums;
     }
     .owp-queue-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .owp-queue-item.done { color: #85847e; }
     .owp-queue-item.current { background: rgba(12, 68, 124, 0.55); color: #e6f1fb; }
     .owp-queue-item.current .owp-queue-mark, .owp-queue-now { color: #85b7eb; }
-    .owp-queue-now { font-size: 11px; flex-shrink: 0; }
+    .owp-queue-now { font-size: ${px(11)}; flex-shrink: 0; }
     .owp-queue-actions { display: flex; flex-shrink: 0; }
-    .owp-queue-actions .owp-bar-btn { height: 22px; padding: 0 4px; }
+    .owp-queue-actions .owp-bar-btn { height: ${px(22)}; padding: 0 ${px(4)}; }
     .owp-queue-actions .owp-bar-btn[aria-disabled="true"] { opacity: 0.35; cursor: default; }
-    .owp-queue-note { margin-top: 6px; font-size: 11px; color: #85847e; }
+    .owp-queue-note { margin-top: ${px(6)}; font-size: ${px(11)}; color: #85847e; }
     /* "Up next": under the bar, or on its own where the bar would be */
     .owp-queue-next {
-      position: relative; overflow: hidden; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px;
-      padding: 6px 8px 6px 10px; border-radius: 12px; box-sizing: border-box;
-      background: rgba(38, 38, 36, 0.97); border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+      position: relative; overflow: hidden; display: flex; flex-wrap: wrap; align-items: center; gap: ${px(6)} ${px(8)};
+      padding: ${px(6)} ${px(8)} ${px(6)} ${px(10)}; border-radius: ${px(12)}; box-sizing: border-box;
+      background: rgba(38, 38, 36, var(--owp-surface-alpha)); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 ${px(4)} ${px(16)} rgba(0,0,0,0.35);
     }
     .owp-queue-next.owp-queue-float {
       position: fixed; top: 72px; right: 20px; z-index: 20000;
-      min-width: 300px; max-width: min(420px, calc(100vw - 40px));
-      color: #ecebe6; font-family: inherit; font-size: 12px;
+      min-width: min(${px(300)}, calc(100vw - 40px)); max-width: min(${px(420)}, calc(100vw - 40px));
+      color: #ecebe6; font-family: inherit; font-size: ${px(12)};
     }
     @media (max-width: 420px) {
       .owp-queue-next.owp-queue-float { left: 8px; right: 8px; min-width: 0; max-width: none; }
@@ -184,8 +185,8 @@
     .owp-queue-next-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .owp-queue-next-text b { font-weight: 500; }
     .owp-queue-next-time { font-weight: 700; font-variant-numeric: tabular-nums; color: #85b7eb; flex-shrink: 0; }
-    .owp-queue-next-actions { width: 100%; display: flex; justify-content: flex-end; gap: 6px; }
-    .owp-queue-next-bar { position: absolute; left: 0; bottom: 0; height: 2px; background: #85b7eb; }
+    .owp-queue-next-actions { width: 100%; display: flex; justify-content: flex-end; gap: ${px(6)}; }
+    .owp-queue-next-bar { position: absolute; left: 0; bottom: 0; height: ${px(2)}; background: #85b7eb; }
     /* The sync adjustment drop-down: where the guest is, and the nudge */
     .owp-nudge-row { display: flex; align-items: center; gap: ${px(8)}; }
     .owp-nudge-state { flex: 1; min-width: 0; display: flex; align-items: center; gap: ${px(6)}; font-weight: 500; }
@@ -416,7 +417,7 @@
       style.id = APPEARANCE_STYLE_ID;
       document.head.appendChild(style);
     }
-    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system {`
+    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system, :root .owp-queue-next {`
       + ` --owp-scale: ${textSize / APPEARANCE.baseTextSize}; --owp-surface-alpha: ${opacity / 100}; }`;
   };
 

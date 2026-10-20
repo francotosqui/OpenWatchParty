@@ -467,7 +467,7 @@ Manages the plugin user interface.
 ### Functions
 
 #### `injectStyles() -> void`
-Injects CSS styles into `<head>`. The sizes of the panel, the room bar, its drop-downs and the toasts are written for 12 px text and multiplied by `--owp-scale`, and their surfaces use `--owp-surface-alpha` with a 12 px backdrop blur; both variables are set on `#owp-panel`, `.owp-toast-container` and `.owp-toast-system`, with the defaults of 14 px and 55 %. `prefers-reduced-transparency: reduce` makes the surfaces opaque.
+Injects CSS styles into `<head>`. The sizes of the panel, the room bar, its drop-downs, the up-next strip and the toasts are written for 12 px text and multiplied by `--owp-scale`, and their surfaces use `--owp-surface-alpha` with a 12 px backdrop blur; both variables are set on `#owp-panel`, `.owp-queue-next` (the up-next strip, which floats outside the panel while the panel is closed), `.owp-toast-container` and `.owp-toast-system`, with the defaults of 14 px and 55 %. `prefers-reduced-transparency: reduce` makes the surfaces opaque.
 
 #### `updateStatusIndicator() -> void`
 Updates connection status indicator (Online/Offline).
