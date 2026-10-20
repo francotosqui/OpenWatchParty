@@ -112,11 +112,15 @@ describe('appearance styles', () => {
   it('scales every size of the panel and the toasts with the text size', () => {
     const panel = css.slice(css.indexOf('#owp-panel, .owp-toast-container'));
     const unscaled = panel.replace(/calc\(-?\d+(\.\d+)?px \* var\(--owp-scale\)\)/g, '');
-    // What stays fixed: hairlines, the window widths of the media queries, the
-    // places on screen, the margins to the window edges, the animations and
-    // the blur.
-    const fixed = /\b1px\b|@media \(max-width: \d+px\)|top: 72px; right: 20px|bottom: 100px; right: 20px|left: 8px; right: 8px|calc\(100v[wh] - \d+px\)|translateX\(20px\)|blur\(1[02]px\)/g;
+    // What stays fixed: hairline borders, the visually hidden text, the window
+    // widths of the media queries, the places on screen, the margins to the
+    // window edges, the animations and the blur.
+    const fixed = /1px solid|width: 1px; height: 1px|@media \(max-width: \d+px\)|top: 72px; right: 20px|bottom: 100px; right: 20px|left: 8px; right: 8px|calc\(100v[wh] - \d+px\)|translateX\(20px\)|blur\(1[02]px\)/g;
     assert.deepEqual(unscaled.replace(fixed, '').match(/\d+(\.\d+)?px/g), null);
+  });
+
+  it('keeps the room bar inside narrow windows at any text size', () => {
+    assert.ok(css.includes('min-width: min(calc(300px * var(--owp-scale)), calc(100vw - 40px));'));
   });
 
   it('starts at 14 px and 55 %, and turns opaque when less transparency is asked for', () => {

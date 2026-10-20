@@ -84,7 +84,7 @@
     /* The bar fits the room name between a minimum (room for the chat input)
        and a maximum (longer names end in an ellipsis); it stays on the right. */
     #${PANEL_ID}.${ROOM_MODE_CLASS} {
-      left: auto; width: auto; min-width: ${px(300)}; max-width: min(${px(420)}, calc(100vw - 40px));
+      left: auto; width: auto; min-width: min(${px(300)}, calc(100vw - 40px)); max-width: min(${px(420)}, calc(100vw - 40px));
       padding: 0; gap: ${px(6)}; font-family: inherit; font-size: ${px(12)}; color: #ecebe6;
       background: none; border: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
     }
@@ -217,7 +217,7 @@
     .owp-participant.owp-has-status .owp-participant-avatar { margin-top: ${px(2)}; }
     .owp-participant-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
     .owp-participant-line { display: flex; align-items: center; gap: ${px(6)}; min-width: 0; }
-    .owp-participant-status { display: flex; align-items: center; gap: ${px(5)}; margin-top: 1px; font-size: ${px(11)}; }
+    .owp-participant-status { display: flex; align-items: center; gap: ${px(5)}; margin-top: ${px(1)}; font-size: ${px(11)}; }
     /* The dot sits on the middle of the letters, not of the line box */
     .owp-participant-status::before {
       content: ''; flex-shrink: 0; position: relative; top: 0.05em;
