@@ -49,6 +49,7 @@
   // OWP's own elements outside the panel: a press on them keeps it open.
   const KEEP_PANEL_OPEN_SELECTOR = `.${HEADER_BTN_CLASS}, .owp-toast-container, .owp-toast-system`;
   const TEXT_FIELD_SELECTOR = 'input, textarea, [contenteditable]';
+  const UP_NEXT_SELECTOR = '.owp-queue-next';
 
   let observer = null;
   let panelObserver = null;
@@ -172,11 +173,13 @@
 
   // Over the player the panel goes with Jellyfin's controls: out of sight
   // while they are hidden, even under a resting pointer as they are, and back
-  // as it was when they show. It stays while someone is typing in it.
+  // as it was when they show. It stays while someone is typing in it or the
+  // queue's "up next" countdown is in it (the host's Cancel and Next).
   const applyPlayerControls = () => {
     const panel = document.getElementById(PANEL_ID);
     if (!panel) return;
-    const fade = !!document.querySelector(PLAYER_CONTROLS_HIDDEN_SELECTOR) && !typingInPanel(panel);
+    const fade = !!document.querySelector(PLAYER_CONTROLS_HIDDEN_SELECTOR) && !typingInPanel(panel)
+      && !panel.querySelector(UP_NEXT_SELECTOR);
     if (panel.classList.contains(PANEL_CONTROLS_HIDDEN_CLASS) !== fade) panel.classList.toggle(PANEL_CONTROLS_HIDDEN_CLASS, fade);
   };
 
@@ -447,5 +450,5 @@
     showFirstRunHelp();
   };
 
-  Object.assign(ui, { injectHeaderButtons, removeHeaderButtons, resetPanelPlacement, updatePanelPlacement, closePanelOnPress });
+  Object.assign(ui, { injectHeaderButtons, removeHeaderButtons, resetPanelPlacement, updatePanelPlacement, closePanelOnPress, applyPlayerControls });
 })();

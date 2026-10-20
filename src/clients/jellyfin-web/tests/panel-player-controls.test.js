@@ -217,6 +217,21 @@ describe('the panel over the player', () => {
     assert.equal(faded(), true);
   });
 
+  it('stays in sight while the up-next countdown of the queue is in it', () => {
+    const { setControlsHidden } = openOverPlayer(hooks);
+    setControlsHidden(true);
+    assert.equal(faded(), true);
+
+    const strip = element('div', 'owp-queue-next');
+    panel().appendChild(strip);
+    OWP.ui.applyPlayerControls();
+    assert.equal(faded(), false);
+
+    strip.remove();
+    OWP.ui.applyPlayerControls();
+    assert.equal(faded(), true);
+  });
+
   it('shows again when the player closes', () => {
     const { header, setControlsHidden } = openOverPlayer(hooks);
     setControlsHidden(true);
