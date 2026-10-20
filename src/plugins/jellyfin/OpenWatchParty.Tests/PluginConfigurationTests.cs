@@ -157,6 +157,39 @@ public class PluginConfigurationTests
     }
 
     [Fact]
+    public void Appearance_DefaultsTo55PercentAnd14Px()
+    {
+        var config = new PluginConfiguration();
+        Assert.Equal(55, config.AppearanceOpacity);
+        Assert.Equal(14, config.AppearanceTextSize);
+    }
+
+    [Theory]
+    [InlineData(0, 40)]
+    [InlineData(40, 40)]
+    [InlineData(57, 55)]
+    [InlineData(58, 60)]
+    [InlineData(100, 100)]
+    [InlineData(250, 100)]
+    public void AppearanceOpacity_IsKeptInRangeOnItsSteps(int value, int expected)
+    {
+        var config = new PluginConfiguration { AppearanceOpacity = value };
+        Assert.Equal(expected, config.AppearanceOpacity);
+    }
+
+    [Theory]
+    [InlineData(-3, 12)]
+    [InlineData(12, 12)]
+    [InlineData(15, 15)]
+    [InlineData(18, 18)]
+    [InlineData(40, 18)]
+    public void AppearanceTextSize_IsKeptInRange(int value, int expected)
+    {
+        var config = new PluginConfiguration { AppearanceTextSize = value };
+        Assert.Equal(expected, config.AppearanceTextSize);
+    }
+
+    [Fact]
     public void ConfigurationPage_OffersNativeSyncPlayToggle()
     {
         var assembly = typeof(Plugin).Assembly;
@@ -168,6 +201,9 @@ public class PluginConfigurationTests
         // Loading and saving the checkbox is covered by tests/config-page-syncplay.test.js.
         Assert.Contains("id=\"HideNativeSyncPlayButton\"", page, StringComparison.Ordinal);
         Assert.Contains("id=\"ShowSyncNudgeButton\"", page, StringComparison.Ordinal);
+        Assert.Contains("id=\"AppearanceOpacity\" min=\"40\" max=\"100\" step=\"5\"", page, StringComparison.Ordinal);
+        Assert.Contains("id=\"AppearanceTextSize\" min=\"12\" max=\"18\" step=\"1\"", page, StringComparison.Ordinal);
+        Assert.Contains("id=\"ResetAppearanceButton\"", page, StringComparison.Ordinal);
     }
 
 }

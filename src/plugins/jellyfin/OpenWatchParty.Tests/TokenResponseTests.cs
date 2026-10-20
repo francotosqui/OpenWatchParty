@@ -74,6 +74,35 @@ public sealed class TokenResponseTests
         Assert.Equal(show, response.RootElement.GetProperty("show_sync_nudge_button").GetBoolean());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Responses_CarryTheAppearance(bool insecure)
+    {
+        var defaulted = new PluginConfiguration
+        {
+            AllowInsecureNoAuth = insecure,
+            JwtSecret = insecure ? string.Empty : ValidSecret,
+            SessionServerUrl = "wss://session.example/ws"
+        };
+        var custom = new PluginConfiguration
+        {
+            AllowInsecureNoAuth = insecure,
+            JwtSecret = insecure ? string.Empty : ValidSecret,
+            SessionServerUrl = "wss://session.example/ws",
+            AppearanceOpacity = 80,
+            AppearanceTextSize = 17
+        };
+
+        using var defaultResponse = GetTokenResponse(defaulted);
+        using var customResponse = GetTokenResponse(custom);
+
+        Assert.Equal(55, defaultResponse.RootElement.GetProperty("appearance_opacity").GetInt32());
+        Assert.Equal(14, defaultResponse.RootElement.GetProperty("appearance_text_size").GetInt32());
+        Assert.Equal(80, customResponse.RootElement.GetProperty("appearance_opacity").GetInt32());
+        Assert.Equal(17, customResponse.RootElement.GetProperty("appearance_text_size").GetInt32());
+    }
+
     [Fact]
     public void Responses_KeepNativeSyncPlayButtonByDefault()
     {
