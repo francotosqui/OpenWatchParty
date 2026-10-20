@@ -14,8 +14,9 @@ const script = configPage.match(/<script type="text\/javascript">([\s\S]*?)<\/sc
 
 const VALID_SECRET = 'B0vLhmX5ZY1mQ4NfIYBcr8VWxOTQ02cbeQ9x7B3K4ow=';
 
-// Minimal jQuery stand-in: form fields keep their value/checked state, and the
-// page and form selectors record the handlers the configuration page registers.
+// Minimal jQuery stand-in: form fields keep their value/checked/text state and
+// their handlers, and the page and form selectors record the handlers the
+// configuration page registers.
 const loadConfigPage = (storedConfig) => {
   const fields = new Map();
   const handlers = {};
@@ -23,9 +24,10 @@ const loadConfigPage = (storedConfig) => {
   const pageElement = { id: 'page' };
   const formElement = { id: 'form' };
   const field = (id) => {
-    if (!fields.has(id)) fields.set(id, { value: '', checked: false });
+    if (!fields.has(id)) fields.set(id, { value: '', checked: false, text: '', handlers: {}, events: [] });
     const state = fields.get(id);
     return {
+      0: { dispatchEvent: event => state.events.push(event.type) },
       val(value) {
         if (value === undefined) return state.value;
         state.value = value;
@@ -36,7 +38,14 @@ const loadConfigPage = (storedConfig) => {
         state[name] = value;
         return this;
       },
-      on: () => {}
+      text(value) {
+        if (value === undefined) return state.text;
+        state.text = value;
+        return this;
+      },
+      on: (events, handler) => {
+        events.split(' ').forEach((event) => { state.handlers[event] = handler; });
+      }
     };
   };
   const $ = (selector) => {
@@ -55,7 +64,9 @@ const loadConfigPage = (storedConfig) => {
     Map,
     Array,
     Math,
+    Number,
     atob,
+    Event: class { constructor(type) { this.type = type; } },
     navigator: { userAgent: 'test-agent' },
     window: {
       location: { origin: 'https://media.example', protocol: 'https:', hostname: 'media.example', port: '' },
@@ -95,6 +106,9 @@ const loadConfigPage = (storedConfig) => {
       handlers.submit.call(formElement, { preventDefault: () => {} });
       await settle();
       await settle();
+    },
+    click(id) {
+      fields.get(id).handlers.click.call(pageElement);
     }
   };
 };
@@ -177,5 +191,53 @@ describe('configuration page sync adjustment setting', () => {
     assert.equal(form.saved.length, 1);
     assert.equal(form.saved[0].ShowSyncNudgeButton, false);
     assert.equal(form.saved[0].HideNativeSyncPlayButton, true);
+  });
+});
+
+describe('configuration page appearance settings', () => {
+  const baseConfig = {
+    JwtSecret: VALID_SECRET,
+    SessionServerUrl: 'wss://media.example/ws'
+  };
+  const shown = form => ({
+    opacity: form.fields.get('AppearanceOpacity').value,
+    textSize: form.fields.get('AppearanceTextSize').value,
+    labels: [form.fields.get('AppearanceOpacityValue').text, form.fields.get('AppearanceTextSizeValue').text]
+  });
+
+  it('shows and saves the defaults when the settings are missing', async () => {
+    const form = loadConfigPage(baseConfig);
+    await form.show();
+    assert.deepEqual(shown(form), { opacity: 55, textSize: 14, labels: ['55 %', '14 px'] });
+    // The sliders redraw their track for the new value.
+    assert.deepEqual(form.fields.get('AppearanceOpacity').events, ['change']);
+
+    await form.submit();
+
+    assert.equal(form.saved[0].AppearanceOpacity, 55);
+    assert.equal(form.saved[0].AppearanceTextSize, 14);
+  });
+
+  it('round-trips stored values through load and save', async () => {
+    const form = loadConfigPage({ ...baseConfig, AppearanceOpacity: 80, AppearanceTextSize: 17 });
+    await form.show();
+    assert.deepEqual(shown(form), { opacity: 80, textSize: 17, labels: ['80 %', '17 px'] });
+
+    await form.submit();
+
+    assert.equal(form.saved[0].AppearanceOpacity, 80);
+    assert.equal(form.saved[0].AppearanceTextSize, 17);
+  });
+
+  it('restores the defaults with the reset button', async () => {
+    const form = loadConfigPage({ ...baseConfig, AppearanceOpacity: 80, AppearanceTextSize: 17 });
+    await form.show();
+    form.click('ResetAppearanceButton');
+    assert.deepEqual(shown(form), { opacity: 55, textSize: 14, labels: ['55 %', '14 px'] });
+
+    await form.submit();
+
+    assert.equal(form.saved[0].AppearanceOpacity, 55);
+    assert.equal(form.saved[0].AppearanceTextSize, 14);
   });
 });

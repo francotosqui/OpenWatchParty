@@ -5,16 +5,22 @@
     PANEL_ID,
     STYLE_ID,
     SYNCPLAY_HIDE_STYLE_ID,
+    APPEARANCE_STYLE_ID,
     MODERN_HEADER_BTN_ID,
     PANEL_HEADER_CLASS,
     PANEL_BUBBLE_CLASS,
-    ROOM_MODE_CLASS
+    ROOM_MODE_CLASS,
+    APPEARANCE
   } = OWP.constants;
 
   // Jellyfin's built-in SyncPlay button: `.headerSyncButton` in the legacy
   // header, and the MUI toolbar button that opens the `app-sync-play-menu`.
   const NATIVE_SYNCPLAY_CSS =
     '.headerSyncButton, button[aria-controls="app-sync-play-menu"] { display: none !important; }';
+
+  // Sizes in the panel and the toasts follow the text size setting: each one
+  // is written for the original 12 px text and multiplied by --owp-scale.
+  const px = n => `calc(${n}px * var(--owp-scale))`;
 
   const CSS_STYLES = `
     html.owp-guest-locked .videoOsdBottom .btnPreviousTrack,
@@ -39,12 +45,21 @@
       font-size: 0.85em; color: rgba(255,255,255,0.75); pointer-events: none;
     }
     #owp-guest-lock-label .owp-guest-lock-icon { font-size: 1.15em; }
+    /* Appearance settings: text scale and surface opacity (applyAppearance) */
+    #${PANEL_ID}, .owp-toast-container, .owp-toast-system {
+      --owp-scale: ${APPEARANCE.textSize.default / APPEARANCE.baseTextSize};
+      --owp-surface-alpha: ${APPEARANCE.opacity.default / 100};
+    }
+    @media (prefers-reduced-transparency: reduce) {
+      #${PANEL_ID}, .owp-toast-container, .owp-toast-system { --owp-surface-alpha: 1 !important; }
+    }
     /* Same look as the room bar: dark grey, soft border, Jellyfin's font */
     #${PANEL_ID} {
-      position: fixed; top: 72px; right: 20px; width: 360px; max-width: calc(100vw - 40px); max-height: min(450px, calc(100vh - 88px));
-      padding: 10px 12px; border-radius: 12px; background: rgba(38, 38, 36, 0.97);
-      color: #ecebe6; font-family: inherit; font-size: 12px; z-index: 20000;
-      border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+      position: fixed; top: 72px; right: 20px; width: ${px(360)}; max-width: calc(100vw - 40px); max-height: min(${px(450)}, calc(100vh - 88px));
+      padding: ${px(10)} ${px(12)}; border-radius: ${px(12)}; background: rgba(38, 38, 36, var(--owp-surface-alpha));
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      color: #ecebe6; font-family: inherit; font-size: ${px(12)}; z-index: 20000;
+      border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 ${px(4)} ${px(16)} rgba(0,0,0,0.35);
       display: flex; flex-direction: column; box-sizing: border-box;
     }
     #${PANEL_ID}.hide { display: none; }
@@ -55,10 +70,13 @@
     }
     /* The lobby opened from the header hangs from its button like a speech
        bubble: left and the arrow position are set when it is placed */
-    #${PANEL_ID}.${PANEL_HEADER_CLASS}.${PANEL_BUBBLE_CLASS} { right: auto; width: 360px; max-width: calc(100vw - 16px); }
+    #${PANEL_ID}.${PANEL_HEADER_CLASS}.${PANEL_BUBBLE_CLASS} { right: auto; width: ${px(360)}; max-width: calc(100vw - 16px); }
     #${PANEL_ID}.${PANEL_BUBBLE_CLASS}::before {
-      content: ''; position: absolute; top: -6px; left: var(--owp-arrow-left, 50%); margin-left: -6px;
-      width: 10px; height: 10px; transform: rotate(45deg); background: rgb(38, 38, 36);
+      content: ''; position: absolute; top: ${px(-6)}; left: var(--owp-arrow-left, 50%); margin-left: ${px(-6)};
+      width: ${px(10)}; height: ${px(10)}; transform: rotate(45deg); background: rgba(38, 38, 36, var(--owp-surface-alpha));
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      /* Only the half above the panel, which would otherwise show twice */
+      clip-path: polygon(0 0, 100% 0, 0 100%);
       border-left: 1px solid rgba(255,255,255,0.14); border-top: 1px solid rgba(255,255,255,0.14);
     }
     /* In a room the panel is only the bar and its drop-down, each with its own
@@ -66,61 +84,62 @@
     /* The bar fits the room name between a minimum (room for the chat input)
        and a maximum (longer names end in an ellipsis); it stays on the right. */
     #${PANEL_ID}.${ROOM_MODE_CLASS} {
-      left: auto; width: auto; min-width: 300px; max-width: min(420px, calc(100vw - 40px));
-      padding: 0; gap: 6px; font-family: inherit; font-size: 12px; color: #ecebe6;
-      background: none; border: none; box-shadow: none;
+      left: auto; width: auto; min-width: ${px(300)}; max-width: min(${px(420)}, calc(100vw - 40px));
+      padding: 0; gap: ${px(6)}; font-family: inherit; font-size: ${px(12)}; color: #ecebe6;
+      background: none; border: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none;
     }
     @media (max-width: 420px) {
       #${PANEL_ID}.${ROOM_MODE_CLASS} { left: 8px; right: 8px; min-width: 0; max-width: none; }
     }
     .owp-room-bar, .owp-room-drop {
-      background: rgba(38, 38, 36, 0.97); border: 1px solid rgba(255,255,255,0.14);
-      box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+      background: rgba(38, 38, 36, var(--owp-surface-alpha)); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: 0 ${px(4)} ${px(16)} rgba(0,0,0,0.35);
     }
     .owp-room-bar {
-      display: flex; align-items: center; gap: 4px; flex-shrink: 0;
-      padding: 5px 6px 5px 10px; border-radius: 20px;
+      display: flex; align-items: center; gap: ${px(4)}; flex-shrink: 0;
+      padding: ${px(5)} ${px(6)} ${px(5)} ${px(10)}; border-radius: ${px(20)};
     }
-    .owp-room-bar .owp-sync-dot { width: 7px; height: 7px; flex-shrink: 0; }
+    .owp-room-bar .owp-sync-dot { width: ${px(7)}; height: ${px(7)}; flex-shrink: 0; }
     .owp-room-bar .owp-sync-dot.synced { background: #97c459; }
     .owp-room-bar .owp-sync-spinner { flex-shrink: 0; }
     /* Fixed width, so the bar does not jump when the latency gains a digit */
     .owp-room-bar .owp-latency {
-      min-width: 3.4em; font-size: 11px; font-variant-numeric: tabular-nums;
-      color: #9a9993; white-space: nowrap; margin: 0 4px 0 2px;
+      min-width: 3.4em; font-size: ${px(11)}; font-variant-numeric: tabular-nums;
+      color: #9a9993; white-space: nowrap; margin: 0 ${px(4)} 0 ${px(2)};
     }
     .owp-room-name { flex: 1; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .owp-icon {
-      width: 15px; height: 15px; flex-shrink: 0;
+      width: ${px(15)}; height: ${px(15)}; flex-shrink: 0;
       fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
     }
     /* Watch Party icon of the header and player buttons: the size of a native icon */
     .owp-watch-party-icon svg { display: block; width: 1em; height: 1em; }
     .owp-bar-btn {
-      display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; height: 24px; padding: 0 6px;
-      border: none; border-radius: 12px; background: transparent; color: #a6a59f;
-      cursor: pointer; font-family: inherit; font-size: 12px;
+      display: inline-flex; align-items: center; gap: ${px(3)}; flex-shrink: 0; height: ${px(24)}; padding: 0 ${px(6)};
+      border: none; border-radius: ${px(12)}; background: transparent; color: #a6a59f;
+      cursor: pointer; font-family: inherit; font-size: ${px(12)};
     }
     .owp-bar-btn:hover, .owp-bar-btn:focus-visible { background: rgba(255,255,255,0.08); color: #ecebe6; }
     .owp-bar-btn[aria-expanded="true"] { background: #0c447c; color: #85b7eb; }
     .owp-bar-btn.danger { color: #f09595; }
     .owp-bar-btn.danger[aria-expanded="true"] { background: #791f1f; color: #f09595; }
-    .owp-bar-btn .owp-expand { width: 12px; height: 12px; transition: transform 0.15s; }
+    .owp-bar-btn .owp-expand { width: ${px(12)}; height: ${px(12)}; transition: transform 0.15s; }
     .owp-bar-btn[aria-expanded="true"] .owp-expand { transform: rotate(180deg); }
     /* As wide as the bar, without widening it: long chat lines wrap instead */
     .owp-room-drop {
       width: 0; min-width: 100%; box-sizing: border-box;
-      min-height: 0; overflow-y: auto; padding: 8px 10px; border-radius: 10px;
+      min-height: 0; overflow-y: auto; padding: ${px(8)} ${px(10)}; border-radius: ${px(10)};
     }
     .owp-room-drop[hidden], .owp-room-drop > [hidden] { display: none !important; }
-    .owp-leave-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .owp-leave-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: ${px(8)}; }
     .owp-leave-question { flex: 1; }
     .owp-leave-hint {
-      flex-basis: 100%; width: 100%; font-size: 12px; line-height: 1.35;
+      flex-basis: 100%; width: 100%; font-size: ${px(12)}; line-height: 1.35;
       color: rgba(255,255,255,.6); overflow-wrap: anywhere;
     }
     .owp-pill-btn {
-      height: 24px; padding: 0 8px; border-radius: 12px; cursor: pointer; font-family: inherit; font-size: 12px;
+      height: ${px(24)}; padding: 0 ${px(8)}; border-radius: ${px(12)}; cursor: pointer; font-family: inherit; font-size: ${px(12)};
     }
     .owp-pill-btn.secondary { background: transparent; border: 1px solid rgba(255,255,255,0.45); color: #ecebe6; }
     .owp-pill-btn.danger { background: #a83232; border: none; color: #fff; }
@@ -128,38 +147,38 @@
     .owp-pill-btn.primary:hover { background: #2274c7; color: #fff; }
     .owp-pill-btn.primary[aria-disabled="true"] { background: rgba(255,255,255,0.06); color: #85847e; cursor: not-allowed; }
     /* The sync adjustment drop-down: where the guest is, and the nudge */
-    .owp-nudge-row { display: flex; align-items: center; gap: 8px; }
-    .owp-nudge-state { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-weight: 500; }
-    .owp-nudge-state .owp-sync-dot { width: 7px; height: 7px; flex-shrink: 0; }
+    .owp-nudge-row { display: flex; align-items: center; gap: ${px(8)}; }
+    .owp-nudge-state { flex: 1; min-width: 0; display: flex; align-items: center; gap: ${px(6)}; font-weight: 500; }
+    .owp-nudge-state .owp-sync-dot { width: ${px(7)}; height: ${px(7)}; flex-shrink: 0; }
     .owp-nudge-state .owp-sync-dot.synced { background: #97c459; }
     .owp-nudge-state .owp-sync-dot.idle { background: #85847e; }
-    .owp-nudge-sub { margin-top: 5px; font-size: 11px; color: #9a9993; line-height: 1.45; }
+    .owp-nudge-sub { margin-top: ${px(5)}; font-size: ${px(11)}; color: #9a9993; line-height: 1.45; }
     .owp-nudge-sub[hidden] { display: none; }
     /* Same size as the MUI SVG icons next to it (MuiSvgIcon fontSizeMedium) */
     #${MODERN_HEADER_BTN_ID} .material-icons { font-size: 1.5rem; width: 1em; height: 1em; line-height: 1; }
     .owp-header {
       display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: ${px(8)}; padding-bottom: ${px(8)}; border-bottom: 1px solid rgba(255,255,255,0.1);
     }
-    .owp-panel-title { font-size: 13px; font-weight: 500; }
-    .owp-header-actions { display: flex; align-items: center; gap: 6px; }
-    .owp-ws-status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #9a9993; }
-    .owp-ws-status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #97c459; }
+    .owp-panel-title { font-size: ${px(13)}; font-weight: 500; }
+    .owp-header-actions { display: flex; align-items: center; gap: ${px(6)}; }
+    .owp-ws-status { display: inline-flex; align-items: center; gap: ${px(5)}; font-size: ${px(11)}; color: #9a9993; }
+    .owp-ws-status::before { content: ''; width: ${px(7)}; height: ${px(7)}; border-radius: 50%; background: #97c459; }
     .owp-ws-status.offline::before { background: #f09595; }
-    .owp-close-btn { margin-left: 0; padding: 0 6px; }
-    .owp-section { margin-bottom: 10px; overflow-y: auto; }
-    .owp-create-section { margin-bottom: 0; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1); }
-    .owp-label { font-size: 11px; color: #9a9993; margin-bottom: 6px; }
+    .owp-close-btn { margin-left: 0; padding: 0 ${px(6)}; }
+    .owp-section { margin-bottom: ${px(10)}; overflow-y: auto; }
+    .owp-create-section { margin-bottom: 0; padding-top: ${px(10)}; border-top: 1px solid rgba(255,255,255,0.1); }
+    .owp-label { font-size: ${px(11)}; color: #9a9993; margin-bottom: ${px(6)}; }
     .owp-room-item {
-      display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer;
-      margin-bottom: 6px; padding: 8px 10px; border-radius: 8px;
+      display: flex; justify-content: space-between; align-items: center; gap: ${px(8)}; cursor: pointer;
+      margin-bottom: ${px(6)}; padding: ${px(8)} ${px(10)}; border-radius: ${px(8)};
       background: rgba(255,255,255,0.04); border: 1px solid transparent;
       transition: background 0.15s, border-color 0.15s;
     }
     .owp-room-item:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.14); }
     .owp-room-title { font-weight: 500; }
-    .owp-room-count { font-size: 11px; color: #9a9993; }
-    .owp-room-empty { padding: 8px; text-align: center; color: #9a9993; }
+    .owp-room-count { font-size: ${px(11)}; color: #9a9993; }
+    .owp-room-empty { padding: ${px(8)}; text-align: center; color: #9a9993; }
     .owp-card-count {
       position: absolute; left: 0.5em; bottom: 0.5em; z-index: 1; max-width: calc(100% - 1em); box-sizing: border-box;
       display: inline-flex; align-items: center; gap: 0.3em; padding: 0.2em 0.55em; border-radius: 0.4em;
@@ -168,41 +187,41 @@
     .owp-card-count .material-icons { font-size: 1.25em; line-height: 1; }
     .owp-card-count-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .owp-btn {
-      height: 26px; padding: 0 12px; border: none; border-radius: 13px; cursor: pointer;
-      background: #1a63ad; color: #fff; font-family: inherit; font-size: 12px; font-weight: 500;
+      height: ${px(26)}; padding: 0 ${px(12)}; border: none; border-radius: ${px(13)}; cursor: pointer;
+      background: #1a63ad; color: #fff; font-family: inherit; font-size: ${px(12)}; font-weight: 500;
     }
     .owp-btn:hover { background: #2274c7; color: #fff; }
     .owp-btn.danger { background: #a83232; color: #fff; }
     .owp-btn:disabled { background: rgba(255,255,255,0.06); color: #85847e; cursor: not-allowed; }
-    .owp-hint { font-size: 11px; color: #9a9993; margin-top: 6px; text-align: center; }
+    .owp-hint { font-size: ${px(11)}; color: #9a9993; margin-top: ${px(6)}; text-align: center; }
     /* The lobby help and its "?" button; the button turns blue while it is open */
-    .owp-help-btn { width: 24px; padding: 0; justify-content: center; font-size: 13px; font-weight: 600; }
+    .owp-help-btn { width: ${px(24)}; padding: 0; justify-content: center; font-size: ${px(13)}; font-weight: 600; }
     .owp-help {
-      display: flow-root; margin-bottom: 10px; padding: 8px 10px; border-radius: 8px;
+      display: flow-root; margin-bottom: ${px(10)}; padding: ${px(8)} ${px(10)}; border-radius: ${px(8)};
       background: rgba(255,255,255,0.04); line-height: 1.5; text-align: justify;
       flex-shrink: 0;
     }
     .owp-help[hidden] { display: none; }
     /* Floats beside the last line, so it does not need a line of its own */
-    .owp-help-ok { float: right; margin: 6px 0 0 8px; }
-    .owp-room-note { font-size: 11px; color: #ef9f27; }
+    .owp-help-ok { float: right; margin: ${px(6)} 0 0 ${px(8)}; }
+    .owp-room-note { font-size: ${px(11)}; color: #ef9f27; }
     .owp-participants { display: flex; flex-direction: column; }
-    .owp-participant { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 0; }
+    .owp-participant { display: flex; align-items: center; gap: ${px(6)}; min-width: 0; padding: ${px(4)} 0; }
     .owp-participant-avatar {
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-      width: 20px; height: 20px; border-radius: 50%; background: #0c447c; color: #85b7eb; font-size: 11px;
+      width: ${px(20)}; height: ${px(20)}; border-radius: 50%; background: #0c447c; color: #85b7eb; font-size: ${px(11)};
     }
     .owp-participant-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     /* With a status: the name and the Host badge on top, the status below */
     .owp-participant.owp-has-status { align-items: flex-start; }
-    .owp-participant.owp-has-status .owp-participant-avatar { margin-top: 2px; }
+    .owp-participant.owp-has-status .owp-participant-avatar { margin-top: ${px(2)}; }
     .owp-participant-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-    .owp-participant-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
-    .owp-participant-status { display: flex; align-items: center; gap: 5px; margin-top: 1px; font-size: 11px; }
+    .owp-participant-line { display: flex; align-items: center; gap: ${px(6)}; min-width: 0; }
+    .owp-participant-status { display: flex; align-items: center; gap: ${px(5)}; margin-top: 1px; font-size: ${px(11)}; }
     /* The dot sits on the middle of the letters, not of the line box */
     .owp-participant-status::before {
       content: ''; flex-shrink: 0; position: relative; top: 0.05em;
-      width: 7px; height: 7px; border-radius: 50%; background: currentColor;
+      width: ${px(7)}; height: ${px(7)}; border-radius: 50%; background: currentColor;
     }
     .owp-participant-status.good { color: #97c459; }
     .owp-participant-status.warn { color: #ef9f27; }
@@ -210,87 +229,88 @@
     .owp-participant-status.bad { color: #f09595; }
     .owp-participant-status.idle { color: #85847e; }
     .owp-host-badge {
-      flex-shrink: 0; padding: 0 4px; border-radius: 5px;
-      background: #27500a; color: #97c459; font-size: 11px;
+      flex-shrink: 0; padding: 0 ${px(4)}; border-radius: ${px(5)};
+      background: #27500a; color: #97c459; font-size: ${px(11)};
     }
     .owp-input {
-      width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444;
-      background: #000; color: #fff; box-sizing: border-box; margin-bottom: 10px; font-size: 14px;
+      width: 100%; padding: ${px(12)}; border-radius: ${px(8)}; border: 1px solid #444;
+      background: #000; color: #fff; box-sizing: border-box; margin-bottom: ${px(10)}; font-size: ${px(14)};
     }
-    .owp-footer { font-size: 11px; color: #9a9993; text-align: center; margin-top: auto; padding-top: 8px; }
+    .owp-footer { font-size: ${px(11)}; color: #9a9993; text-align: center; margin-top: auto; padding-top: ${px(8)}; }
     .owp-select {
-      width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #444;
-      background: #000; color: #fff; box-sizing: border-box; font-size: 13px;
+      width: 100%; padding: ${px(8)} ${px(10)}; border-radius: ${px(6)}; border: 1px solid #444;
+      background: #000; color: #fff; box-sizing: border-box; font-size: ${px(13)};
       cursor: pointer; appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888'%3E%3Cpath d='M6 8L2 4h8z'/%3E%3C/svg%3E");
-      background-repeat: no-repeat; background-position: right 10px center;
+      background-repeat: no-repeat; background-position: right ${px(10)} center;
     }
     .owp-select:focus { border-color: #1565c0; outline: none; }
     .owp-checkbox-row {
-      display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: #aaa;
+      display: flex; align-items: center; gap: ${px(8)}; margin-top: ${px(8)}; font-size: ${px(12)}; color: #aaa;
     }
     .owp-checkbox-row input { accent-color: #388e3c; }
     /* Sync status indicator styles */
-    .owp-sync-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .owp-sync-dot { width: ${px(8)}; height: ${px(8)}; border-radius: 50%; }
     .owp-sync-dot.synced { background: #69f0ae; }
     .owp-sync-dot.syncing { background: #ffd740; animation: owp-pulse 1s infinite; }
     .owp-sync-dot.pending { background: #ff9800; animation: owp-pulse 0.5s infinite; }
     @keyframes owp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    .owp-sync-spinner { width: 12px; height: 12px; border: 2px solid #444; border-top-color: #ff9800; border-radius: 50%; animation: owp-spin 0.8s linear infinite; }
+    .owp-sync-spinner { width: ${px(12)}; height: ${px(12)}; border: ${px(2)} solid #444; border-top-color: #ff9800; border-radius: 50%; animation: owp-spin 0.8s linear infinite; }
     @keyframes owp-spin { to { transform: rotate(360deg); } }
     /* Chat styles (the chat drop-down of the room bar) */
     #owp-chat-section { display: flex; flex-direction: column; }
-    #owp-chat-messages { max-height: 160px; overflow-y: auto; }
+    #owp-chat-messages { max-height: ${px(160)}; overflow-y: auto; }
     #owp-chat-messages:empty { display: none; }
-    .owp-chat-message { position: relative; padding: 3px 0; line-height: 1.4; }
+    .owp-chat-message { position: relative; padding: ${px(3)} 0; line-height: 1.4; }
     .owp-chat-message.owp-chat-own .owp-chat-username { color: #97c459; }
     .owp-chat-meta, .owp-chat-text { display: inline; }
-    .owp-chat-username { font-weight: 500; color: #85b7eb; margin-right: 4px; }
+    .owp-chat-username { font-weight: 500; color: #85b7eb; margin-right: ${px(4)}; }
     /* Hidden on screen like the mockup, still read by screen readers */
     .owp-chat-time, .owp-visually-hidden {
       position: absolute; width: 1px; height: 1px; overflow: hidden;
       clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
     }
     .owp-chat-text { color: #ecebe6; word-wrap: break-word; }
-    #owp-chat-input-container { display: flex; gap: 6px; }
-    #owp-chat-messages:not(:empty) + #owp-chat-input-container { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.1); }
+    #owp-chat-input-container { display: flex; gap: ${px(6)}; }
+    #owp-chat-messages:not(:empty) + #owp-chat-input-container { margin-top: ${px(6)}; padding-top: ${px(6)}; border-top: 1px solid rgba(255,255,255,0.1); }
     #owp-chat-input {
-      flex: 1; min-width: 0; padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.14);
-      background: transparent; color: #ecebe6; font-family: inherit; font-size: 12px;
+      flex: 1; min-width: 0; padding: ${px(4)} ${px(8)}; border-radius: ${px(6)}; border: 1px solid rgba(255,255,255,0.14);
+      background: transparent; color: #ecebe6; font-family: inherit; font-size: ${px(12)};
     }
     #owp-chat-input::placeholder { color: #9a9993; }
     #owp-chat-input:focus { border-color: #85b7eb; outline: none; }
     #owp-chat-send {
-      display: inline-flex; align-items: center; height: 24px; padding: 0 8px;
-      border: none; border-radius: 12px; background: #0c447c; color: #85b7eb; cursor: pointer;
+      display: inline-flex; align-items: center; height: ${px(24)}; padding: 0 ${px(8)};
+      border: none; border-radius: ${px(12)}; background: #0c447c; color: #85b7eb; cursor: pointer;
     }
     #owp-chat-send:hover { background: #185fa5; color: #e6f1fb; }
-    .owp-chat-badge { display: none; padding: 0 5px; border-radius: 8px; background: #791f1f; color: #f09595; font-size: 11px; line-height: 1.45; }
+    .owp-chat-badge { display: none; padding: 0 ${px(5)}; border-radius: ${px(8)}; background: #791f1f; color: #f09595; font-size: ${px(11)}; line-height: 1.45; }
     /* Toast styles */
     /* Bottom right, so chat toasts do not cover the room bar at the top */
     .owp-toast-container {
       position: fixed; bottom: 100px; right: 20px; z-index: 30000;
-      display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+      display: flex; flex-direction: column; gap: ${px(8)}; pointer-events: none;
     }
     .owp-toast {
-      background: rgba(38, 38, 36, 0.97); color: #ecebe6; padding: 8px 12px;
-      border-radius: 10px; font-size: 12px; max-width: 320px;
+      background: rgba(38, 38, 36, var(--owp-surface-alpha)); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      color: #ecebe6; padding: ${px(8)} ${px(12)};
+      border-radius: ${px(10)}; font-size: ${px(12)}; max-width: ${px(320)};
       border: 1px solid rgba(255,255,255,0.14);
-      box-shadow: 0 4px 16px rgba(0,0,0,0.35); pointer-events: auto; cursor: pointer;
+      box-shadow: 0 ${px(4)} ${px(16)} rgba(0,0,0,0.35); pointer-events: auto; cursor: pointer;
       animation: owp-toast-in 0.3s ease-out;
       transition: transform 0.3s ease-out, opacity 0.3s ease-out;
     }
     .owp-toast.owp-toast-out {
       animation: owp-toast-out 0.3s ease-in forwards;
     }
-    .owp-toast-username { font-weight: 500; color: #85b7eb; margin-right: 4px; }
+    .owp-toast-username { font-weight: 500; color: #85b7eb; margin-right: ${px(4)}; }
     .owp-toast-text { color: #ecebe6; word-wrap: break-word; }
     .owp-toast-system {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      background: rgba(20, 20, 20, 0.95); color: #fff; padding: 12px 20px;
-      border-radius: 8px; font-size: 13px; z-index: 30000;
+      background: rgba(20, 20, 20, var(--owp-surface-alpha)); color: #fff; padding: ${px(12)} ${px(20)};
+      border-radius: ${px(8)}; font-size: ${px(13)}; z-index: 30000;
       backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5); cursor: pointer;
+      box-shadow: 0 ${px(4)} ${px(20)} rgba(0,0,0,0.5); cursor: pointer;
       animation: owp-toast-system-in 0.3s ease-out;
     }
     .owp-toast-system.owp-toast-out {
@@ -338,5 +358,27 @@
     document.head.appendChild(style);
   };
 
-  Object.assign(ui, { injectStyles, applyNativeSyncPlayVisibility });
+  // A value the plugin did not send (an older plugin) or that is out of its
+  // range falls back to the default.
+  const appearanceValue = (value, { min, max, step, default: fallback }) => (
+    Number.isInteger(value) && value >= min && value <= max && (value - min) % step === 0 ? value : fallback
+  );
+
+  // The appearance settings from the plugin, as the variables the styles use.
+  // :root makes them win over the defaults in the main stylesheet whatever
+  // the order of the two; prefers-reduced-transparency still wins.
+  const applyAppearance = () => {
+    const opacity = appearanceValue(OWP.state.appearanceOpacity, APPEARANCE.opacity);
+    const textSize = appearanceValue(OWP.state.appearanceTextSize, APPEARANCE.textSize);
+    let style = document.getElementById(APPEARANCE_STYLE_ID);
+    if (!style) {
+      style = document.createElement('style');
+      style.id = APPEARANCE_STYLE_ID;
+      document.head.appendChild(style);
+    }
+    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system {`
+      + ` --owp-scale: ${textSize / APPEARANCE.baseTextSize}; --owp-surface-alpha: ${opacity / 100}; }`;
+  };
+
+  Object.assign(ui, { injectStyles, applyNativeSyncPlayVisibility, applyAppearance });
 })();
