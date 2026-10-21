@@ -99,7 +99,7 @@
     if (becameHost && OWP.playback?.syncPromotedGuest) {
       OWP.playback.syncPromotedGuest(state.currentVideoElement || OWP.utils.getVideo());
     }
-    if (becameHost && OWP.queue?.refresh) OWP.queue.refresh();
+    if (OWP.queue?.refresh) OWP.queue.refresh();
     ui.render();
     if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();
     ui.showToast(becameHost ? t('youAreHost') : t('nowHost', { name: msg.payload.host_name }));

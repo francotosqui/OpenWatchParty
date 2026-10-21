@@ -37,40 +37,54 @@
   // which comes after room_state on joining. Filling goes on from the episode
   // the room's queue_add appended last, which the server keeps, so one the
   // host removed doesn't come back after a reload or a host change either.
-  // Each room item is looked at once.
+  // Each room item is looked at once; the next room_state or queue_state looks
+  // again at one whose fill failed or was dropped.
   let seenItem = '';
+  // The fill waiting for the library, dropped when the room moves to another
+  // item or this client loses the role or the room's queue (another room, a
+  // lost connection).
+  let filling = null;
 
   const fill = async () => {
     if (!state.queueReceived) return;
     const roomId = state.roomId;
     const item = `${roomId}|${state.roomMediaId}`;
-    const previous = seenItem;
-    if (previous === item) return;
-    const seenRoom = previous.startsWith(`${roomId}|`);
-    seenItem = item;
-    if (state.queueItems.length && !seenRoom) return;
+    if (filling?.item !== item) filling = null;
+    if (seenItem === item || filling) return;
     const index = roomIndex();
-    // A room item that isn't queued leaves the host's list as it is.
-    if (state.queueItems.length && index < 0) return;
     const upcoming = state.queueItems.length ? state.queueItems.length - 1 - index : 0;
-    if (upcoming >= UPCOMING) return;
-    const startId = state.queueLastAdded || state.roomMediaId;
+    // A queue this client didn't see as host is inherited, and a room item
+    // that isn't queued leaves the host's list as it is.
+    if (state.queueItems.length && (!seenItem.startsWith(`${roomId}|`) || index < 0 || upcoming >= UPCOMING)) {
+      seenItem = item;
+      return;
+    }
+    const lastAdded = state.queueLastAdded;
+    const startId = lastAdded || state.roomMediaId;
+    const attempt = { item };
+    filling = attempt;
     const userId = window.ApiClient.getCurrentUserId();
     let start;
     let result;
     try {
       start = await window.ApiClient.getItem(userId, startId);
-      if (start?.Type !== 'Episode' || !start.SeriesId) return;
-      result = await window.ApiClient.getJSON(window.ApiClient.getUrl(`Shows/${start.SeriesId}/Episodes`, {
-        userId, startItemId: startId, limit: UPCOMING + 10
-      }));
+      if (start?.Type === 'Episode' && start.SeriesId) {
+        result = await window.ApiClient.getJSON(window.ApiClient.getUrl(`Shows/${start.SeriesId}/Episodes`, {
+          userId, startItemId: startId, limit: UPCOMING + 10
+        }));
+      }
     } catch (err) {
-      // The next room_state or queue_state tries this item again.
-      if (seenItem === item) seenItem = previous;
+      if (filling === attempt) filling = null;
       throw err;
     }
-    if (!isQueueHost() || state.roomId !== roomId) return;
-    const episodes = (result?.Items || [])
+    const current = filling === attempt;
+    if (current) filling = null;
+    // The answer is for the queue this started from, not one with another item
+    // added meanwhile.
+    if (!current || !isQueueHost() || state.queueLastAdded !== lastAdded) return;
+    seenItem = item;
+    if (!result) return;
+    const episodes = (result.Items || [])
       .filter(episode => episode.Id !== startId && episode.LocationType !== 'Virtual')
       .slice(0, UPCOMING - upcoming);
     const items = (state.queueItems.length ? [] : [start]).concat(episodes);
@@ -100,8 +114,12 @@
   // The last countdown request, until a queue_state answers it.
   let countdownRequest = '';
 
-  // After room_state and queue_state, and when this client becomes the host.
+  // After room_state, queue_state and host changes. A guest forgets the items
+  // it saw as host: the queue it finds on becoming the host again is
+  // inherited.
   queue.refresh = () => {
+    if (!state.isHost) seenItem = '';
+    if (!state.isHost || !state.queueReceived) filling = null;
     if (!isQueueHost() || !state.roomMediaId || !window.ApiClient) return;
     if (credits.mediaId !== state.roomMediaId) loadCredits(state.roomMediaId).catch(err => report('credits', err));
     fill().catch(err => report('fill', err));

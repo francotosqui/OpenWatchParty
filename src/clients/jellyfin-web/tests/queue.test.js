@@ -84,16 +84,16 @@ describe('room queue', () => {
     assert.equal(queueStates, 2);
   });
 
-  it('lets the host logic look again after each room state and on becoming the host', () => {
+  it('lets the host logic look again after each room state and host change', () => {
     h.handleRoomState(roomState('room-1', 'a'), null);
     assert.equal(refreshes, 1);
     OWP.ui.updateRoomRoleControls = () => {};
     OWP.ui.showToast = () => {};
     Object.assign(OWP.state, { isHost: false, clientId: 'guest' });
     h.handleHostChanged({ room: 'room-1', payload: { host_id: 'other', host_name: 'Other' } });
-    assert.equal(refreshes, 1);
-    h.handleHostChanged({ room: 'room-1', payload: { host_id: 'guest', host_name: 'Guest' } });
     assert.equal(refreshes, 2);
+    h.handleHostChanged({ room: 'room-1', payload: { host_id: 'guest', host_name: 'Guest' } });
+    assert.equal(refreshes, 3);
   });
 
   it('forgets the queue on entering another room', () => {

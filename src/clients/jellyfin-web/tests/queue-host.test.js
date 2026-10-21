@@ -8,6 +8,7 @@ let itemRequests = 0;
 let segments = {};
 let segmentRequests = 0;
 let failItem = false;
+let libraryGate = null; // While set, the library answers once it resolves
 OWP.actions = { send: (type, payload) => sent.push({ type, payload }) };
 OWP.utils.log = () => {};
 OWP.utils.getPlayingItemId = () => playing;
@@ -30,6 +31,7 @@ globalThis.ApiClient = {
   getCurrentUserId: () => 'user',
   getItem: async (userId, id) => {
     itemRequests++;
+    await libraryGate;
     if (failItem) {
       failItem = false;
       throw new Error('offline');
@@ -62,6 +64,7 @@ let room = 0;
 const enterRoom = (fields = {}) => {
   room++;
   Object.assign(OWP.state, {
+    clientId: 'host',
     inRoom: true,
     isHost: true,
     serverFeatures: ['media_queue'],
@@ -76,14 +79,14 @@ const enterRoom = (fields = {}) => {
 };
 
 // What the server sends, for the tests that go through the message handlers.
-const roomState = (room, mediaId) => ({
+const roomState = (room, mediaId, hostId = 'host') => ({
   type: 'room_state',
   room,
   client: 'host',
   server_ts: Date.now(),
   payload: {
     name: 'Room',
-    host_id: 'host',
+    host_id: hostId,
     participant_count: 2,
     media_id: mediaId,
     state_server_ts: Date.now(),
@@ -111,7 +114,19 @@ describe('host queue', () => {
     segments = {};
     segmentRequests = 0;
     hostVideo = null;
+    libraryGate = null;
   });
+
+  // Holds the library's answers until the returned function is called.
+  const holdLibrary = () => {
+    let release;
+    libraryGate = new Promise(resolve => { release = resolve; });
+    return async () => {
+      libraryGate = null;
+      release();
+      await settle();
+    };
+  };
 
   it('fills an empty queue with the room episode and the next five in the library', async () => {
     // Not before the server sent the room's queue.
@@ -174,7 +189,7 @@ describe('host queue', () => {
 
   it('keeps an episode the previous host removed out after taking over the room', async () => {
     // The previous host filled e1 to e7 and removed e7.
-    enterRoom({ clientId: 'host', isHost: false, roomHostId: 'old-host' });
+    enterRoom({ isHost: false, roomHostId: 'old-host' });
     const { roomId } = OWP.state;
     h.handleQueueState(queueState(roomId, ['e1', 'e2', 'e3', 'e5', 'e6'], 'e7'));
     h.handleHostChanged({ room: roomId, payload: { host_id: 'host', host_name: 'Host' } });
@@ -202,6 +217,87 @@ describe('host queue', () => {
     OWP.queue.refresh();
     await settle();
     assert.deepEqual(sent.map(ids), [['e8']]);
+  });
+
+  it('drops a top-up the queue changed under while the library answered, and tops up again', async () => {
+    enterRoom({ queueItems: ['e1', 'e2', 'e3'].map(item), queueLastAdded: 'e3' });
+    OWP.queue.refresh();
+    await settle();
+    const release = holdLibrary();
+    Object.assign(OWP.state, { roomMediaId: 'e2' });
+    OWP.queue.refresh();
+    // Meanwhile a newer queue: e5 was added and the host removed it.
+    Object.assign(OWP.state, { queueLastAdded: 'e5' });
+    OWP.queue.refresh();
+    await release();
+    assert.deepEqual(sent, []);
+    OWP.queue.refresh();
+    await settle();
+    assert.deepEqual(sent.map(ids), [['e6', 'e7', 'e8', 'e9']]);
+  });
+
+  it('drops a top-up for an item the room left while the library answered', async () => {
+    enterRoom({ queueItems: ['e1', 'e2', 'e3'].map(item), queueLastAdded: 'e3' });
+    OWP.queue.refresh();
+    await settle();
+    const release = holdLibrary();
+    Object.assign(OWP.state, { roomMediaId: 'e2' });
+    OWP.queue.refresh();
+    // The host goes back to the previous episode at once.
+    Object.assign(OWP.state, { roomMediaId: 'e1' });
+    OWP.queue.refresh();
+    await release();
+    assert.deepEqual(sent, []);
+  });
+
+  it('fills the queue after the connection drops during the first fill', async () => {
+    enterRoom();
+    const { roomId } = OWP.state;
+    const disconnect = () => Object.assign(OWP.state, { inRoom: false, roomId: '', isHost: false },
+      OWP.stateFactories.createQueueState());
+    let release = holdLibrary();
+    OWP.queue.refresh();
+    // The library answers while the client is away...
+    disconnect();
+    await release();
+    h.handleRoomState(roomState(roomId, 'e1'), null);
+    // ...and, on the next try, once it is back but before the queue came.
+    release = holdLibrary();
+    h.handleQueueState(queueState(roomId, [], null));
+    disconnect();
+    h.handleRoomState(roomState(roomId, 'e1'), null);
+    await release();
+    assert.deepEqual(sent, []);
+    h.handleQueueState(queueState(roomId, [], null));
+    await settle();
+    assert.deepEqual(sent.map(ids), [['e1', 'e2', 'e3', 'e5', 'e6', 'e7']]);
+  });
+
+  it('drops a top-up on losing the host role, even when the role comes back before the library answers', async () => {
+    enterRoom({ roomHostId: 'host', queueItems: ['e1', 'e2', 'e3'].map(item), queueLastAdded: 'e3' });
+    const { roomId } = OWP.state;
+    OWP.queue.refresh();
+    await settle();
+    const release = holdLibrary();
+    h.handleRoomState(roomState(roomId, 'e2'), null);
+    h.handleHostChanged({ room: roomId, payload: { host_id: 'other', host_name: 'Other' } });
+    h.handleHostChanged({ room: roomId, payload: { host_id: 'host', host_name: 'Host' } });
+    await release();
+    assert.equal(itemRequests, 1);
+    assert.deepEqual(sent, []);
+  });
+
+  it('leaves the queue alone on becoming the host again after the room moved on', async () => {
+    enterRoom({ roomHostId: 'host', queueItems: ['e1', 'e2', 'e3'].map(item), queueLastAdded: 'e3' });
+    const { roomId } = OWP.state;
+    OWP.queue.refresh();
+    await settle();
+    h.handleHostChanged({ room: roomId, payload: { host_id: 'other', host_name: 'Other' } });
+    h.handleRoomState(roomState(roomId, 'e2', 'other'), null);
+    h.handleHostChanged({ room: roomId, payload: { host_id: 'host', host_name: 'Host' } });
+    await settle();
+    assert.equal(itemRequests, 0);
+    assert.deepEqual(sent, []);
   });
 
   it('tries the room item again after the library fails to answer', async () => {
