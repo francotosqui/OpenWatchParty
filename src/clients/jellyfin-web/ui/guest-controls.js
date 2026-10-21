@@ -30,7 +30,8 @@
   let lastBlockedToastAt = -Infinity;
 
   const getVideo = () => OWP.utils?.getVideo?.() || null;
-  const isGuestLocked = (video) => Boolean(video && state.inRoom && !state.isHost);
+  const isGuest = () => state.inRoom && !state.isHost;
+  const isGuestLocked = (video) => Boolean(video && isGuest());
   // Play and pause are everyone's; play only waits while the host's stream
   // loads.
   const isPlayLocked = (video) => isGuestLocked(video)
@@ -56,13 +57,17 @@
 
   const isPositionSlider = (target) => Boolean(target?.closest?.('.videoOsdBottom .osdPositionSlider'));
 
+  // The listeners below see every click and key press in Jellyfin: they look
+  // the video up only for a guest in a room.
+
   // The CSS that makes the slider inert follows the role on the next tick;
   // this covers a guest who presses on it before that.
   const handlePointerDown = (event) => {
-    if (isGuestLocked(getVideo()) && isPositionSlider(event.target)) blockEvent(event);
+    if (isGuest() && isPositionSlider(event.target) && getVideo()) blockEvent(event);
   };
 
   const handleClick = (event) => {
+    if (!isGuest()) return;
     const video = getVideo();
     if (!isGuestLocked(video)) return;
     const seekButton = event.target?.closest?.(SEEK_BUTTON_SELECTOR);
@@ -114,6 +119,7 @@
     && !target.closest('.btnPause'));
 
   const handleKeydown = (event) => {
+    if (!isGuest()) return;
     const video = getVideo();
     if (!isGuestLocked(video) || event.ctrlKey || event.altKey || event.metaKey || isEditable(event.target)) return;
     // On the focused slider every arrow seeks (up and down too), in the TV
@@ -178,8 +184,20 @@
     }
   };
 
+  // Outside a room there is nothing to lock: the locks a room left are cleared
+  // once, and the 500 ms tick then does nothing until the next room.
+  let clearedOutsideRoom = false;
+
   const updateGuestControls = () => {
     const root = document.documentElement;
+    if (!state.inRoom) {
+      if (clearedOutsideRoom) return;
+      clearedOutsideRoom = true;
+      root.classList.remove(LOCKED_CLASS, PLAY_LOCKED_CLASS);
+      removeLabel();
+      return;
+    }
+    clearedOutsideRoom = false;
     const video = getVideo();
     const locked = isGuestLocked(video);
     root.classList.toggle(LOCKED_CLASS, locked);

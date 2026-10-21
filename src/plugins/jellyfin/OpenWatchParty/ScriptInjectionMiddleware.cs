@@ -2,6 +2,7 @@ using System.Text;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Configuration;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
 
@@ -13,11 +14,15 @@ namespace OpenWatchParty.Plugin;
 public sealed class ScriptInjectionMiddleware
 {
     private const long MaxIndexSize = 4 * 1024 * 1024;
+    // Jellyfin's index is a few dozen KB, so it stays in memory; only a
+    // response past this spills to a temporary file.
+    private const int MemoryThreshold = 256 * 1024;
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private readonly RequestDelegate _next;
     private readonly string _baseUrl;
     private readonly ILogger<ScriptInjectionMiddleware> _logger;
     private readonly InjectionDiagnostics _diagnostics;
+    private readonly Func<string>? _tempDirectory;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ScriptInjectionMiddleware"/> class.
@@ -35,12 +40,14 @@ public sealed class ScriptInjectionMiddleware
         RequestDelegate next,
         string? baseUrl,
         ILogger<ScriptInjectionMiddleware> logger,
-        InjectionDiagnostics? diagnostics = null)
+        InjectionDiagnostics? diagnostics = null,
+        Func<string>? tempDirectory = null)
     {
         _next = next;
         _baseUrl = NormalizeBaseUrl(baseUrl);
         _logger = logger;
         _diagnostics = diagnostics ?? new InjectionDiagnostics();
+        _tempDirectory = tempDirectory;
     }
 
     /// <summary>
@@ -56,14 +63,9 @@ public sealed class ScriptInjectionMiddleware
 
         var originalBody = context.Response.Body;
         _diagnostics.RecordIndexObserved();
-        var temporaryPath = Path.Combine(Path.GetTempPath(), $"owp-index-{Guid.NewGuid():N}.tmp");
-        await using var bufferedBody = new FileStream(
-            temporaryPath,
-            FileMode.CreateNew,
-            FileAccess.ReadWrite,
-            FileShare.None,
-            16 * 1024,
-            FileOptions.Asynchronous | FileOptions.DeleteOnClose | FileOptions.SequentialScan);
+        await using var bufferedBody = new FileBufferingWriteStream(
+            MemoryThreshold,
+            tempFileDirectoryAccessor: _tempDirectory);
         var savedHeaders = RemoveRequestHeaders(
             context.Request.Headers,
             "Accept-Encoding",
@@ -86,11 +88,11 @@ public sealed class ScriptInjectionMiddleware
             await _next(context).ConfigureAwait(false);
             context.Response.Body = originalBody;
 
-            bufferedBody.Position = 0;
             if (IsTransformableResponse(context.Response) && bufferedBody.Length <= MaxIndexSize)
             {
-                var originalBytes = new byte[checked((int)bufferedBody.Length)];
-                await bufferedBody.ReadExactlyAsync(originalBytes, context.RequestAborted).ConfigureAwait(false);
+                using var captured = new MemoryStream(checked((int)bufferedBody.Length));
+                await bufferedBody.DrainBufferAsync(captured, context.RequestAborted).ConfigureAwait(false);
+                var originalBytes = captured.ToArray();
                 var outputBytes = TryInject(context.Response, originalBytes);
                 if (!ReferenceEquals(outputBytes, originalBytes))
                 {
@@ -100,7 +102,7 @@ public sealed class ScriptInjectionMiddleware
             }
             else
             {
-                await bufferedBody.CopyToAsync(originalBody, context.RequestAborted).ConfigureAwait(false);
+                await bufferedBody.DrainBufferAsync(originalBody, context.RequestAborted).ConfigureAwait(false);
             }
         }
         finally

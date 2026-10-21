@@ -156,6 +156,38 @@ describe('guest playback controls', () => {
     assert.equal(h.document.documentElement.classList.contains('owp-guest-play-locked'), false);
   });
 
+  it('clears the locks once on leaving the room and then stays idle outside it', () => {
+    h.setGuest({ waiting: true });
+    assert.ok(h.document.getElementById('owp-guest-lock-label'));
+
+    let lookups = 0;
+    h.OWP.utils.getVideo = () => {
+      lookups++;
+      return h.video;
+    };
+    h.OWP.state.inRoom = false;
+    h.OWP.ui.updateGuestControls();
+    const root = h.document.documentElement;
+    assert.equal(root.classList.contains('owp-guest-locked'), false);
+    assert.equal(root.classList.contains('owp-guest-play-locked'), false);
+    assert.equal(h.document.getElementById('owp-guest-lock-label'), null);
+
+    // Ticks outside a room don't look the video up or touch the page.
+    root.classList.add('owp-guest-locked');
+    h.OWP.ui.updateGuestControls();
+    h.OWP.ui.updateGuestControls();
+    assert.equal(lookups, 0);
+    assert.equal(root.classList.contains('owp-guest-locked'), true);
+
+    // The next room locks again, and leaving it clears again.
+    h.setGuest({ waiting: true });
+    assert.equal(root.classList.contains('owp-guest-play-locked'), true);
+    h.OWP.state.inRoom = false;
+    h.OWP.ui.updateGuestControls();
+    assert.equal(root.classList.contains('owp-guest-locked'), false);
+    assert.equal(root.classList.contains('owp-guest-play-locked'), false);
+  });
+
   it('inserts, updates, restores, and removes the label', () => {
     h.setGuest({ paused: false, playState: 'playing' });
     let label = h.document.getElementById('owp-guest-lock-label');
@@ -200,6 +232,36 @@ describe('guest playback controls', () => {
 
     assert.ok(h.sliderRow.children[0].classList.contains('owp-position-slider-container'));
     assert.equal(volume.classList.contains('owp-position-slider-container'), false);
+  });
+
+  it('looks the video up only for a guest in a room', () => {
+    let lookups = 0;
+    h.OWP.utils.getVideo = () => {
+      lookups++;
+      return h.video;
+    };
+    const slider = h.sliderRow.querySelector('.osdPositionSlider');
+    const pressAll = () => [
+      h.dispatch('pointerdown', slider),
+      h.dispatch('mousedown', slider),
+      h.dispatch('touchstart', slider),
+      h.dispatch('click', h.buttons.btnRewind),
+      h.dispatch('keydown', h.document.body, { code: 'ArrowLeft' })
+    ];
+
+    for (const fields of [{ inRoom: false, isHost: false }, { inRoom: true, isHost: true }]) {
+      Object.assign(h.OWP.state, fields);
+      const events = pressAll();
+      assert.equal(lookups, 0);
+      assert.ok(events.every(event => !event.defaultPrevented));
+    }
+
+    // A guest's press off the slider doesn't need the video either.
+    Object.assign(h.OWP.state, { inRoom: true, isHost: false });
+    h.dispatch('pointerdown', h.buttons.btnSubtitles);
+    assert.equal(lookups, 0);
+    assert.ok(pressAll().every(event => event.defaultPrevented));
+    assert.equal(lookups, 5);
   });
 
   it('installs one capture listener of each kind', () => {

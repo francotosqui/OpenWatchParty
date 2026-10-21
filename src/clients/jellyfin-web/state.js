@@ -102,6 +102,14 @@
     ROOM_MODE_CLASS: 'owp-room-mode',
     STYLE_ID: 'owp-style',
     SYNCPLAY_HIDE_STYLE_ID: 'owp-hide-native-syncplay',
+    APPEARANCE_STYLE_ID: 'owp-appearance',
+    // Appearance of the room bar, its drop-downs, the lobby and the toasts:
+    // the same ranges as the plugin settings.
+    APPEARANCE: {
+      baseTextSize: 12,
+      opacity: { min: 40, max: 100, step: 5, default: 55 },
+      textSize: { min: 12, max: 18, step: 1, default: 14 }
+    },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
     CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue'],
@@ -309,6 +317,8 @@
     followHost: true,
     hideNativeSyncPlayButton: false,
     showSyncNudge: false,       // The plugin offers guests the sync adjustment in the room bar
+    appearanceOpacity: OWP.constants.APPEARANCE.opacity.default,   // Surface opacity in percent
+    appearanceTextSize: OWP.constants.APPEARANCE.textSize.default, // Base text size in px
     inviteTtlSeconds: 3600,      // Lifetime requested for new invite tickets
   });
 

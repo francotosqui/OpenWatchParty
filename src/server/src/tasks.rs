@@ -156,9 +156,14 @@ pub fn spawn_heartbeat(state: SharedState, tasks: &AppTasks) -> JoinHandle<()> {
 }
 
 /// Removes a session that missed the heartbeat. Its connection task then
-/// ends with the `heartbeat_timeout` close reason.
+/// ends with the `heartbeat_timeout` close reason. The sweep picks zombies
+/// under a read lock; one that answered since then is kept.
 pub(crate) async fn remove_zombie(id: &str, state: &SharedState, tasks: &AppTasks) {
-    if crate::room::handle_disconnect(id, state, tasks).await {
+    if crate::room::handle_disconnect_if(id, state, tasks, |client| {
+        is_zombie(client, Instant::now())
+    })
+    .await
+    {
         warn!("Removed zombie connection client_id={id}");
         crate::metrics::metrics().zombie_removed();
     }
@@ -243,6 +248,31 @@ pub fn shutdown_signal() -> Pin<Box<dyn Future<Output = ()> + Send>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_zombie_that_answers_before_its_removal_is_kept() {
+        let state = crate::test_helpers::create_state();
+        let tasks = AppTasks::new();
+        let (mut client, _rx) = crate::test_helpers::create_client_with_rx("u1", "User", true);
+        client.last_seen = Instant::now() - ZOMBIE_TIMEOUT - Duration::from_secs(1);
+        assert!(is_zombie(&client, Instant::now()));
+        state.write().await.clients.insert("c1".into(), client);
+        // The sweep already picked c1; a pong arrives before its removal.
+        state.write().await.clients.get_mut("c1").unwrap().last_seen = Instant::now();
+        remove_zombie("c1", &state, &tasks).await;
+        assert!(state.read().await.clients.contains_key("c1"));
+    }
+
+    #[tokio::test]
+    async fn a_zombie_that_is_still_silent_is_removed() {
+        let state = crate::test_helpers::create_state();
+        let tasks = AppTasks::new();
+        let (mut client, _rx) = crate::test_helpers::create_client_with_rx("u1", "User", true);
+        client.last_seen = Instant::now() - ZOMBIE_TIMEOUT - Duration::from_secs(1);
+        state.write().await.clients.insert("c1".into(), client);
+        remove_zombie("c1", &state, &tasks).await;
+        assert!(!state.read().await.clients.contains_key("c1"));
+    }
 
     #[tokio::test(start_paused = true)]
     async fn sleeping_cleanup_stops_on_cancellation() {

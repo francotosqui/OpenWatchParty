@@ -2,7 +2,9 @@ use super::super::constants::MAX_CLIENTS_PER_ROOM;
 use super::super::dispatch::{error_message, is_authenticated, send_error, ErrorCode};
 use super::super::validation::sanitize_name;
 use crate::auth::{InviteTicketError, JwtConfig};
-use crate::messaging::{collect_room_senders, send_message, send_to_senders, ClientSender};
+use crate::messaging::{
+    broadcast_room_list, collect_room_senders, send_message, send_to_senders, ClientSender,
+};
 use crate::room::{
     handle_leave_without_transfer, host_changed_message, participant_list_message,
     participant_statuses_message, send_leave_notification,
@@ -222,7 +224,7 @@ pub(in crate::ws) async fn handle_join_room(
         .and_then(|v| v.as_str())
         .and_then(sanitize_name);
 
-    {
+    let joined = {
         let mut state = state.write().await;
         let (notifications, previous_leave, participants) = if !state.rooms.contains_key(room_id) {
             let sender = state.clients.get(client_id).map(|c| c.sender.clone());
@@ -295,6 +297,7 @@ pub(in crate::ws) async fn handle_join_room(
             send_leave_notification(&notification, "previous room leave");
         }
         enqueue_join_notifications(client_id, notifications);
+        let joined = participants.is_some();
         if let Some((senders, host_changed, list, statuses)) = participants {
             if let Some(message) = host_changed {
                 send_to_senders(&senders, &message, "host reconnect");
@@ -306,6 +309,12 @@ pub(in crate::ws) async fn handle_join_room(
             crate::room::send_room_capabilities(room, &state.clients);
             super::queue::send_queue_state(room, &state.clients, Some(client_id));
         }
+        joined
+    };
+    // The room's count changed for everyone's home cards (and the previous
+    // room's, when the client moved).
+    if joined {
+        broadcast_room_list(state).await;
     }
 }
 
@@ -811,6 +820,48 @@ mod tests {
                 serde_json::json!([null, null])
             );
         }
+    }
+
+    fn room_lists(
+        rx: &mut tokio::sync::mpsc::Receiver<Result<warp::ws::Message, warp::Error>>,
+    ) -> Vec<WsMessage> {
+        std::iter::from_fn(|| test_helpers::recv_msg(rx))
+            .filter(|message| message.msg_type == ServerMessageType::RoomList)
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn join_sends_the_new_count_in_the_room_list_to_everyone() {
+        let state = test_helpers::create_state();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
+        let (guest, _guest_rx) = test_helpers::create_client_with_rx("u2", "Ana", true);
+        let (outsider, mut outsider_rx) = test_helpers::create_client_with_rx("u3", "Luis", true);
+        host.room_id = Some("room".to_string());
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("guest".to_string(), guest);
+            locked.clients.insert("outsider".to_string(), outsider);
+            locked.rooms.insert(
+                "room".to_string(),
+                test_helpers::create_room("room", "host"),
+            );
+        }
+
+        // A join that fails changes no room.
+        handle_join_room(
+            "guest",
+            &join_message("nowhere"),
+            &state,
+            &test_jwt_config(),
+        )
+        .await;
+        assert!(room_lists(&mut outsider_rx).is_empty());
+
+        handle_join_room("guest", &join_message("room"), &state, &test_jwt_config()).await;
+        let lists = room_lists(&mut outsider_rx);
+        assert_eq!(lists.len(), 1);
+        assert_eq!(lists[0].payload.as_ref().unwrap()[0]["count"], 2);
     }
 
     #[tokio::test]

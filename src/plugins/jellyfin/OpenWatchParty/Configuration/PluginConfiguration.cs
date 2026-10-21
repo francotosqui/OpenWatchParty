@@ -11,6 +11,8 @@ public class PluginConfiguration : BasePluginConfiguration
     private string _jwtSecret = string.Empty;
     private int _tokenTtlSeconds = 3600;
     private int _inviteTtlSeconds = 3600;
+    private int _appearanceOpacity = 55;
+    private int _appearanceTextSize = 14;
 
     /// <summary>
     /// Gets or sets the JWT secret. A value is required unless insecure development mode is explicit.
@@ -83,4 +85,24 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public bool ShowSyncNudgeButton { get; set; }
 
+    /// <summary>
+    /// Gets or sets the opacity, in percent, of the room bar, its drop-downs, the lobby panel and the
+    /// toasts over the player. Between 40 and 100 in steps of 5; 55 by default.
+    /// </summary>
+    public int AppearanceOpacity
+    {
+        get => _appearanceOpacity;
+        set => _appearanceOpacity = Math.Clamp(
+            (int)Math.Round(value / 5.0, MidpointRounding.AwayFromZero) * 5, 40, 100);
+    }
+
+    /// <summary>
+    /// Gets or sets the base text size, in pixels, of the same elements; their icons and spacing
+    /// scale with it. Between 12 and 18; 14 by default.
+    /// </summary>
+    public int AppearanceTextSize
+    {
+        get => _appearanceTextSize;
+        set => _appearanceTextSize = Math.Clamp(value, 12, 18);
+    }
 }

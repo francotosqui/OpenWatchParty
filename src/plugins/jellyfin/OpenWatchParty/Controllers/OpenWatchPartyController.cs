@@ -46,14 +46,14 @@ public class OpenWatchPartyController : ControllerBase
         "ui/indicators.js",
         "ui/toasts.js",
         "ui/cards.js",
-        "ui/home.js",
-        "ui/guest-controls.js",
         "ui/panel-elements.js",
         "ui/lobby.js",
         "ui/participants.js",
         "ui/leave-confirm.js",
         "ui/room.js",
+        "ui/home.js",
         "ui/queue.js",
+        "ui/guest-controls.js",
         "ui/render.js",
         "ui/header.js",
         "playback/play.js",
@@ -386,6 +386,8 @@ public class OpenWatchPartyController : ControllerBase
                 session_server_url = sessionServerUrl,
                 hide_native_syncplay_button = config.HideNativeSyncPlayButton,
                 show_sync_nudge_button = config.ShowSyncNudgeButton,
+                appearance_opacity = config.AppearanceOpacity,
+                appearance_text_size = config.AppearanceTextSize,
                 invite_ttl_seconds = config.InviteTtlSeconds,
                 protocol_version = ProtocolVersion
             });
@@ -410,6 +412,8 @@ public class OpenWatchPartyController : ControllerBase
             session_server_url = sessionServerUrl,
             hide_native_syncplay_button = config.HideNativeSyncPlayButton,
             show_sync_nudge_button = config.ShowSyncNudgeButton,
+            appearance_opacity = config.AppearanceOpacity,
+            appearance_text_size = config.AppearanceTextSize,
             invite_ttl_seconds = config.InviteTtlSeconds,
             protocol_version = ProtocolVersion
         });
