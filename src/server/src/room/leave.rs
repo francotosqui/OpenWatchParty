@@ -257,9 +257,27 @@ pub fn send_leave_notification(notification: &LeaveNotification, context: &str) 
 /// Removes a client and leaves its room. Returns whether the client was
 /// still registered.
 pub async fn handle_disconnect(client_id: &str, state: &SharedState, tasks: &AppTasks) -> bool {
+    handle_disconnect_if(client_id, state, tasks, |_| true).await
+}
+
+/// Like [`handle_disconnect`], but keeps a registered client for which
+/// `should_remove` is false. The check runs under the write lock that removes
+/// the client, so nothing can change it in between.
+pub(crate) async fn handle_disconnect_if(
+    client_id: &str,
+    state: &SharedState,
+    tasks: &AppTasks,
+    should_remove: impl FnOnce(&Client) -> bool,
+) -> bool {
     let (reconnect_grace, removed) = {
         let mut state = state.write().await;
         let crate::types::ServerState { clients, rooms } = &mut *state;
+        if clients
+            .get(client_id)
+            .is_some_and(|client| !should_remove(client))
+        {
+            return false;
+        }
         let room_id = clients.get(client_id).and_then(|c| c.room_id.clone());
         info!(
             "Disconnecting client client_id={client_id} room_id={}",
