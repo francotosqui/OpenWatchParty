@@ -29,6 +29,9 @@
     text.textContent = String(message.text);
     msgEl.append(meta, text);
     container.appendChild(msgEl);
+    // The rendered chat keeps the same messages as chat.messages, which gains
+    // one at a time.
+    if (container.children.length > MAX_MESSAGES) container.children[0].remove();
     container.scrollTop = container.scrollHeight;
   };
 
