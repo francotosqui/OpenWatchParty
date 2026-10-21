@@ -112,3 +112,47 @@ test('a cancelled up-next countdown keeps the room on its item', async () => {
   expect(await playingItem(host)).toBe(firstId);
   expect(await playingItem(guest)).toBe(firstId);
 });
+
+test('a guest pause during the up-next countdown keeps the room on its item', async () => {
+  await openQueuedRoom();
+
+  // Five seconds before the countdown, so the guest has followed the seek
+  // when it starts.
+  await host.evaluate(() => {
+    const video = document.querySelector('video');
+    video.currentTime = video.duration - 20;
+  });
+  await expect
+    .poll(async () => {
+      const hostVideo = await helpers.videoState(host);
+      const guestVideo = await helpers.videoState(guest);
+      return Math.abs(hostVideo.time - guestVideo.time);
+    }, { timeout: 10_000 })
+    .toBeLessThan(3);
+  await helpers.waitForSettled(guest);
+  await expect(guest.locator('#owp-queue-next')).toContainText('Second');
+  // The host's page doesn't stop the countdown itself here, as when its own
+  // cancel comes too late: the server ends it with the guest's pause.
+  await host.evaluate(() => {
+    const queue = window.OpenWatchParty.queue;
+    queue.keptOnVideoTime = queue.onVideoTime;
+    queue.onVideoTime = () => {};
+  });
+  try {
+    await helpers.togglePlayback(guest);
+    await expect(host.locator('.owp-toast-system', { hasText: 'A guest paused playback' })).toHaveCount(1);
+    await helpers.waitForPaused(host);
+    await expect(guest.locator('#owp-queue-next')).toHaveCount(0);
+
+    // Past the 10-second countdown: still the first item, paused.
+    await guest.waitForTimeout(11_000);
+    expect(await playingItem(host)).toBe(firstId);
+    expect(await playingItem(guest)).toBe(firstId);
+    expect((await helpers.videoState(host)).paused).toBe(true);
+  } finally {
+    await host.evaluate(() => {
+      const queue = window.OpenWatchParty.queue;
+      queue.onVideoTime = queue.keptOnVideoTime;
+    });
+  }
+});
