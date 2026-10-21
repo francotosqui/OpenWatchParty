@@ -136,17 +136,21 @@
     return Math.min(outro, latest);
   };
 
+  // A room play or pause on its way to the host's player, such as a guest's
+  // pause: the server already ended the countdown, and the video plays on
+  // until the pause applies.
+  const roomCommandPending = () => Boolean(state.pendingPlayUntil) && utils.getServerNow() < state.pendingPlayUntil;
+
   // From the host's video events: the countdown starts at the credits, and
-  // stops when the room pauses or the host goes back before them. The browser
-  // also pauses at the end, which keeps it going.
+  // stops when the room pauses, at the end too, or the host goes back before
+  // them. The server also ends it when it accepts a pause.
   queue.onVideoTime = (video) => {
     if (!isQueueHost() || !state.roomMediaId || utils.getPlayingItemId?.() !== state.roomMediaId) return;
     const start = countdownStart(video);
     const inCredits = start !== null && video.currentTime >= start;
-    const stopped = video.paused && !video.ended;
     if (state.queueCountdownUntil) {
-      if (!inCredits || stopped) requestCountdown(false);
-    } else if (inCredits && !stopped && nextItem() && cancelledFor !== cancelKey()) {
+      if (!inCredits || video.paused) requestCountdown(false);
+    } else if (inCredits && !video.paused && !roomCommandPending() && nextItem() && cancelledFor !== cancelKey()) {
       requestCountdown(true);
     }
   };

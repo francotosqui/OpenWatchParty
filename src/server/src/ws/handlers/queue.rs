@@ -4,8 +4,9 @@
 //! members without the feature still follow it.
 //!
 //! The "up next" countdown runs on the server, so it doesn't depend on the
-//! host's tab timers, which browsers slow down in the background. The host's
-//! client cancels it when the room pauses or seeks back out of the credits.
+//! host's tab timers, which browsers slow down in the background. A pause the
+//! server accepts ends it (see `handle_playback`); the host's client also
+//! cancels it when its video pauses or seeks back out of the credits.
 
 use super::super::constants::QUEUE_COUNTDOWN_MS;
 use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
@@ -891,6 +892,105 @@ mod tests {
         assert_eq!(
             messages[1].payload.as_ref().unwrap()["countdown_until"],
             serde_json::Value::Null
+        );
+    }
+
+    fn player_event(action: &str) -> IncomingMessage {
+        message(
+            ClientMessageType::PlayerEvent,
+            serde_json::json!({ "action": action, "position": 1300.0 }),
+        )
+    }
+
+    /// The room plays `A` with a countdown toward `B`, and the host and the
+    /// guest may play and pause it.
+    async fn counting_down_room() -> (
+        SharedState,
+        Vec<Receiver<crate::messaging::OutboundMessage>>,
+        AppTasks,
+    ) {
+        let (state, mut receivers) = room_with_members().await;
+        let tasks = AppTasks::new();
+        {
+            let mut locked = state.write().await;
+            for id in ["host", "guest"] {
+                locked
+                    .clients
+                    .get_mut(id)
+                    .unwrap()
+                    .supports_shared_playback_control = true;
+            }
+            locked.rooms.get_mut("room").unwrap().state = PlaybackState {
+                position: 1300.0,
+                play_state: PlayState::Playing,
+            };
+        }
+        handle_queue("host", &add(&[A, B]), &state, &tasks).await;
+        handle_queue("host", &countdown(true), &state, &tasks).await;
+        receivers.iter_mut().for_each(|rx| {
+            drain(rx);
+        });
+        (state, receivers, tasks)
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_pause_ends_the_countdown_before_its_timer_moves_the_room() {
+        for member in ["host", "guest"] {
+            let (state, mut receivers, tasks) = counting_down_room().await;
+
+            super::super::playback::handle_playback(member, player_event("pause"), &state, &tasks)
+                .await;
+
+            assert_eq!(countdown_until(&state).await, None, "{member}");
+            // The pause comes first, so the host's client doesn't start the
+            // countdown again before it pauses.
+            for rx in &mut receivers[..2] {
+                let messages = drain(rx);
+                assert_eq!(
+                    types(&messages),
+                    [
+                        ServerMessageType::PlayerEvent,
+                        ServerMessageType::QueueState
+                    ],
+                    "{member}"
+                );
+                assert_eq!(
+                    messages[1].payload.as_ref().unwrap()["countdown_until"],
+                    serde_json::Value::Null
+                );
+            }
+            assert_eq!(
+                types(&drain(&mut receivers[2])),
+                [ServerMessageType::PlayerEvent]
+            );
+
+            sleep(Duration::from_millis(QUEUE_COUNTDOWN_MS + 1)).await;
+            run_due_timers(&state, B).await;
+            let locked = state.read().await;
+            let room = &locked.rooms["room"];
+            assert_eq!(room.media_id.as_deref(), Some(A), "{member}");
+            assert_eq!(room.state.play_state, PlayState::Paused);
+        }
+    }
+
+    #[tokio::test]
+    async fn only_a_pause_that_ends_a_countdown_sends_the_queue() {
+        let (state, mut receivers, tasks) = counting_down_room().await;
+        // The host's player waits for data: the countdown goes on.
+        super::super::playback::handle_playback("host", player_event("buffering"), &state, &tasks)
+            .await;
+        assert!(countdown_until(&state).await.is_some());
+        super::super::playback::handle_playback("host", player_event("pause"), &state, &tasks)
+            .await;
+        receivers.iter_mut().for_each(|rx| {
+            drain(rx);
+        });
+
+        super::super::playback::handle_playback("host", player_event("pause"), &state, &tasks)
+            .await;
+        assert_eq!(
+            types(&drain(&mut receivers[1])),
+            [ServerMessageType::PlayerEvent]
         );
     }
 

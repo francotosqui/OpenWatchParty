@@ -322,13 +322,17 @@ pub(in crate::ws) async fn handle_playback(
                 if action == Some(PlaybackAction::Pause) {
                     room.pending_play = None;
                 }
+                // A pause also ends the up-next countdown here, under the same
+                // lock, so its timer can't move the room on.
+                let countdown_ended =
+                    action == Some(PlaybackAction::Pause) && room.queue.countdown.take().is_some();
                 // A host command ends a guest's hold; a guest's command
                 // starts a new one below.
                 if action.is_some() {
                     room.guest_command_until = None;
                 }
 
-                if action == Some(PlaybackAction::Play) && !all_ready(room) {
+                let outcome = if action == Some(PlaybackAction::Play) && !all_ready(room) {
                     if from_guest {
                         // Until the pending play starts; then until the host
                         // has applied it (see prepare_scheduled_play).
@@ -373,7 +377,13 @@ pub(in crate::ws) async fn handle_playback(
                         send_to_senders(&senders, &outgoing, "playback");
                         PlaybackOutcome::Accepted
                     }
+                };
+                // After the pause, so that the host's client gets the pause
+                // first and doesn't start the countdown again.
+                if countdown_ended {
+                    super::queue::send_queue_state(room, clients, None);
                 }
+                outcome
             }
         } else {
             PlaybackOutcome::Error(ErrorCode::RoomNotFound, "Room not found")

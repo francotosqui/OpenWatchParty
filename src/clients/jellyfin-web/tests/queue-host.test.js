@@ -345,11 +345,12 @@ describe('host queue', () => {
     OWP.queue.onVideoTime(video(1385, { duration: 1400 }));
     assert.deepEqual(countdowns(), [true]);
 
-    // The browser pauses at the end: the countdown keeps going.
+    // By the end the room has moved on; the browser's pause there stops a
+    // countdown like any other.
     Object.assign(OWP.state, { queueCountdownUntil: 1 });
     OWP.queue.onQueueState();
     OWP.queue.onVideoTime(video(1400, { duration: 1400, paused: true, ended: true }));
-    assert.deepEqual(countdowns(), [true]);
+    assert.deepEqual(countdowns(), [true, false]);
 
     sent = [];
     enterRoom({ roomMediaId: 'e9', queueItems: ['e8', 'e9'].map(item) });
@@ -368,6 +369,26 @@ describe('host queue', () => {
     await settle();
     OWP.queue.onVideoTime(video(1384, { duration: 1400 }));
     OWP.queue.onVideoTime(video(1385, { duration: 1400 }));
+    assert.deepEqual(countdowns(), [true]);
+  });
+
+  it('waits for a room pause on its way to the host player before counting down again', async () => {
+    segments = { e3: [{ Type: 'Outro', StartTicks: 1200 * 10000000 }] };
+    enterRoom({ roomMediaId: 'e3', queueItems: ['e2', 'e3', 'e5'].map(item), queueCountdownUntil: 1 });
+    playing = 'e3';
+    OWP.queue.refresh();
+    await settle();
+    // A guest paused: the server ended the countdown, and the host's player
+    // applies the pause in a moment.
+    hostVideo = video(1250);
+    Object.assign(OWP.state, { pendingPlayUntil: OWP.utils.getServerNow() + 300, queueCountdownUntil: 0 });
+    OWP.queue.onQueueState();
+    OWP.queue.onVideoTime(video(1250.1));
+    assert.deepEqual(countdowns(), []);
+    // Once its moment has passed, the room playing on in the credits counts
+    // down again.
+    Object.assign(OWP.state, { pendingPlayUntil: OWP.utils.getServerNow() - 1 });
+    OWP.queue.onVideoTime(video(1260));
     assert.deepEqual(countdowns(), [true]);
   });
 
