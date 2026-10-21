@@ -867,6 +867,107 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn application_pongs_are_bounded_before_and_after_authentication() {
+        for authenticated in [false, true] {
+            let state = crate::test_helpers::create_state();
+            let config = test_jwt_config(true);
+            let tasks = crate::tasks::AppTasks::new();
+            let route = build_ws_route_with_tasks(
+                state.clone(),
+                config.clone(),
+                Arc::new(vec!["https://example.com".to_string()]),
+                test_ingress_config(Duration::from_secs(5)),
+                tasks.clone(),
+            );
+            let mut client = warp::test::ws()
+                .path("/ws")
+                .header("origin", "https://example.com")
+                .handshake(route)
+                .await
+                .unwrap();
+            client.recv().await.unwrap(); // client_hello
+            if authenticated {
+                authenticate(
+                    &mut client,
+                    &token_with_expiration(&config, crate::utils::now_ms() / 1000 + 60),
+                )
+                .await;
+            }
+            for field in ["payload", "room", "client", "client_ts"] {
+                let mut ping = serde_json::json!({
+                    "type": "ping", "payload": { "client_ts": 1678900000000_u64 }, "ts": 0
+                });
+                let padding = serde_json::Value::String("x".repeat(60 * 1024));
+                match field {
+                    "payload" => ping["payload"]["extra"] = padding,
+                    "client_ts" => ping["payload"]["client_ts"] = padding,
+                    _ => ping[field] = padding,
+                }
+                let encoded = serde_json::to_string(&ping).unwrap();
+                assert!(encoded.len() < crate::ws::constants::MAX_MESSAGE_SIZE);
+                client.send_text(encoded).await;
+                let response = client.recv().await.unwrap();
+                assert!(
+                    response.as_bytes().len() <= 256,
+                    "pong reflected {field}: {} bytes (authenticated={authenticated})",
+                    response.as_bytes().len()
+                );
+                let pong: serde_json::Value =
+                    serde_json::from_str(response.to_str().unwrap()).unwrap();
+                assert_eq!(pong["type"], "pong");
+                assert_eq!(pong["room"], serde_json::Value::Null);
+                assert_eq!(pong["client"], serde_json::Value::Null);
+                assert!(pong["ts"].as_u64().is_some());
+                assert!(pong["server_ts"].as_u64().is_some());
+                let expected = if field == "client_ts" {
+                    serde_json::Value::Null
+                } else {
+                    serde_json::json!({ "client_ts": 1678900000000_u64 })
+                };
+                assert_eq!(pong["payload"], expected);
+                assert_eq!(
+                    state
+                        .read()
+                        .await
+                        .clients
+                        .values()
+                        .next()
+                        .unwrap()
+                        .authenticated,
+                    authenticated
+                );
+            }
+            // Malformed or absent timestamps must not introduce another
+            // reflection path; older timestamp-less keep-alives still work.
+            for payload in [
+                serde_json::Value::Null,
+                serde_json::json!({}),
+                serde_json::json!({ "client_ts": -1 }),
+                serde_json::json!({ "client_ts": 1.5 }),
+                serde_json::json!({ "client_ts": "1678900000000" }),
+                serde_json::json!({ "client_ts": { "nested": "value" } }),
+                serde_json::json!({ "client_ts": [1, 2, 3] }),
+                serde_json::json!({ "client_ts": true }),
+            ] {
+                client
+                    .send_text(
+                        serde_json::json!({ "type": "ping", "payload": payload, "ts": 0 })
+                            .to_string(),
+                    )
+                    .await;
+                let response = client.recv().await.unwrap();
+                assert!(response.as_bytes().len() <= 256);
+                let pong: serde_json::Value =
+                    serde_json::from_str(response.to_str().unwrap()).unwrap();
+                assert_eq!(pong["type"], "pong");
+                assert_eq!(pong["payload"], serde_json::Value::Null);
+            }
+            tasks.cancel();
+            tasks.wait().await;
+        }
+    }
+
+    #[tokio::test]
     async fn outbound_failure_signal_closes_and_cleans_up_connection() {
         let state = crate::test_helpers::create_state();
         let route = build_ws_route(

@@ -291,7 +291,11 @@ Latency measurement and clock synchronization.
 }
 ```
 
-**Response:** `pong`
+**Response:** `pong`. Pings are available before authentication. Only a
+`client_ts` representable as an unsigned 64-bit integer is echoed; extra payload
+fields and the request's `room` and `client` fields are not reflected. A missing
+or invalid `client_ts` produces a bounded pong with a null payload, which clients
+ignore for clock synchronization.
 
 ### `chat_message`
 
