@@ -128,6 +128,35 @@ public sealed class ScriptInjectionMiddlewareTests
     }
 
     [Fact]
+    public async Task IndexStaysInMemoryAndOnlyALargeResponseSpillsToDisk()
+    {
+        var directory = Directory.CreateTempSubdirectory("owp-index-test-");
+        try
+        {
+            var spills = 0;
+            string TempDirectory()
+            {
+                spills++;
+                return directory.FullName;
+            }
+
+            var small = await InvokeAsync("/web/index.html", string.Empty, tempDirectory: TempDirectory);
+            Assert.Contains(ClientScriptInjection.ScriptTag, small.Body, StringComparison.Ordinal);
+            Assert.Equal(0, spills);
+
+            var largeBody = "<html><body>" + new string('x', 300 * 1024) + "</body></html>";
+            var large = await InvokeAsync("/web/index.html", string.Empty, body: largeBody, tempDirectory: TempDirectory);
+            Assert.Equal(ClientScriptInjection.InjectIntoHtml(largeBody), large.Body);
+            Assert.True(spills > 0);
+            Assert.Empty(directory.EnumerateFiles());
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void ServiceRegistrationIsIdempotent()
     {
         var services = new ServiceCollection();
@@ -149,7 +178,8 @@ public sealed class ScriptInjectionMiddlewareTests
         int statusCode = StatusCodes.Status200OK,
         string? contentEncoding = null,
         bool splitBody = false,
-        string? body = null)
+        string? body = null,
+        Func<string>? tempDirectory = null)
     {
         var html = body ?? "<html><head></head><body><h1>Jellyfin</h1></body></html>";
         var context = new DefaultHttpContext();
@@ -187,7 +217,8 @@ public sealed class ScriptInjectionMiddlewareTests
         var middleware = new ScriptInjectionMiddleware(
             next,
             baseUrl,
-            NullLogger<ScriptInjectionMiddleware>.Instance);
+            NullLogger<ScriptInjectionMiddleware>.Instance,
+            tempDirectory: tempDirectory);
         await middleware.InvokeAsync(context);
         output.Position = 0;
         using var reader = new StreamReader(output, Encoding.UTF8, leaveOpen: true);
