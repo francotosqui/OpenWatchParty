@@ -152,17 +152,19 @@
   };
 
   // The room's queue, with the room's item at `current` (null when it isn't
-  // queued) and the server time of the next advance, if one is counting down.
+  // queued), the item queue_add appended last and the server time of the next
+  // advance, if one is counting down.
   const validateQueueState = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
-    const { items, current, countdown_until: countdownUntil } = message.payload;
-    if (!onlyKeys(message.payload, ['items', 'current', 'countdown_until'])) return 'queue_state has unknown fields';
+    const { items, current, last_added: lastAdded, countdown_until: countdownUntil } = message.payload;
+    if (!onlyKeys(message.payload, ['items', 'current', 'last_added', 'countdown_until'])) return 'queue_state has unknown fields';
     if (!Array.isArray(items) || items.length > MAX_QUEUE_ITEMS) return 'items is invalid';
     for (const item of items) {
       if (!object(item) || !onlyKeys(item, ['id', 'title'])) return 'queue item is invalid';
       if (!string(item.id, MAX_ID_LENGTH) || !string(item.title, MAX_NAME_LENGTH)) return 'queue item is invalid';
     }
     if (!nullable(current, value => Number.isInteger(value) && value >= 0 && value < items.length)) return 'current is invalid';
+    if (!nullable(lastAdded, value => string(value, MAX_ID_LENGTH))) return 'last_added is invalid';
     return nullable(countdownUntil, timestamp) ? null : 'countdown_until is invalid';
   };
 

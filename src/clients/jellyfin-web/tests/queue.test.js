@@ -65,16 +65,20 @@ describe('room queue', () => {
   });
 
   it('stores the queue of its own room only', () => {
-    h.handleQueueState(queueState('room-1', { items: [item('a'), item('b')], current: 0, countdown_until: 1234 }));
+    h.handleQueueState(queueState('room-1', { items: [item('a'), item('b')], current: 0, last_added: 'b', countdown_until: 1234 }));
     assert.deepEqual(OWP.state.queueItems, [item('a'), item('b')]);
     assert.equal(OWP.state.queueCurrent, 0);
     assert.equal(OWP.state.queueCountdownUntil, 1234);
+    assert.equal(OWP.state.queueLastAdded, 'b');
+    assert.equal(OWP.state.queueReceived, true);
     assert.equal(queueUpdates, 1);
 
-    h.handleQueueState(queueState('room-1', { items: [item('a')], current: 0, countdown_until: null }));
+    // The host removed b, the last one added.
+    h.handleQueueState(queueState('room-1', { items: [item('a')], current: 0, last_added: 'b', countdown_until: null }));
     assert.equal(OWP.state.queueCountdownUntil, 0);
+    assert.equal(OWP.state.queueLastAdded, 'b');
 
-    h.handleQueueState(queueState('room-2', { items: [], current: null, countdown_until: null }));
+    h.handleQueueState(queueState('room-2', { items: [], current: null, last_added: null, countdown_until: null }));
     assert.deepEqual(OWP.state.queueItems, [item('a')]);
     assert.equal(queueUpdates, 2);
     assert.equal(queueStates, 2);
@@ -93,11 +97,13 @@ describe('room queue', () => {
   });
 
   it('forgets the queue on entering another room', () => {
-    h.handleQueueState(queueState('room-1', { items: [item('a')], current: 0, countdown_until: 1234 }));
+    h.handleQueueState(queueState('room-1', { items: [item('a')], current: 0, last_added: 'a', countdown_until: 1234 }));
     h.handleRoomState(roomState('room-2', 'x'), null);
     assert.deepEqual(OWP.state.queueItems, []);
     assert.equal(OWP.state.queueCurrent, null);
     assert.equal(OWP.state.queueCountdownUntil, 0);
+    assert.equal(OWP.state.queueLastAdded, null);
+    assert.equal(OWP.state.queueReceived, false);
     assert.equal(OWP.state.roomMediaId, 'x');
   });
 

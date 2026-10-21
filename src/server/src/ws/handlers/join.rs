@@ -752,12 +752,17 @@ mod tests {
                 let room = locked.rooms.get_mut("room").unwrap();
                 room.media_id = Some("a".repeat(32));
                 room.queue.add(
-                    vec![crate::room::QueueItem {
-                        id: "a".repeat(32),
-                        title: "Pilot".to_string(),
-                    }],
+                    ["a", "b"]
+                        .map(|id| crate::room::QueueItem {
+                            id: id.repeat(32),
+                            title: "Pilot".to_string(),
+                        })
+                        .to_vec(),
                     None,
                 );
+                // The host removed the item it added last: a reloaded page
+                // or a new host still fills the queue on from it.
+                room.queue.remove(&"b".repeat(32), room.media_id.as_deref());
             }
 
             handle_join_room("guest", &join_message("room"), &state, &jwt_config).await;
@@ -769,7 +774,10 @@ mod tests {
                 .find(|msg| msg.msg_type == ServerMessageType::QueueState);
             assert_eq!(queue.is_some(), supports_queue);
             if let Some(queue) = queue {
-                assert_eq!(queue.payload.as_ref().unwrap()["current"], 0);
+                let payload = queue.payload.as_ref().unwrap();
+                assert_eq!(payload["current"], 0);
+                assert_eq!(payload["items"].as_array().unwrap().len(), 1);
+                assert_eq!(payload["last_added"], "b".repeat(32));
             }
         }
     }

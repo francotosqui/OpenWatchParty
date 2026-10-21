@@ -170,6 +170,8 @@
     queueItems: [],         // [{ id, title }]
     queueCurrent: null,     // Index of the room's item in queueItems, or null
     queueCountdownUntil: 0, // Server time the room moves to the next item, 0 without a countdown
+    queueLastAdded: null,   // The item the room's queue_add appended last, where filling goes on
+    queueReceived: false,   // Whether queue_state came since entering the room or reconnecting
   });
 
   const createRoomState = () => ({

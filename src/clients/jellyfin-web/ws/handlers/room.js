@@ -58,6 +58,8 @@
     state.queueItems = msg.payload.items;
     state.queueCurrent = msg.payload.current;
     state.queueCountdownUntil = msg.payload.countdown_until || 0;
+    state.queueLastAdded = msg.payload.last_added;
+    state.queueReceived = true;
     if (ui.updateQueue) ui.updateQueue();
     if (OWP.queue?.onQueueState) OWP.queue.onQueueState();
   };

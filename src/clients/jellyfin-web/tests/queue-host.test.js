@@ -46,8 +46,12 @@ globalThis.ApiClient = {
     return { Items: segments[path.replace('MediaSegments/', '')] || [] };
   }
 };
+OWP.ui = { render: () => {}, showToast: () => {} };
+require('../ws/handlers/room.js');
+require('../ws/handlers/sync.js');
 require('../app/queue.js');
 
+const h = OWP._wsHandlers;
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 const item = id => ({ id, title: `S1:E${id.slice(1)} · Ep ${id.slice(1)}` });
 const ids = message => message.payload.items.map(entry => entry.id);
@@ -65,8 +69,38 @@ const enterRoom = (fields = {}) => {
     roomMediaId: 'e1',
     queueItems: [],
     queueCurrent: null,
-    queueCountdownUntil: 0
+    queueCountdownUntil: 0,
+    queueLastAdded: null,
+    queueReceived: true
   }, fields);
+};
+
+// What the server sends, for the tests that go through the message handlers.
+const roomState = (room, mediaId) => ({
+  type: 'room_state',
+  room,
+  client: 'host',
+  server_ts: Date.now(),
+  payload: {
+    name: 'Room',
+    host_id: 'host',
+    participant_count: 2,
+    media_id: mediaId,
+    state_server_ts: Date.now(),
+    target_server_ts: null,
+    state: { position: 0, play_state: 'paused' }
+  }
+});
+const queueState = (room, queued, lastAdded) => ({
+  type: 'queue_state',
+  room,
+  payload: { items: queued.map(item), current: null, last_added: lastAdded, countdown_until: null }
+});
+// A new page: this module and the room state start over.
+const reloadPage = () => {
+  delete require.cache[require.resolve('../app/queue.js')];
+  require('../app/queue.js');
+  Object.assign(OWP.state, OWP.stateFactories.createRoomState(), { clientId: 'host' });
 };
 
 describe('host queue', () => {
@@ -80,7 +114,12 @@ describe('host queue', () => {
   });
 
   it('fills an empty queue with the room episode and the next five in the library', async () => {
-    enterRoom();
+    // Not before the server sent the room's queue.
+    enterRoom({ queueReceived: false });
+    OWP.queue.refresh();
+    await settle();
+    assert.equal(itemRequests, 0);
+    Object.assign(OWP.state, { queueReceived: true });
     OWP.queue.refresh();
     await settle();
     const adds = sent.filter(message => message.type === 'queue_add');
@@ -88,13 +127,13 @@ describe('host queue', () => {
     assert.deepEqual(adds[0].payload.items, ['e1', 'e2', 'e3', 'e5', 'e6', 'e7'].map(item));
   });
 
-  it('tops up only when the room moves on, from the episode it added last', async () => {
+  it('tops up only when the room moves on, from the episode the room added last', async () => {
     enterRoom();
     OWP.queue.refresh();
     await settle();
     sent = [];
     // The host removed e7: the queue stays one short until the room moves on.
-    Object.assign(OWP.state, { queueItems: ['e1', 'e2', 'e3', 'e5', 'e6'].map(item) });
+    Object.assign(OWP.state, { queueItems: ['e1', 'e2', 'e3', 'e5', 'e6'].map(item), queueLastAdded: 'e7' });
     OWP.queue.refresh();
     await settle();
     assert.deepEqual(sent, []);
@@ -105,7 +144,7 @@ describe('host queue', () => {
   });
 
   it('leaves the queue it inherits as host alone until the room moves on', async () => {
-    enterRoom({ queueItems: ['e1', 'e2', 'e3'].map(item) });
+    enterRoom({ queueItems: ['e1', 'e2', 'e3'].map(item), queueLastAdded: 'e3' });
     OWP.queue.refresh();
     await settle();
     assert.equal(itemRequests, 0);
@@ -116,6 +155,36 @@ describe('host queue', () => {
     assert.deepEqual(sent.map(ids), [['e5', 'e6', 'e7', 'e8']]);
   });
 
+  it('keeps an episode the host removed out after the host reloads the page', async () => {
+    enterRoom();
+    const { roomId } = OWP.state;
+    // Before the reload, the host's page filled e1 to e7 and the host removed
+    // e3. The new page gets room_state first, then the queue.
+    reloadPage();
+    h.handleRoomState(roomState(roomId, 'e1'), null);
+    await settle();
+    h.handleQueueState(queueState(roomId, ['e1', 'e2', 'e5', 'e6', 'e7'], 'e7'));
+    await settle();
+    assert.equal(itemRequests, 0);
+    assert.deepEqual(sent, []);
+    h.handleRoomState(roomState(roomId, 'e2'), null);
+    await settle();
+    assert.deepEqual(sent.map(ids), [['e8', 'e9']]);
+  });
+
+  it('keeps an episode the previous host removed out after taking over the room', async () => {
+    // The previous host filled e1 to e7 and removed e7.
+    enterRoom({ clientId: 'host', isHost: false, roomHostId: 'old-host' });
+    const { roomId } = OWP.state;
+    h.handleQueueState(queueState(roomId, ['e1', 'e2', 'e3', 'e5', 'e6'], 'e7'));
+    h.handleHostChanged({ room: roomId, payload: { host_id: 'host', host_name: 'Host' } });
+    await settle();
+    assert.deepEqual(sent, []);
+    h.handleRoomState(roomState(roomId, 'e2'), null);
+    await settle();
+    assert.deepEqual(sent.map(ids), [['e8', 'e9']]);
+  });
+
   it('waits for the queue after reconnecting before topping it up', async () => {
     enterRoom();
     OWP.queue.refresh();
@@ -123,11 +192,13 @@ describe('host queue', () => {
     sent = [];
     // The room moved on to e2 while the connection was down: room_state comes
     // before the queue, which then shows four episodes ahead.
-    Object.assign(OWP.state, { roomMediaId: 'e2', queueItems: [] });
+    Object.assign(OWP.state, { roomMediaId: 'e2', queueItems: [], queueLastAdded: null, queueReceived: false });
     OWP.queue.refresh();
     await settle();
     assert.deepEqual(sent, []);
-    Object.assign(OWP.state, { queueItems: ['e1', 'e2', 'e3', 'e5', 'e6', 'e7'].map(item) });
+    Object.assign(OWP.state, {
+      queueItems: ['e1', 'e2', 'e3', 'e5', 'e6', 'e7'].map(item), queueLastAdded: 'e7', queueReceived: true
+    });
     OWP.queue.refresh();
     await settle();
     assert.deepEqual(sent.map(ids), [['e8']]);

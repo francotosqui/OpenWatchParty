@@ -209,10 +209,14 @@ describe('room reconnection lifecycle', () => {
       { name: 'Guest', isHost: false, status: null }
     ]);
 
+    // The queue that the host fills comes after room_state.
+    assert.equal(OWP.state.queueReceived, false);
     const items = [{ id: 'a', title: 'Pilot' }, { id: 'b', title: 'Second' }];
-    second.receive({ type: 'queue_state', room: 'room-a', payload: { items, current: 0, countdown_until: null } });
+    second.receive({ type: 'queue_state', room: 'room-a', payload: { items, current: 0, last_added: 'b', countdown_until: null } });
     assert.deepEqual(OWP.state.queueItems, items);
     assert.equal(OWP.state.queueCurrent, 0);
+    assert.equal(OWP.state.queueLastAdded, 'b');
+    assert.equal(OWP.state.queueReceived, true);
   });
 
   it('reports the previous WebSocket close after reconnecting', async () => {

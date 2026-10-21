@@ -33,22 +33,20 @@
     : episode.Name || episode.Id);
 
   // The host fills an empty queue, then tops it up only when the room moves on
-  // from an item this client saw as host. Filling goes on from the episode this
-  // client added last in the room, so one the host removed doesn't come back.
+  // from an item this client saw as host. It waits for the room's queue_state,
+  // which comes after room_state on joining. Filling goes on from the episode
+  // the room's queue_add appended last, which the server keeps, so one the
+  // host removed doesn't come back after a reload or a host change either.
   // Each room item is looked at once.
-  let filled = { roomId: '', id: '' };
   let seenItem = '';
 
   const fill = async () => {
+    if (!state.queueReceived) return;
     const roomId = state.roomId;
     const item = `${roomId}|${state.roomMediaId}`;
     const previous = seenItem;
     if (previous === item) return;
     const seenRoom = previous.startsWith(`${roomId}|`);
-    // The room's item only changes through the queue, so in a room this
-    // client already saw, an empty queue is one that hasn't arrived yet
-    // after reconnecting: the queue_state that follows decides.
-    if (!state.queueItems.length && seenRoom) return;
     seenItem = item;
     if (state.queueItems.length && !seenRoom) return;
     const index = roomIndex();
@@ -56,8 +54,7 @@
     if (state.queueItems.length && index < 0) return;
     const upcoming = state.queueItems.length ? state.queueItems.length - 1 - index : 0;
     if (upcoming >= UPCOMING) return;
-    const lastQueued = state.queueItems[state.queueItems.length - 1]?.id;
-    const startId = (filled.roomId === roomId && filled.id) || lastQueued || state.roomMediaId;
+    const startId = state.queueLastAdded || state.roomMediaId;
     const userId = window.ApiClient.getCurrentUserId();
     let start;
     let result;
@@ -78,7 +75,6 @@
       .slice(0, UPCOMING - upcoming);
     const items = (state.queueItems.length ? [] : [start]).concat(episodes);
     if (!items.length) return;
-    filled = { roomId, id: items[items.length - 1].Id };
     send('queue_add', { items: items.map(episode => ({ id: episode.Id, title: episodeTitle(episode) })) });
   };
 

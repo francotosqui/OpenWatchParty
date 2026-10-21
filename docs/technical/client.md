@@ -130,6 +130,8 @@ Defines global shared state and configuration constants.
 | `queueItems` | array | `{ id, title }` entries from `queue_state` |
 | `queueCurrent` | number\|null | Index of the room's item in `queueItems` |
 | `queueCountdownUntil` | number | Server time (ms) at which the room moves to the next item; 0 without a countdown |
+| `queueLastAdded` | string\|null | `last_added` from `queue_state`: the item the room's queue was filled up to |
+| `queueReceived` | boolean | `true` once `queue_state` came for this room since joining or reconnecting; the host waits for it before filling the queue |
 | `lastSyncServerTs` | number | Server timestamp of last sync |
 | `lastSyncPosition` | number | Position of last sync (seconds) |
 | `lastSyncPlayState` | string | Play state of last sync |

@@ -266,7 +266,9 @@ Responds with `pong` for latency measurement.
 Host only. Change the room's queue and send `queue_state` to the members that
 negotiated `media_queue`. An advance, also when a countdown ends, moves the room
 to the item from 0 through the pending-play flow and announces it with
-`room_state`. See [Room queue](protocol.md#room-queue).
+`room_state`. The queue also keeps `last_added`, the last item `queue_add`
+appended, after that item is removed too, so the host's client fills the queue
+on from it. See [Room queue](protocol.md#room-queue).
 
 ## Module: `room/`
 

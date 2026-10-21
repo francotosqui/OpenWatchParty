@@ -25,6 +25,10 @@ pub(crate) struct Countdown {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct MediaQueue {
     pub items: Vec<QueueItem>,
+    /// The last item `add` appended. It stays after that item is removed, so
+    /// the host's client fills the queue on from it and an item the host
+    /// removed doesn't come back, after a reload or a host change too.
+    pub last_added: Option<String>,
     pub countdown: Option<Countdown>,
     /// The generation of the pending play the last advance armed. While that
     /// play is pending, the host may still report its previous item, which
@@ -65,6 +69,7 @@ impl MediaQueue {
                 }
                 self.items.remove(0);
             }
+            self.last_added = Some(item.id.clone());
             self.items.push(item);
             changed = true;
         }
@@ -103,6 +108,7 @@ impl MediaQueue {
         serde_json::json!({
             "items": self.items,
             "current": self.current(media_id),
+            "last_added": self.last_added,
             "countdown_until": self.countdown.map(|countdown| countdown.until),
         })
     }
@@ -146,7 +152,25 @@ mod tests {
         let mut queue = queue(&["a"]);
         assert!(queue.add(vec![item("b"), item("a"), item("b"), item("c")], Some("a")));
         assert_eq!(ids(&queue), ["a", "b", "c"]);
+        assert_eq!(queue.last_added.as_deref(), Some("c"));
         assert!(!queue.add(vec![item("c")], Some("a")));
+    }
+
+    #[test]
+    fn the_last_added_item_outlives_its_removal() {
+        let names: Vec<String> = (0..MAX_QUEUE_ITEMS).map(|i| i.to_string()).collect();
+        let mut full = queue(&names.iter().map(String::as_str).collect::<Vec<_>>());
+        let mut queue = queue(&["a"]);
+        assert!(queue.add(vec![item("b"), item("c")], Some("a")));
+        assert!(queue.remove("c", Some("a")));
+        assert_eq!(queue.last_added.as_deref(), Some("c"));
+
+        // Items already queued, or that don't fit, don't move it.
+        assert!(!queue.add(vec![item("b")], Some("a")));
+        assert_eq!(queue.last_added.as_deref(), Some("c"));
+        full.last_added = Some("19".to_string());
+        assert!(!full.add(vec![item("new")], Some("0")));
+        assert_eq!(full.last_added.as_deref(), Some("19"));
     }
 
     #[test]
@@ -207,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn payload_reports_items_current_and_countdown() {
+    fn payload_reports_items_current_last_added_and_countdown() {
         let mut queue = queue(&["a", "b"]);
         assert_eq!(
             queue.payload(Some("a")),
@@ -217,6 +241,7 @@ mod tests {
                     { "id": "b", "title": "Episode b" },
                 ],
                 "current": 0,
+                "last_added": null,
                 "countdown_until": null,
             })
         );
@@ -225,8 +250,10 @@ mod tests {
             until: 1234,
             generation: 7,
         });
+        queue.last_added = Some("c".to_string());
         let payload = queue.payload(None);
         assert_eq!(payload["current"], serde_json::Value::Null);
+        assert_eq!(payload["last_added"], "c");
         assert_eq!(payload["countdown_until"], 1234);
     }
 }

@@ -544,7 +544,7 @@ It is a separate message because `participant_list` rejects unknown fields: clie
 
 ### `queue_state`
 
-The room's [queue](#room-queue), sent only to members that declared `media_queue`: after each change, on joining (after `room_capabilities`) and after a move to another item (after `room_state`).
+The room's [queue](#room-queue), sent only to members that declared `media_queue`: after each change, on creating the room and on joining it (after `room_state`, `room_capabilities` and the participant list), and after a move to another item (after `room_state`).
 
 ```json
 {
@@ -556,6 +556,7 @@ The room's [queue](#room-queue), sent only to members that declared `media_queue
       { "id": "fedcba9876543210fedcba9876543210", "title": "S1:E2 · The Storm" }
     ],
     "current": 0,
+    "last_added": "fedcba9876543210fedcba9876543210",
     "countdown_until": 1678900010000
   },
   "ts": 1678900000000,
@@ -567,6 +568,7 @@ The room's [queue](#room-queue), sent only to members that declared `media_queue
 |---------------|------|-------------|
 | `items` | array | Up to 20 `{ id, title }`, watched ones first |
 | `current` | number or null | Index of the room's `media_id` in `items`, or `null` when it isn't queued |
+| `last_added` | string or null | The last item `queue_add` appended, or `null` before the first. It stays after that item is removed: the host's web client fills the queue on from it, so an episode the host removed doesn't come back after a reload or a host change |
 | `countdown_until` | number or null | Server time (ms) at which the room moves to the next item, or `null` |
 
 ### `player_event`
