@@ -74,6 +74,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         statuses: HashMap::new(),
         status_broadcast: Default::default(),
         guest_command_until: None,
+        queue: Default::default(),
     }
 }
 
@@ -187,12 +188,17 @@ pub(in crate::ws) async fn handle_create_room(
             );
         }
         send_message(sender.clone(), &room_msg, Some(client_id));
-        if let Some(room) = room_msg.room.as_ref().and_then(|id| rooms.get(id)) {
+        let room = room_msg.room.as_ref().and_then(|id| rooms.get(id));
+        if let Some(room) = room {
             crate::room::send_room_capabilities(room, clients);
         }
         if let Some((list, statuses)) = participant_list {
             send_message(sender.clone(), &list, Some(client_id));
             send_message(sender, &statuses, Some(client_id));
+        }
+        // The host's client fills the queue only once it has the room's.
+        if let Some(room) = room {
+            super::queue::send_queue_state(room, clients, Some(client_id));
         }
     }
 
@@ -316,6 +322,43 @@ mod tests {
             statuses.payload.unwrap()["statuses"],
             serde_json::json!([null])
         );
+    }
+
+    #[tokio::test]
+    async fn create_room_sends_the_empty_queue_to_a_host_that_negotiated_it() {
+        for supports_queue in [true, false] {
+            let state = test_helpers::create_state();
+            let (mut host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
+            host.supports_media_queue = supports_queue;
+            state.write().await.clients.insert("host".to_string(), host);
+            let parsed = IncomingMessage {
+                msg_type: crate::types::ClientMessageType::CreateRoom,
+                room: None,
+                client: Some("host".to_string()),
+                payload: Some(serde_json::json!({})),
+                ts: crate::utils::now_ms(),
+                server_ts: None,
+            };
+
+            handle_create_room("host", &parsed, &state).await;
+
+            let messages: Vec<_> =
+                std::iter::from_fn(|| test_helpers::recv_msg(&mut host_rx)).collect();
+            let queue = messages
+                .iter()
+                .position(|msg| msg.msg_type == ServerMessageType::QueueState);
+            assert_eq!(queue.is_some(), supports_queue);
+            if let Some(queue) = queue {
+                assert_eq!(
+                    messages[queue].payload.as_ref().unwrap()["items"],
+                    serde_json::json!([])
+                );
+                let statuses = messages
+                    .iter()
+                    .position(|msg| msg.msg_type == ServerMessageType::ParticipantStatuses);
+                assert!(statuses.unwrap() < queue);
+            }
+        }
     }
 
     #[tokio::test]

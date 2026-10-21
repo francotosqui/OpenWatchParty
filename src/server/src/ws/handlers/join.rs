@@ -71,6 +71,36 @@ fn prepare_join_notifications(
     prepare_join_notifications_at(client_id, room, locked_clients, Instant::now(), now_ms())
 }
 
+/// The room as a member sees it on joining, or when the room moves to another
+/// queue item. `client` is the recipient's own id.
+pub(super) fn room_state_message(
+    client_id: &str,
+    room: &Room,
+    now: Instant,
+    wall_now_ms: u64,
+) -> WsMessage {
+    let target_server_ts = match (room.target_at, room.target_server_ts) {
+        (Some(deadline), Some(target)) if now < deadline && wall_now_ms < target => Some(target),
+        _ => None,
+    };
+    WsMessage {
+        msg_type: ServerMessageType::RoomState,
+        room: Some(room.room_id.clone()),
+        client: Some(client_id.to_string()),
+        payload: Some(serde_json::json!({
+            "name": room.name,
+            "host_id": room.host_id,
+            "state": room.state,
+            "state_server_ts": room.state_server_ts,
+            "target_server_ts": target_server_ts,
+            "participant_count": room.clients.len(),
+            "media_id": room.media_id
+        })),
+        ts: now_ms(),
+        server_ts: Some(now_ms()),
+    }
+}
+
 fn prepare_join_notifications_at(
     client_id: &str,
     room: &Room,
@@ -78,28 +108,9 @@ fn prepare_join_notifications_at(
     now: Instant,
     wall_now_ms: u64,
 ) -> JoinNotifications {
-    let target_server_ts = match (room.target_at, room.target_server_ts) {
-        (Some(deadline), Some(target)) if now < deadline && wall_now_ms < target => Some(target),
-        _ => None,
-    };
     (
         locked_clients.get(client_id).map(|c| c.sender.clone()),
-        WsMessage {
-            msg_type: ServerMessageType::RoomState,
-            room: Some(room.room_id.clone()),
-            client: Some(client_id.to_string()),
-            payload: Some(serde_json::json!({
-                "name": room.name,
-                "host_id": room.host_id,
-                "state": room.state,
-                "state_server_ts": room.state_server_ts,
-                "target_server_ts": target_server_ts,
-                "participant_count": room.clients.len(),
-                "media_id": room.media_id
-            })),
-            ts: now_ms(),
-            server_ts: Some(now_ms()),
-        },
+        room_state_message(client_id, room, now, wall_now_ms),
         Some((
             collect_room_senders(room, locked_clients, Some(client_id)),
             WsMessage {
@@ -296,6 +307,7 @@ pub(in crate::ws) async fn handle_join_room(
         }
         if let Some(room) = state.rooms.get(room_id) {
             crate::room::send_room_capabilities(room, &state.clients);
+            super::queue::send_queue_state(room, &state.clients, Some(client_id));
         }
         joined
     };
@@ -724,6 +736,50 @@ mod tests {
         );
         assert_eq!(locked.clients["guest"].room_id.as_deref(), Some("room"));
         assert!(!locked.rooms["room"].ready_clients.contains("guest"));
+    }
+
+    #[tokio::test]
+    async fn join_sends_the_queue_to_a_joiner_that_negotiated_it() {
+        for supports_queue in [true, false] {
+            let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
+            {
+                let mut locked = state.write().await;
+                locked
+                    .clients
+                    .get_mut("guest")
+                    .unwrap()
+                    .supports_media_queue = supports_queue;
+                let room = locked.rooms.get_mut("room").unwrap();
+                room.media_id = Some("a".repeat(32));
+                room.queue.add(
+                    ["a", "b"]
+                        .map(|id| crate::room::QueueItem {
+                            id: id.repeat(32),
+                            title: "Pilot".to_string(),
+                        })
+                        .to_vec(),
+                    None,
+                );
+                // The host removed the item it added last: a reloaded page
+                // or a new host still fills the queue on from it.
+                room.queue.remove(&"b".repeat(32), room.media_id.as_deref());
+            }
+
+            handle_join_room("guest", &join_message("room"), &state, &jwt_config).await;
+
+            let messages: Vec<_> =
+                std::iter::from_fn(|| test_helpers::recv_msg(&mut guest_rx)).collect();
+            let queue = messages
+                .iter()
+                .find(|msg| msg.msg_type == ServerMessageType::QueueState);
+            assert_eq!(queue.is_some(), supports_queue);
+            if let Some(queue) = queue {
+                let payload = queue.payload.as_ref().unwrap();
+                assert_eq!(payload["current"], 0);
+                assert_eq!(payload["items"].as_array().unwrap().len(), 1);
+                assert_eq!(payload["last_added"], "b".repeat(32));
+            }
+        }
     }
 
     #[tokio::test]

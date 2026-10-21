@@ -25,6 +25,7 @@ pub struct Client {
     pub authentication_version: u64,
     pub supports_host_transfer: bool,
     pub supports_shared_playback_control: bool,
+    pub supports_media_queue: bool,
     pub message_count: u32,
     pub last_reset: Instant,
     pub last_seen: Instant, // For zombie connection detection
@@ -63,6 +64,8 @@ pub struct Room {
     /// updates sent before the host applied it.
     #[serde(skip)]
     pub guest_command_until: Option<Instant>,
+    #[serde(skip)]
+    pub queue: crate::room::MediaQueue,
 }
 
 #[derive(Debug, Clone)]
@@ -150,6 +153,11 @@ pub enum ClientMessageType {
     ClientLog,
     ChatMessage,
     ParticipantStatus,
+    QueueAdd,
+    QueueRemove,
+    QueueMove,
+    QueueAdvance,
+    QueueCountdown,
     #[serde(other)]
     Unknown,
 }
@@ -171,6 +179,11 @@ impl ClientMessageType {
             Self::ClientLog => "client_log",
             Self::ChatMessage => "chat_message",
             Self::ParticipantStatus => "participant_status",
+            Self::QueueAdd => "queue_add",
+            Self::QueueRemove => "queue_remove",
+            Self::QueueMove => "queue_move",
+            Self::QueueAdvance => "queue_advance",
+            Self::QueueCountdown => "queue_countdown",
             Self::Unknown => "unknown",
         }
     }
@@ -196,6 +209,7 @@ pub enum ServerMessageType {
     HostChanged,
     RoomClosed,
     ChatMessage,
+    QueueState,
 }
 
 impl ServerMessageType {
@@ -217,6 +231,7 @@ impl ServerMessageType {
             Self::ChatMessage => "chat_message",
             Self::ParticipantList => "participant_list",
             Self::ParticipantStatuses => "participant_statuses",
+            Self::QueueState => "queue_state",
         }
     }
 }
@@ -433,6 +448,11 @@ mod tests {
             ClientLog,
             ChatMessage,
             ParticipantStatus,
+            QueueAdd,
+            QueueRemove,
+            QueueMove,
+            QueueAdvance,
+            QueueCountdown,
         ] {
             let wire = serde_json::to_string(&message_type).unwrap();
             assert_eq!(wire, format!("\"{}\"", message_type.as_str()));

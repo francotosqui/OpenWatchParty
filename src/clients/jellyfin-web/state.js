@@ -112,12 +112,13 @@
     },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
     SUPPRESS_MS: 2000,
     SEEK_THRESHOLD: 1.0,          // Minimum position change for broadcasting a seek or correcting received playback
+    QUEUE_COUNTDOWN_MS: 10000,    // How long the server shows "up next" before the room moves to the next queue item
     OWN_COMMAND_HOLD_MS: 1500,    // A guest's own play or pause holds against room updates already on their way
     STATE_UPDATE_MS: 1000,        // Playback status cadence; the sender also throttles updates to this interval
     SYNC_LEAD_MS: 300,            // Compensates processing + initial HLS buffer
@@ -164,6 +165,15 @@
   // Factories are the sole defaults for each domain; resets never copy credentials
   // or reset monotonic attempt counters from a whole-state snapshot.
 
+  // The room's queue, from queue_state when the server has media_queue.
+  const createQueueState = () => ({
+    queueItems: [],         // [{ id, title }]
+    queueCurrent: null,     // Index of the room's item in queueItems, or null
+    queueCountdownUntil: 0, // Server time the room moves to the next item, 0 without a countdown
+    queueLastAdded: null,   // The item the room's queue_add appended last, where filling goes on
+    queueReceived: false,   // Whether queue_state came since entering the room or reconnecting
+  });
+
   const createRoomState = () => ({
     roomId: '',
     isHost: false,
@@ -181,8 +191,10 @@
     lastSyncPlayState: '',
     roomWaiting: false,
     roomHostId: '',
+    roomMediaId: '',       // The room's item, from room_state: a change is a queue advance
     sharedPlaybackControl: false,
     readyRoomId: '',
+    ...createQueueState(),
   });
 
   const createRoomPlaybackState = () => ({
@@ -323,7 +335,7 @@
   });
 
   OWP.stateFactories = {
-    createState, createRoomState, createRoomPlaybackState, createConnectionSessionState,
+    createState, createRoomState, createQueueState, createRoomPlaybackState, createConnectionSessionState,
     createRoomUIState, createInviteWorkState
   };
   // A loader retry can encounter state from an already loaded module. Install

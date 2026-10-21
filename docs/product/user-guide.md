@@ -128,7 +128,7 @@ Shared controls require a compatible server and host. With an older host or serv
 
 The panel follows the Jellyfin display language; English, Spanish, French and German (`en`, `es`, `fr`, `de`) are included.
 
-Over the player, the room bar, its drop-downs, the lobby panel and the notifications are semi-transparent, so the video shows through them, blurred. The administrator sets their opacity and text size under **Web Client** in the plugin settings (55 % and 14 px by default). If your system asks apps to reduce transparency, they stay opaque.
+Over the player, the room bar, its drop-downs, the lobby panel, the up-next strip and the notifications are semi-transparent, so the video shows through them, blurred. The administrator sets their opacity and text size under **Web Client** in the plugin settings (55 % and 14 px by default). If your system asks apps to reduce transparency, they stay opaque.
 
 ![Close-up of the room bar with the chat open: sync dot, latency, room name, participants, chat and leave]({{ '/assets/images/watch-party-panel-closeup.png' | relative_url }})
 
@@ -148,11 +148,12 @@ In a room the panel becomes a single bar at the top right (below the header when
 - **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge on the host and each person's status under their name (older session servers show only the number of people)
 - **Chat** (chat icon) - Opens the chat; a red badge counts unread messages
 - **Sync adjustment** (circular arrows, guests only, when the administrator enables it) - Shows how far you are from the host and lets you nudge your video toward them; see [Sync adjustment](#sync-adjustment)
+- **Queue** (list icon, while the room has a queue) - Opens the room's queue; see [Watching a series](#watching-a-series)
 - **Invite** (share icon, host only) - Copies a short-lived invite link that joins people to this room automatically
 - **Leave** (exit icon) - Guests confirm leaving normally. On a compatible server, a host with other participants can choose **Leave** to pass the room to the named next host or **Close for everyone** to end it. A host who is alone, or connected to an older server, sees the existing **Close room** confirmation.
 - **Close (X)** - Only hides the bar: you stay in the room
 
-Participants, chat, the sync adjustment and the leave confirmation open one at a time below the bar; select the same icon again to close it.
+Participants, chat, the sync adjustment, the queue and the leave confirmation open one at a time below the bar; select the same icon again to close it.
 
 The participants list shows how each person is doing, with a colored dot:
 
@@ -167,6 +168,17 @@ The participants list shows how each person is doing, with a colored dot:
 | Not watching | grey | In the room without the video open |
 
 A status changes after it has held for about a second. People on an older version of OpenWatchParty show no status.
+
+## Watching a series
+
+While the room plays an episode, the host's player fills the room's queue with the next episodes of the series, in Jellyfin's order across seasons, five ahead, and tops it up each time the room moves to the next one. Episodes missing from the library are skipped, and one the host removes doesn't come back, even after the host reloads the page or someone else becomes the host. A room playing a movie has no queue and works as before.
+
+- **Queue** (list icon in the bar) opens the list: watched episodes dimmed with a check, the one playing highlighted as **Watching**, and the upcoming ones numbered.
+- The host can go to the **Previous** or **Next** episode, and play, move up, move down or remove an upcoming one. Guests see the list only.
+- **Up next:** when the host's video reaches the credits (an *Outro* segment, as Intro Skipper marks them), or 15 seconds before the end of an episode without them, everyone sees the next title and a 10-second countdown: below the bar, or on its own over the video while the panel is closed. The host can **Cancel** it or go to the **Next** episode at once. Pausing the room or going back before the credits cancels it; it starts again if the room plays on in the credits, unless the host cancelled it on that episode.
+- When the room moves to another episode, everyone loads it and starts from the beginning together, as when joining a room.
+
+The queue needs a session server and clients with this feature. People on an older version still follow the room to the next episode, without seeing the queue.
 
 ## Using Chat
 

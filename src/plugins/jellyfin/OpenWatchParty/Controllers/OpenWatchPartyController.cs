@@ -52,6 +52,7 @@ public class OpenWatchPartyController : ControllerBase
         "ui/leave-confirm.js",
         "ui/room.js",
         "ui/home.js",
+        "ui/queue.js",
         "ui/guest-controls.js",
         "ui/render.js",
         "ui/header.js",
@@ -69,6 +70,7 @@ public class OpenWatchPartyController : ControllerBase
         "ws/handlers/clock.js",
         "ws/connection.js",
         "app/invite.js",
+        "app/queue.js",
         "app/lifecycle.js",
         "app/cleanup.js"
     };

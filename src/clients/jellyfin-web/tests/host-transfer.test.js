@@ -168,6 +168,7 @@ describe('host transfer client support', () => {
       clientId: 'client-1',
       inRoom: false,
       roomId: '',
+      roomMediaId: '',
       isHost: false,
       guestPaused: false,
       serverFeatures: [],
@@ -235,7 +236,7 @@ describe('host transfer client support', () => {
     socket.open();
 
     const auth = socket.sent.find(message => message.type === 'auth');
-    assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control']);
+    assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue']);
     socket.receive({
       type: 'auth_success',
       payload: { user_name: 'Guest', features: ['host_transfer'] }
@@ -256,7 +257,7 @@ describe('host transfer client support', () => {
       const socket = sockets[0];
       socket.open();
       const auth = socket.sent.find(message => message.type === 'auth');
-      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control']);
+      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue']);
       assert.equal(auth.payload.token, undefined);
     } finally {
       OWP.actions.fetchAuthToken = originalFetchAuthToken;
@@ -901,6 +902,19 @@ describe('host transfer client support', () => {
 
     await oldVideo.play();
     assert.equal(sent.some(message => message.type === 'player_event' && message.payload.action === 'play'), true);
+  });
+
+  it('passes the video time and pauses on to the room queue', () => {
+    const seen = [];
+    OWP.queue = { onVideoTime: video => seen.push(video.currentTime) };
+    const video = new FakeVideo({ currentTime: 3 });
+    OWP.state.currentVideoElement = video;
+    OWP.playback.bindVideo();
+    video.listeners.get('timeupdate')();
+    video.currentTime = 4;
+    video.pause();
+    delete OWP.queue;
+    assert.deepEqual(seen, [3, 4]);
   });
 
   it('does not gate a regular host for a future room state', async () => {

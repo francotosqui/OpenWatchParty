@@ -35,11 +35,13 @@ src/
 │       ├── create.rs     # Room creation
 │       ├── join.rs       # Room joining
 │       ├── misc.rs       # Ping, list_rooms, etc.
-│       └── playback.rs   # player_event, state_update, ready
+│       ├── playback.rs   # player_event, state_update, ready
+│       └── queue.rs      # Room queue messages and the up-next countdown
 └── room/
     ├── mod.rs
     ├── leave.rs          # Client leave / disconnect
-    └── close.rs          # Room closure
+    ├── close.rs          # Room closure
+    └── queue.rs          # Room queue list operations
 ```
 
 ## Module: `main.rs`
@@ -97,6 +99,7 @@ Represents a connected WebSocket client.
 | `authentication_version` | `u64` | Identifies the current authentication generation |
 | `supports_host_transfer` | `bool` | Negotiated host-transfer capability |
 | `supports_shared_playback_control` | `bool` | Negotiated shared-control capability |
+| `supports_media_queue` | `bool` | Negotiated room-queue capability: the client gets `queue_state` |
 | `message_count` | `u32` | Messages sent in current rate-limit window |
 | `last_reset` | `Instant` | Monotonic time of last rate-limit window reset |
 | `last_seen` | `Instant` | Monotonic time of last activity (for zombie detection) |
@@ -124,6 +127,7 @@ Represents a watch party room.
 | `statuses` | `HashMap<String, &'static str>` | No | Last participant status by client ID |
 | `status_broadcast` | `StatusBroadcast` | No | Participant-status broadcast scheduling |
 | `guest_command_until` | `Option<Instant>` | No | Deadline protecting a guest command from stale host state |
+| `queue` | `MediaQueue` | No | Queued items, the up-next countdown and the generation of the pending play the last advance armed; the current item is `media_id` |
 
 ### Struct `PlaybackState`
 
@@ -257,6 +261,14 @@ Applies filtering (cooldown, rate limit, jitter), broadcasts if accepted.
 
 #### `ping`
 Responds with `pong` for latency measurement.
+
+#### `queue_add`, `queue_remove`, `queue_move`, `queue_advance`, `queue_countdown`
+Host only. Change the room's queue and send `queue_state` to the members that
+negotiated `media_queue`. An advance, also when a countdown ends, moves the room
+to the item from 0 through the pending-play flow and announces it with
+`room_state`. The queue also keeps `last_added`, the last item `queue_add`
+appended, after that item is removed too, so the host's client fills the queue
+on from it. See [Room queue](protocol.md#room-queue).
 
 ## Module: `room/`
 

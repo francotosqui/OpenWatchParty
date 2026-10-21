@@ -153,6 +153,7 @@
     await load('ui/room.js');
     await Promise.all([
       load('ui/home.js'),
+      load('ui/queue.js'),
       load('ui/guest-controls.js'),
       load('ui/render.js'),
       load('ui/header.js'),
@@ -177,6 +178,7 @@
     ]);
     await load('ws/connection.js');
     await load('app/invite.js');
+    await load('app/queue.js');
     await load('app/lifecycle.js');
     await load('app/cleanup.js');
   };

@@ -12,6 +12,14 @@ pub(super) fn all_ready(room: &Room) -> bool {
         .all(|client_id| room.ready_clients.contains(client_id))
 }
 
+/// Whether the pending play is the one a queue advance armed to start the new
+/// item from 0. Until it starts, the host may still report its previous item.
+pub(super) fn starting_queue_item(room: &Room) -> bool {
+    room.pending_play
+        .as_ref()
+        .is_some_and(|pending| room.queue.advance_generation == Some(pending.generation))
+}
+
 pub(super) fn prepare_scheduled_play(
     room: &mut Room,
     clients: &HashMap<String, Client>,
@@ -19,6 +27,14 @@ pub(super) fn prepare_scheduled_play(
     event_server_ts: u64,
     target_server_ts: u64,
 ) -> (Vec<ClientSender>, WsMessage) {
+    // Members project the position from `event_server_ts`. After a queue
+    // advance they were loading the new item, not playing it, so it starts
+    // from 0 when the play does instead of from when the advance was made.
+    let event_server_ts = if starting_queue_item(room) {
+        target_server_ts
+    } else {
+        event_server_ts
+    };
     let initiator_id = room
         .pending_play
         .take()
@@ -152,6 +168,25 @@ mod tests {
         assert_eq!(room.target_server_ts, Some(5000));
         assert_eq!(message.server_ts, Some(4000));
         assert_eq!(message.payload.unwrap()["play_state"], "playing");
+    }
+
+    #[test]
+    fn a_queue_advance_plays_from_the_start_when_its_play_does() {
+        let mut room = test_helpers::create_room("r1", "host");
+        let generation = crate::types::next_pending_play_generation();
+        room.pending_play = Some(crate::types::PendingPlay {
+            initiator_id: "host".into(),
+            position: 0.0,
+            generation,
+            position_ts: 4000,
+        });
+        room.queue.advance_generation = Some(generation);
+
+        let (_, message) = prepare_scheduled_play(&mut room, &HashMap::new(), 0.0, 4000, 9000);
+
+        assert_eq!(room.state_server_ts, 9000);
+        assert_eq!(message.server_ts, Some(9000));
+        assert_eq!(message.payload.unwrap()["position"], 0.0);
     }
 
     #[tokio::test(start_paused = true)]

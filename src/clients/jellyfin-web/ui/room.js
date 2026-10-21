@@ -29,6 +29,7 @@
     { name: 'people', sectionId: 'owp-people-section', buttonId: 'owp-btn-people' },
     { name: 'chat', sectionId: 'owp-chat-section', buttonId: 'owp-btn-chat' },
     { name: 'sync', sectionId: 'owp-sync-section', buttonId: 'owp-btn-sync' },
+    { name: 'queue', sectionId: 'owp-queue-section', buttonId: 'owp-btn-queue' },
     { name: 'leave', sectionId: 'owp-leave-confirm', buttonId: 'owp-btn-leave' }
   ];
 
@@ -187,6 +188,7 @@
       if (state.roomBarSection === 'sync') state.roomBarSection = '';
     }
     updateLeaveConfirm();
+    if (ui.updateQueue) ui.updateQueue();
     applyRoomSection();
   };
 
@@ -310,6 +312,6 @@
     }
   };
 
-  Object.assign(views, { renderRoom, setupChatInput, toggleRoomSection });
+  Object.assign(views, { renderRoom, setupChatInput, toggleRoomSection, applyRoomSection });
   Object.assign(ui, { updateRoomRoleControls, updateSyncSection });
 })();

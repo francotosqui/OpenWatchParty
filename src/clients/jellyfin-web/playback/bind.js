@@ -191,6 +191,7 @@
         if (state.inRoom && !state.isHost && !state.sharedPlaybackControl && state.lastSyncPlayState === 'playing') state.guestPaused = true;
         onGuestEvent('pause', video);
         onHostEvent('pause', video);
+        if (OWP.queue?.onVideoTime) OWP.queue.onVideoTime(video);
       },
       seeked: () => {
         utils.log('VIDEO', { event: 'seeked', pos: video.currentTime });
@@ -201,7 +202,9 @@
       // 0:00 and then to seek back.
       emptied: () => {
         // A reload already under way (a retry empties again) keeps its limit.
-        if (!state.isHost || !state.inRoom || state.guestPaused || isReloadingStream()) return;
+        // OWP opening the room's next item empties the video too: that is no
+        // reload, and the room's play must not wait for one.
+        if (!state.isHost || !state.inRoom || state.guestPaused || isReloadingStream() || state.pendingMediaId) return;
         state.streamReloadUntil = utils.nowMs() + STREAM_RELOAD_MAX_MS;
         state.streamReloadResume = state.lastPlayedPlaying;
         if (!state.streamReloadResume || hasPendingRoomWork()
@@ -213,6 +216,7 @@
         if (video.readyState < 2 || video.seeking) return;
         state.lastPlayedPosition = video.currentTime;
         state.lastPlayedPlaying = !video.paused;
+        if (OWP.queue?.onVideoTime) OWP.queue.onVideoTime(video);
       }
     };
   };

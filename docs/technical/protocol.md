@@ -78,10 +78,10 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
 |---------------|------|----------|-------------|
 | `token` | string | No | JWT issued by the `/OpenWatchParty/Token` endpoint |
 | `protocol_version` | number | No | Client protocol version; defaults to `1` when omitted |
-| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer` and `participant_status` |
+| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control` and `media_queue` |
 
 On a protocol version mismatch the server answers with `error` (`PROTOCOL_VERSION_UNSUPPORTED`) and closes the connection.
-Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room.
+Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, and gets `queue_state` only when it declared `media_queue`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged `media_queue`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room.
 
 ### `list_rooms`
 
@@ -204,6 +204,7 @@ Indicate client is ready to receive playback commands.
 **Effects:**
 - Client added to `room.ready_clients`
 - If `pending_play` exists and `all_ready()`: triggers scheduled play
+- A `ready` whose `media_id` names another item than the room's was sent before the room moved to another queue item: it is ignored
 
 ### `player_event`
 
@@ -344,6 +345,36 @@ Report how this client is doing, for the room's participants list. Informational
 - A room gets at most one `participant_statuses` every 250 ms for status changes: the first change is sent at once, and later changes within the 250 ms are sent together when they end, with the latest statuses
 - The web client sends it only to a server that sent `participant_statuses` for its room (an older server answers unknown types with an error), once a status has held for a second, and again after reconnecting
 
+### Room queue
+
+`queue_add`, `queue_remove`, `queue_move`, `queue_advance` and `queue_countdown` change the room's queue of up to 20 items, watched ones included. Only the host sends them: other members get `HOST_PERMISSION_REQUIRED`, a client outside a room `NOT_IN_ROOM`, and a malformed payload `INVALID_QUEUE_PAYLOAD`. A command that changes nothing (an item already queued, an unknown id, the room's own item, a countdown already running) is ignored without an error. Members that declared `media_queue` get the result as `queue_state` (see below).
+
+```json
+{
+  "type": "queue_add",
+  "payload": {
+    "items": [{ "id": "0123456789abcdef0123456789abcdef", "title": "S1:E2 · The Storm" }]
+  },
+  "ts": 1678900000000
+}
+```
+
+| Message | Payload | Effect |
+|---------|---------|--------|
+| `queue_add` | `items`: 1 to 20 `{ id, title }`. `id` is a Jellyfin item id like `media_id` (32 hexadecimal characters); `title` is cleaned like a name and cut to 100 characters | Appends the items not queued yet. A full queue drops its oldest watched item for each new one; items that still don't fit are left out |
+| `queue_remove` | `id` | Removes an item other than the room's own |
+| `queue_move` | `id`, `to` (the item's new index) | Moves an upcoming item to another upcoming place; the room's item and the watched ones keep theirs |
+| `queue_advance` | `id` | Moves the room to that queued item |
+| `queue_countdown` | `start` (boolean) | Starts a 10-second countdown toward the next item, or cancels it |
+
+**Moving to another item** (`queue_advance`, or a countdown that ends):
+- The room's `media_id` becomes the item's; the position goes back to 0, paused, and the ready set is cleared
+- A pending play at 0, started by the host, plays the room once every member sent `ready` for the new item, or when the usual wait for them ends
+- Every member gets `room_state` with the new `media_id`, so clients without `media_queue` follow it as on joining; members with `media_queue` then get `queue_state`, and every client gets `room_list`
+- Until that pending play starts, the host's position updates and play events don't move it, because they may still describe the previous item; a pause still cancels it
+
+**Countdown:** the deadline and its timer live on the server, so a host tab that the browser slows down in the background doesn't delay the move. It starts only toward a next item and ends when the host cancels it, on any move to another item, when the next item is removed, or when the server accepts a `pause` from the host or a guest (members with `media_queue` then get `queue_state` right after that `player_event`). The host's web client starts it when its video reaches the credits (Jellyfin's `Outro` media segment) or, at the latest, 15 seconds before the end: Jellyfin closes the player when a video ends, which takes the member out of the room, so the room moves on while the video still plays. It cancels it when its video pauses or the host seeks back before the credits, and doesn't start it while a room play or pause is on its way to its player.
+
 ## Server → Client Messages
 
 ### `client_hello`
@@ -405,7 +436,7 @@ List of active rooms.
 
 ### `room_state`
 
-Full room state. Sent after `create_room` or `join_room`.
+Full room state. Sent after `create_room` or `join_room`, and to every member when the room moves to another [queue](#room-queue) item.
 
 ```json
 {
@@ -510,6 +541,35 @@ Each participant's last reported `participant_status`, in the same order as the 
 | `statuses[]` | string or null | The participant's status, or `null` if they have not reported one (an older client, say) |
 
 It is a separate message because `participant_list` rejects unknown fields: clients that do not know `participant_statuses` ignore it. The web client ignores a list of statuses whose length does not match its participants list.
+
+### `queue_state`
+
+The room's [queue](#room-queue), sent only to members that declared `media_queue`: after each change, on creating the room and on joining it (after `room_state`, `room_capabilities` and the participant list), and after a move to another item (after `room_state`).
+
+```json
+{
+  "type": "queue_state",
+  "room": "uuid-room-id",
+  "payload": {
+    "items": [
+      { "id": "0123456789abcdef0123456789abcdef", "title": "S1:E1 · Pilot" },
+      { "id": "fedcba9876543210fedcba9876543210", "title": "S1:E2 · The Storm" }
+    ],
+    "current": 0,
+    "last_added": "fedcba9876543210fedcba9876543210",
+    "countdown_until": 1678900010000
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `items` | array | Up to 20 `{ id, title }`, watched ones first |
+| `current` | number or null | Index of the room's `media_id` in `items`, or `null` when it isn't queued |
+| `last_added` | string or null | The last item `queue_add` appended, or `null` before the first. It stays after that item is removed: the host's web client fills the queue on from it, so an episode the host removed doesn't come back after a reload or a host change |
+| `countdown_until` | number or null | Server time (ms) at which the room moves to the next item, or `null` |
 
 ### `player_event`
 
@@ -675,13 +735,14 @@ Error response.
 | `ROOM_NOT_FOUND` | The requested room does not exist |
 | `ROOM_FULL` | The requested room reached its participant limit |
 | `NOT_ROOM_MEMBER` | The client is not a member of the requested room |
-| `HOST_PERMISSION_REQUIRED` | A non-host client sent a `seek`, a `buffering` event, a `state_update` or `close_room` |
+| `HOST_PERMISSION_REQUIRED` | A non-host client sent a `seek`, a `buffering` event, a `state_update`, `close_room` or a queue message |
 | `INVALID_PLAYBACK_PAYLOAD` | A playback payload is absent, malformed, or outside accepted bounds |
-| `NOT_IN_ROOM` | `leave_room` or `close_room` was requested while the client had no room |
+| `NOT_IN_ROOM` | `leave_room`, `close_room` or a queue message was sent while the client had no room |
 | `INVALID_READY` | A `ready` transition is missing required room context |
 | `INVALID_CHAT_PAYLOAD` | The chat payload does not contain a string `text` field |
 | `CHAT_MESSAGE_EMPTY` | Chat text is empty |
 | `CHAT_MESSAGE_TOO_LONG` | Chat text exceeds the configured limit |
+| `INVALID_QUEUE_PAYLOAD` | A queue message's payload is absent, malformed, or outside accepted bounds |
 
 ## Sequence Diagram: Complete Session
 

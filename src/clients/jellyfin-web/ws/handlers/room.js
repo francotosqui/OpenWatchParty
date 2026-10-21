@@ -53,6 +53,17 @@
     }
   };
 
+  h.handleQueueState = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId) return;
+    state.queueItems = msg.payload.items;
+    state.queueCurrent = msg.payload.current;
+    state.queueCountdownUntil = msg.payload.countdown_until || 0;
+    state.queueLastAdded = msg.payload.last_added;
+    state.queueReceived = true;
+    if (ui.updateQueue) ui.updateQueue();
+    if (OWP.queue?.onQueueState) OWP.queue.onQueueState();
+  };
+
   h.handleParticipantList = (msg) => {
     if (!state.inRoom || msg.room !== state.roomId) return;
     // The statuses for this list follow in participant_statuses.
@@ -88,6 +99,7 @@
     if (becameHost && OWP.playback?.syncPromotedGuest) {
       OWP.playback.syncPromotedGuest(state.currentVideoElement || OWP.utils.getVideo());
     }
+    if (OWP.queue?.refresh) OWP.queue.refresh();
     ui.render();
     if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();
     ui.showToast(becameHost ? t('youAreHost') : t('nowHost', { name: msg.payload.host_name }));

@@ -3,7 +3,7 @@ use super::super::constants::{
     PLAY_SCHEDULE_MS, POSITION_JITTER_THRESHOLD,
 };
 use super::super::dispatch::{send_error, ErrorCode};
-use super::super::pending_play::{all_ready, schedule_pending_play};
+use super::super::pending_play::{all_ready, schedule_pending_play, starting_queue_item};
 use super::super::validation::is_valid_position;
 use crate::messaging::{collect_room_senders, send_to_senders};
 use crate::types::{
@@ -122,6 +122,9 @@ fn handle_play_not_ready(
     current_ts: u64,
     now: Instant,
 ) -> Option<(String, u64)> {
+    if starting_queue_item(room) {
+        return None;
+    }
     room.state.position = position;
     if let Some(pending) = room.pending_play.as_mut() {
         pending.initiator_id = client_id.to_string();
@@ -155,6 +158,9 @@ fn absorb_during_pending(
     }
     if message.action() == Some(PlaybackAction::Pause) {
         return false;
+    }
+    if starting_queue_item(room) {
+        return true;
     }
 
     let position = message.position().unwrap_or(room.state.position);
@@ -316,13 +322,17 @@ pub(in crate::ws) async fn handle_playback(
                 if action == Some(PlaybackAction::Pause) {
                     room.pending_play = None;
                 }
+                // A pause also ends the up-next countdown here, under the same
+                // lock, so its timer can't move the room on.
+                let countdown_ended =
+                    action == Some(PlaybackAction::Pause) && room.queue.countdown.take().is_some();
                 // A host command ends a guest's hold; a guest's command
                 // starts a new one below.
                 if action.is_some() {
                     room.guest_command_until = None;
                 }
 
-                if action == Some(PlaybackAction::Play) && !all_ready(room) {
+                let outcome = if action == Some(PlaybackAction::Play) && !all_ready(room) {
                     if from_guest {
                         // Until the pending play starts; then until the host
                         // has applied it (see prepare_scheduled_play).
@@ -367,7 +377,13 @@ pub(in crate::ws) async fn handle_playback(
                         send_to_senders(&senders, &outgoing, "playback");
                         PlaybackOutcome::Accepted
                     }
+                };
+                // After the pause, so that the host's client gets the pause
+                // first and doesn't start the countdown again.
+                if countdown_ended {
+                    super::queue::send_queue_state(room, clients, None);
                 }
+                outcome
             }
         } else {
             PlaybackOutcome::Error(ErrorCode::RoomNotFound, "Room not found")
@@ -636,6 +652,57 @@ mod tests {
         assert!(result.is_none()); // Returns None when pending already exists
         assert!((room.pending_play.as_ref().unwrap().position - 15.0).abs() < f64::EPSILON);
         assert_eq!(room.pending_play.as_ref().unwrap().position_ts, update_ts);
+    }
+
+    #[test]
+    fn the_host_cannot_move_a_queue_advance_off_the_start() {
+        let mut room = test_helpers::create_room("r1", "host");
+        let generation = crate::types::next_pending_play_generation();
+        room.pending_play = Some(PendingPlay {
+            initiator_id: "host".to_string(),
+            position: 0.0,
+            generation,
+            position_ts: now_ms(),
+        });
+        room.queue.advance_generation = Some(generation);
+
+        // Reports from the previous item are absorbed without moving it.
+        let previous_item = state_update(1300.0, PlayState::Playing);
+        assert!(absorb_during_pending(
+            &mut room,
+            &previous_item,
+            now_ms(),
+            Instant::now()
+        ));
+        assert_eq!(
+            handle_play_not_ready(&mut room, "host", 1300.0, now_ms(), Instant::now()),
+            None
+        );
+        assert_eq!(room.state.position, 0.0);
+        assert_eq!(room.pending_play.as_ref().unwrap().position, 0.0);
+
+        // A pause still reaches the room.
+        let pause = PlaybackMessage::PlayerEvent(PlayerEventPayload {
+            action: PlaybackAction::Pause,
+            position: None,
+            play_state: None,
+        });
+        assert!(!absorb_during_pending(
+            &mut room,
+            &pause,
+            now_ms(),
+            Instant::now()
+        ));
+
+        // Any other pending play still follows the host.
+        room.queue.advance_generation = Some(generation + 1);
+        assert!(absorb_during_pending(
+            &mut room,
+            &state_update(12.0, PlayState::Playing),
+            now_ms(),
+            Instant::now()
+        ));
+        assert_eq!(room.pending_play.as_ref().unwrap().position, 12.0);
     }
 
     #[test]

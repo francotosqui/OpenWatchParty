@@ -83,10 +83,10 @@ describe('appearance settings', () => {
     assert.deepEqual(variables(), { scale: 15 / 12, alpha: 1 });
   });
 
-  it('targets the panel and the toasts above the defaults of the main stylesheet', () => {
+  it('targets the panel, the up-next strip and the toasts above the defaults of the main stylesheet', () => {
     set(70, 16);
     const text = appearanceStyles()[0].textContent;
-    for (const selector of [':root #owp-panel', ':root .owp-toast-container', ':root .owp-toast-system']) {
+    for (const selector of [':root #owp-panel', ':root .owp-toast-container', ':root .owp-toast-system', ':root .owp-queue-next']) {
       assert.ok(text.includes(selector), selector);
     }
   });
@@ -119,19 +119,19 @@ describe('appearance styles', () => {
     assert.deepEqual(unscaled.replace(fixed, '').match(/\d+(\.\d+)?px/g), null);
   });
 
-  it('keeps the room bar inside narrow windows at any text size', () => {
-    assert.ok(css.includes('min-width: min(calc(300px * var(--owp-scale)), calc(100vw - 40px));'));
+  it('keeps the room bar and the floating up-next strip inside narrow windows at any text size', () => {
+    assert.equal(css.split('min-width: min(calc(300px * var(--owp-scale)), calc(100vw - 40px));').length - 1, 2);
   });
 
   it('starts at 14 px and 55 %, and turns opaque when less transparency is asked for', () => {
-    assert.match(css, /--owp-scale: 1\.1666/);
+    assert.match(css, /#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next \{\s*--owp-scale: 1\.1666/);
     assert.match(css, /--owp-surface-alpha: 0\.55/);
-    assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{\s*#owp-panel, \.owp-toast-container, \.owp-toast-system \{ --owp-surface-alpha: 1 !important; \}/);
+    assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{\s*#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next \{ --owp-surface-alpha: 1 !important; \}/);
   });
 
   it('draws every surface with the opacity setting', () => {
     assert.equal(css.match(/rgba\(38, 38, 36, 0\.97\)/g), null);
-    assert.equal(css.match(/rgba\(38, 38, 36, var\(--owp-surface-alpha\)\)/g).length, 4);
+    assert.equal(css.match(/rgba\(38, 38, 36, var\(--owp-surface-alpha\)\)/g).length, 5);
     assert.match(css, /rgba\(20, 20, 20, var\(--owp-surface-alpha\)\)/);
   });
 });
