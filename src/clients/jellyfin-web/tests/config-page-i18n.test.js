@@ -109,8 +109,9 @@ describe('configuration page localization', () => {
   };
 
   it('marks every text and label of the page for translation', () => {
-    // Product names and a Material icon glyph stay as they are.
-    const untranslated = new Set(['OpenWatchParty', 'visibility']);
+    // Product names, a Material icon glyph and the limits of the text size
+    // slider (a number and its unit) stay as they are.
+    const untranslated = new Set(['OpenWatchParty', 'visibility', '12 px', '18 px']);
     const markup = withoutBlocks(withoutBlocks(configPage, 'script'), 'style');
     const violations = [];
     for (const [, tag, attributes, text] of markup.matchAll(/<([a-zA-Z][\w-]*)([^>]*)>([^<]*[A-Za-z][^<]*)</g)) {

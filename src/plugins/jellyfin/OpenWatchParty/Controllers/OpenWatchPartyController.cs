@@ -384,6 +384,8 @@ public class OpenWatchPartyController : ControllerBase
                 session_server_url = sessionServerUrl,
                 hide_native_syncplay_button = config.HideNativeSyncPlayButton,
                 show_sync_nudge_button = config.ShowSyncNudgeButton,
+                appearance_opacity = config.AppearanceOpacity,
+                appearance_text_size = config.AppearanceTextSize,
                 invite_ttl_seconds = config.InviteTtlSeconds,
                 protocol_version = ProtocolVersion
             });
@@ -408,6 +410,8 @@ public class OpenWatchPartyController : ControllerBase
             session_server_url = sessionServerUrl,
             hide_native_syncplay_button = config.HideNativeSyncPlayButton,
             show_sync_nudge_button = config.ShowSyncNudgeButton,
+            appearance_opacity = config.AppearanceOpacity,
+            appearance_text_size = config.AppearanceTextSize,
             invite_ttl_seconds = config.InviteTtlSeconds,
             protocol_version = ProtocolVersion
         });

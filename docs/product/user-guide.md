@@ -128,6 +128,8 @@ Shared controls require a compatible server and host. With an older host or serv
 
 The panel follows the Jellyfin display language; English, Spanish, French and German (`en`, `es`, `fr`, `de`) are included.
 
+Over the player, the room bar, its drop-downs, the lobby panel and the notifications are semi-transparent, so the video shows through them, blurred. The administrator sets their opacity and text size under **Web Client** in the plugin settings (55 % and 14 px by default). If your system asks apps to reduce transparency, they stay opaque.
+
 ![Close-up of the room bar with the chat open: sync dot, latency, room name, participants, chat and leave]({{ '/assets/images/watch-party-panel-closeup.png' | relative_url }})
 
 ### Lobby View (Not in a room)

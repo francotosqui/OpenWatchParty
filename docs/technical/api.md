@@ -64,6 +64,8 @@ Generates a JWT token for the authenticated user.
   "session_server_url": "wss://jellyfin.example.com/ws",
   "hide_native_syncplay_button": false,
   "show_sync_nudge_button": false,
+  "appearance_opacity": 55,
+  "appearance_text_size": 14,
   "invite_ttl_seconds": 3600,
   "protocol_version": 1
 }
@@ -80,6 +82,8 @@ Generates a JWT token for the authenticated user.
   "session_server_url": "wss://jellyfin.example.com/ws",
   "hide_native_syncplay_button": false,
   "show_sync_nudge_button": false,
+  "appearance_opacity": 55,
+  "appearance_text_size": 14,
   "invite_ttl_seconds": 3600,
   "protocol_version": 1
 }
@@ -88,6 +92,8 @@ Generates a JWT token for the authenticated user.
 `hide_native_syncplay_button` is `true` when the administrator enabled **Hide Jellyfin's SyncPlay button**; the web client then hides the built-in SyncPlay button, and shows it again when a later response turns the setting off.
 
 `show_sync_nudge_button` is `true` when the administrator enabled **Show the sync adjustment button in rooms**; guests then get the sync adjustment in the room bar. Only an explicit `true` turns it on.
+
+`appearance_opacity` (40-100, in steps of 5) and `appearance_text_size` (12-18) are the **Room bar opacity** in percent and the **Text size** in pixels. The web client applies them to the room bar, its drop-downs, the lobby panel and the toasts, and uses the defaults (55 and 14) for a missing or out-of-range value.
 
 `invite_ttl_seconds` is the configured **Invite TTL** (60-86400 seconds). The client sends it when asking the session server for a new invite link; the session server clamps it again.
 

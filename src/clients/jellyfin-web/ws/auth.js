@@ -142,6 +142,13 @@
     if (state.inRoom && OWP.ui?.render) OWP.ui.render(true);
   };
 
+  // The look of the room bar, its drop-downs, the lobby and the toasts.
+  const setAppearance = (data) => {
+    state.appearanceOpacity = data.appearance_opacity;
+    state.appearanceTextSize = data.appearance_text_size;
+    if (OWP.ui?.applyAppearance) OWP.ui.applyAppearance();
+  };
+
   // The plugin tells the client how long host invite links should live. The
   // session server clamps it again, so a bad value only falls back to an hour.
   const applyInviteTtl = (data) => {
@@ -190,6 +197,7 @@
       state.authToken = data.token;
       setNativeSyncPlayHidden(data.hide_native_syncplay_button === true);
       setSyncNudgeShown(data.show_sync_nudge_button === true);
+      setAppearance(data);
       applyInviteTtl(data);
       const expiresIn = data.expires_in || 3600;
       state.tokenExpiresAt = Date.now() + (expiresIn * 1000);
@@ -208,6 +216,7 @@
       state.tokenExpiresAt = 0;
       setNativeSyncPlayHidden(data.hide_native_syncplay_button === true);
       setSyncNudgeShown(data.show_sync_nudge_button === true);
+      setAppearance(data);
       applyInviteTtl(data);
       console.log('[OpenWatchParty] Explicit insecure mode enabled, connecting without token');
       return { mode: 'insecure', token: null };
