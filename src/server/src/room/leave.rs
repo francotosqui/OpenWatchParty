@@ -269,7 +269,7 @@ pub(crate) async fn handle_disconnect_if(
     tasks: &AppTasks,
     should_remove: impl FnOnce(&Client) -> bool,
 ) -> bool {
-    let (reconnect_grace, removed) = {
+    let (reconnect_grace, removed, left_room) = {
         let mut state = state.write().await;
         let crate::types::ServerState { clients, rooms } = &mut *state;
         if clients
@@ -284,22 +284,28 @@ pub(crate) async fn handle_disconnect_if(
             room_id.as_deref().unwrap_or("-")
         );
         let reconnect_grace = begin_host_reconnect_grace(client_id, clients, rooms);
+        let mut left_room = reconnect_grace.is_some();
         if let Some((room_id, _, notification)) = &reconnect_grace {
             info!("Holding host role in room {room_id} for reconnect grace");
             send_leave_notification(notification, "host reconnect grace");
         } else if let Some(notification) = handle_leave(client_id, clients, rooms) {
+            left_room = true;
             send_leave_notification(&notification, "leave notification");
         }
         let removed = clients.remove(client_id).is_some();
         (
             reconnect_grace.map(|(room_id, generation, _)| (room_id, generation)),
             removed,
+            left_room,
         )
     };
     if let Some((room_id, generation)) = reconnect_grace {
         schedule_host_reconnect_expiry(room_id, generation, state.clone(), tasks);
     }
-    broadcast_room_list(state).await;
+    // Only a client that was in a room changes the room list.
+    if left_room {
+        broadcast_room_list(state).await;
+    }
     removed
 }
 
@@ -574,6 +580,44 @@ mod tests {
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
             ServerMessageType::ParticipantList
         );
+
+        tasks.cancel();
+        tasks.wait().await;
+    }
+
+    #[tokio::test]
+    async fn only_a_disconnect_that_leaves_a_room_sends_the_room_list() {
+        let state = test_helpers::create_state();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx("u1", "Host", true);
+        let (mut guest, _guest_rx) = test_helpers::create_client_with_rx("u2", "Guest", true);
+        let (outsider, _outsider_rx) = test_helpers::create_client_with_rx("u3", "Out", true);
+        let (watcher, mut watcher_rx) = test_helpers::create_client_with_rx("u4", "Watch", true);
+        host.room_id = Some("room".to_string());
+        guest.room_id = Some("room".to_string());
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("guest".to_string(), guest);
+            locked.clients.insert("outsider".to_string(), outsider);
+            locked.clients.insert("watcher".to_string(), watcher);
+            let mut room = test_helpers::create_room("room", "host");
+            room.clients.push("guest".to_string());
+            locked.rooms.insert("room".to_string(), room);
+        }
+        let tasks = AppTasks::new();
+        let lists = |rx: &mut tokio::sync::mpsc::Receiver<_>| {
+            std::iter::from_fn(|| test_helpers::recv_msg(rx))
+                .filter(|message| message.msg_type == ServerMessageType::RoomList)
+                .collect::<Vec<_>>()
+        };
+
+        assert!(handle_disconnect("outsider", &state, &tasks).await);
+        assert!(lists(&mut watcher_rx).is_empty());
+
+        assert!(handle_disconnect("guest", &state, &tasks).await);
+        let sent = lists(&mut watcher_rx);
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].payload.as_ref().unwrap()[0]["count"], 1);
 
         tasks.cancel();
         tasks.wait().await;
