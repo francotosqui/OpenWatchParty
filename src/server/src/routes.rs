@@ -104,14 +104,18 @@ impl ConnectionLimiter {
 
     fn try_acquire(&self, ip: IpAddr) -> Option<ConnectionPermit> {
         let global_permit = self.global.clone().try_acquire_owned().ok()?;
-        let ip_semaphore = self
+        // The per-IP permit is taken under the map lock, so `drop` can't remove
+        // an entry while a connection is getting a permit from it.
+        let mut per_ip = self
             .per_ip
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let ip_semaphore = per_ip
             .entry(ip)
             .or_insert_with(|| Arc::new(Semaphore::new(self.per_ip_limit)))
             .clone();
         let ip_permit = ip_semaphore.clone().try_acquire_owned().ok()?;
+        drop(per_ip);
 
         Some(ConnectionPermit {
             global_permit: Some(global_permit),
@@ -140,8 +144,11 @@ impl Drop for ConnectionPermit {
             .per_ip
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // Permits are only taken under this lock, so an entry with all its
+        // permits back gets no new one before it is removed. Other references
+        // to the semaphore don't matter; an entry that was already replaced
+        // stays.
         if self.ip_semaphore.available_permits() == self.limiter.per_ip_limit
-            && Arc::strong_count(&self.ip_semaphore) == 2
             && per_ip
                 .get(&self.ip)
                 .is_some_and(|current| Arc::ptr_eq(current, &self.ip_semaphore))
@@ -740,6 +747,77 @@ mod tests {
         drop(first);
         assert!(limiter.try_acquire(first_ip).is_some());
         drop(second);
+    }
+
+    fn tracked_ips(limiter: &ConnectionLimiter) -> usize {
+        limiter.per_ip.lock().unwrap().len()
+    }
+
+    #[test]
+    fn the_last_connection_of_an_ip_removes_its_entry_while_its_semaphore_is_referenced() {
+        let limiter = ConnectionLimiter::new(4, 2);
+        let ip = IpAddr::from([192, 0, 2, 1]);
+        let permit = limiter.try_acquire(ip).unwrap();
+        // A rejected acquisition used to hold a reference like this one after
+        // releasing the map lock, which kept the entry after the last close.
+        let lingering = limiter.per_ip.lock().unwrap()[&ip].clone();
+
+        drop(permit);
+        assert_eq!(tracked_ips(&limiter), 0);
+        drop(lingering);
+    }
+
+    #[test]
+    fn an_ip_keeps_its_entry_and_its_limit_while_a_connection_is_open() {
+        let limiter = ConnectionLimiter::new(8, 2);
+        let ip = IpAddr::from([192, 0, 2, 1]);
+        let first = limiter.try_acquire(ip).unwrap();
+        let second = limiter.try_acquire(ip).unwrap();
+
+        drop(first);
+        let third = limiter.try_acquire(ip).unwrap();
+        assert!(limiter.try_acquire(ip).is_none());
+        drop(second);
+        drop(third);
+        assert_eq!(tracked_ips(&limiter), 0);
+    }
+
+    #[test]
+    fn concurrent_connections_from_one_ip_keep_its_limit_and_leave_no_entry() {
+        use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+        const THREADS: usize = 8;
+        const LIMIT: usize = 2;
+        let limiter = ConnectionLimiter::new(THREADS, LIMIT);
+        let ip = IpAddr::from([192, 0, 2, 1]);
+        let open = AtomicUsize::new(0);
+        let peak = AtomicUsize::new(0);
+        let start = std::sync::Barrier::new(THREADS);
+        std::thread::scope(|scope| {
+            for _ in 0..THREADS {
+                scope.spawn(|| {
+                    start.wait();
+                    for _ in 0..20_000 {
+                        let Some(permit) = limiter.try_acquire(ip) else {
+                            continue;
+                        };
+                        peak.fetch_max(open.fetch_add(1, SeqCst) + 1, SeqCst);
+                        // While a connection is open, its IP's entry is the
+                        // semaphore its permit came from: never removed and
+                        // replaced by a fresh one with a full limit.
+                        assert!(limiter
+                            .per_ip
+                            .lock()
+                            .unwrap()
+                            .get(&ip)
+                            .is_some_and(|current| Arc::ptr_eq(current, &permit.ip_semaphore)));
+                        open.fetch_sub(1, SeqCst);
+                        drop(permit);
+                    }
+                });
+            }
+        });
+        assert!(peak.load(SeqCst) <= LIMIT);
+        assert_eq!(tracked_ips(&limiter), 0);
     }
 
     #[test]

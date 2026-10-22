@@ -341,7 +341,7 @@ Every control above is implemented in the referenced code, and the authenticatio
 | Limit | Value | Code reference | Test reference |
 |-------|-------|----------------|----------------|
 | Global concurrent connections | 256 (`MAX_CONNECTIONS`) | `src/server/src/routes.rs` (`ConnectionLimiter`) | `connection_limits_are_global_per_ip_and_released_on_drop` |
-| Concurrent connections per effective IP | 32 (`MAX_CONNECTIONS_PER_IP`) | `src/server/src/routes.rs` (`ConnectionLimiter`, `client_ip`) | `connection_limits_are_global_per_ip_and_released_on_drop`, `forwarded_for_requires_a_trusted_proxy` |
+| Concurrent connections per effective IP | 32 (`MAX_CONNECTIONS_PER_IP`) | `src/server/src/routes.rs` (`ConnectionLimiter`, `client_ip`) | `connection_limits_are_global_per_ip_and_released_on_drop`, `an_ip_keeps_its_entry_and_its_limit_while_a_connection_is_open`, `concurrent_connections_from_one_ip_keep_its_limit_and_leave_no_entry`, `the_last_connection_of_an_ip_removes_its_entry_while_its_semaphore_is_referenced`, `forwarded_for_requires_a_trusted_proxy` |
 | WebSocket frame size | 64 KiB (`MAX_FRAME_SIZE`) | `src/server/src/ws/constants.rs`, applied in `src/server/src/routes.rs` | `transport_limits_are_fixed_at_sixty_four_kibibytes` |
 | Assembled message size | 64 KiB (`MAX_MESSAGE_SIZE`) | `src/server/src/ws/constants.rs`, re-checked in `src/server/src/ws/dispatch.rs` | `transport_limits_are_fixed_at_sixty_four_kibibytes` |
 | WebSocket message rate | 30 per 1000 ms per connection (`RATE_LIMIT_MESSAGES`, `RATE_LIMIT_WINDOW_MS`) | `update_rate_limit` in `src/server/src/ws/dispatch.rs` | `check_rate_limit_under`, `check_rate_limit_at_limit`, `rate_limit_violation_is_terminal` |
