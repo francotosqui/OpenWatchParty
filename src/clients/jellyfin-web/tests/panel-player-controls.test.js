@@ -217,6 +217,18 @@ describe('the panel over the player', () => {
     assert.equal(faded(), true);
   });
 
+  it('fades while a field outside it has focus', () => {
+    const { setControlsHidden } = openOverPlayer(hooks);
+    const field = element('input');
+    document.body.appendChild(field);
+
+    field.focus();
+    hooks.fire('focusin', { target: field });
+    setControlsHidden(true);
+
+    assert.equal(faded(), true);
+  });
+
   it('stays in sight while the up-next countdown of the queue is in it', () => {
     const { setControlsHidden } = openOverPlayer(hooks);
     setControlsHidden(true);
@@ -229,6 +241,16 @@ describe('the panel over the player', () => {
 
     strip.remove();
     OWP.ui.applyPlayerControls();
+    assert.equal(faded(), true);
+  });
+
+  it('follows the controls again when the header buttons come back', () => {
+    const { setControlsHidden } = openOverPlayer(hooks);
+    OWP.ui.removeHeaderButtons();
+    OWP.ui.injectHeaderButtons();
+
+    setControlsHidden(true);
+
     assert.equal(faded(), true);
   });
 
@@ -423,13 +445,19 @@ describe('a press outside the panel', () => {
   });
 
   it('lets the player controls work while closing it', () => {
-    const { pause } = openOverPlayer(hooks);
+    const { page, pause } = openOverPlayer(hooks);
+    const upNext = element('div', 'upNextContainer');
+    page.appendChild(upNext);
 
-    const event = hooks.fire('pointerdown', { target: pause });
+    // A button, the bottom bar around it and Jellyfin's own up-next card.
+    for (const target of [pause, pause.parentNode, upNext]) {
+      if (closed()) document.getElementById(MODERN_HEADER_BTN_ID).click();
+      const event = hooks.fire('pointerdown', { target });
 
-    assert.equal(closed(), true);
-    assert.equal(event.defaultPrevented, false);
-    assert.equal(event.propagationStopped, false);
+      assert.equal(closed(), true);
+      assert.equal(event.defaultPrevented, false);
+      assert.equal(event.propagationStopped, false);
+    }
   });
 
   it('ignores presses inside it, on the Watch Party button and on the toasts', () => {
