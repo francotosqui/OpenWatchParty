@@ -89,7 +89,7 @@ The `0.7.0` session-server release fixes [GHSA-fjpr-3g28-27r9](https://github.co
 If guests connect from another network, first configure a publicly reachable
 `wss://` URL as shown in the [remote access example]({{ '/product/first-watch-party/#4-if-your-guest-is-on-another-network' | relative_url }}). `127.0.0.1:3000` is reachable only from the server machine, not from a guest's browser.
 
-![OpenWatchParty settings reporting the plugin, client injection and session server as ready]({{ '/assets/images/plugin-configuration.png' | relative_url }})
+![OpenWatchParty settings reporting the plugin, client injection and session server as ready]({{ '/assets/images/plugin-diagnostics.png' | relative_url }})
 
 Use the verification and troubleshooting sections below if any status remains blocked.
 
