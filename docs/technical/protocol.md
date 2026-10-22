@@ -294,8 +294,9 @@ Latency measurement and clock synchronization.
 **Response:** `pong`. Pings are available before authentication. Only a
 `client_ts` representable as an unsigned 64-bit integer is echoed; extra payload
 fields and the request's `room` and `client` fields are not reflected. A missing
-or invalid `client_ts` produces a bounded pong with a null payload, which clients
-ignore for clock synchronization.
+or invalid `client_ts` produces a bounded pong without a `payload` field. The web
+client discards that pong as a schema error and logs a warning; normal clock-sync
+pings always include a valid timestamp.
 
 ### `chat_message`
 

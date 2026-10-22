@@ -915,16 +915,18 @@ mod tests {
                 let pong: serde_json::Value =
                     serde_json::from_str(response.to_str().unwrap()).unwrap();
                 assert_eq!(pong["type"], "pong");
-                assert_eq!(pong["room"], serde_json::Value::Null);
-                assert_eq!(pong["client"], serde_json::Value::Null);
+                assert!(pong.get("room").is_none());
+                assert!(pong.get("client").is_none());
                 assert!(pong["ts"].as_u64().is_some());
                 assert!(pong["server_ts"].as_u64().is_some());
-                let expected = if field == "client_ts" {
-                    serde_json::Value::Null
+                if field == "client_ts" {
+                    assert!(pong.get("payload").is_none());
                 } else {
-                    serde_json::json!({ "client_ts": 1678900000000_u64 })
-                };
-                assert_eq!(pong["payload"], expected);
+                    assert_eq!(
+                        pong.get("payload"),
+                        Some(&serde_json::json!({ "client_ts": 1678900000000_u64 }))
+                    );
+                }
                 assert_eq!(
                     state
                         .read()
@@ -937,8 +939,37 @@ mod tests {
                     authenticated
                 );
             }
+            for client_ts in [0, u64::MAX] {
+                client
+                    .send_text(
+                        serde_json::json!({ "type": "ping", "payload": { "client_ts": client_ts }, "ts": 0 })
+                            .to_string(),
+                    )
+                    .await;
+                let response = client.recv().await.unwrap();
+                assert!(response.as_bytes().len() <= 256);
+                let pong: serde_json::Value =
+                    serde_json::from_str(response.to_str().unwrap()).unwrap();
+                assert_eq!(pong["type"], "pong");
+                assert_eq!(
+                    pong.get("payload"),
+                    Some(&serde_json::json!({ "client_ts": client_ts }))
+                );
+                assert!(pong.get("room").is_none());
+                assert!(pong.get("client").is_none());
+            }
+            // The first integer above u64::MAX must not be echoed as a float.
+            // These pongs omit payload; the web client discards them.
+            client
+                .send_text(r#"{"type":"ping","payload":{"client_ts":18446744073709551616},"ts":0}"#)
+                .await;
+            let response = client.recv().await.unwrap();
+            assert!(response.as_bytes().len() <= 256);
+            let pong: serde_json::Value = serde_json::from_str(response.to_str().unwrap()).unwrap();
+            assert_eq!(pong["type"], "pong");
+            assert!(pong.get("payload").is_none());
             // Malformed or absent timestamps must not introduce another
-            // reflection path; older timestamp-less keep-alives still work.
+            // reflection path; timestamp-less pings still get bounded pongs.
             for payload in [
                 serde_json::Value::Null,
                 serde_json::json!({}),
@@ -960,7 +991,9 @@ mod tests {
                 let pong: serde_json::Value =
                     serde_json::from_str(response.to_str().unwrap()).unwrap();
                 assert_eq!(pong["type"], "pong");
-                assert_eq!(pong["payload"], serde_json::Value::Null);
+                assert!(pong.get("payload").is_none());
+                assert!(pong.get("room").is_none());
+                assert!(pong.get("client").is_none());
             }
             tasks.cancel();
             tasks.wait().await;
