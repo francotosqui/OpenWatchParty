@@ -25,7 +25,7 @@ nav_order: 5
 ### Watch Party Button Not Visible
 
 **Symptoms:**
-- No group icon in the video player header
+- No Watch Party button (a screen with two viewers) in the video player header
 - Panel doesn't appear
 
 **Solutions:**

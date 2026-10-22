@@ -283,7 +283,7 @@ When the chat is closed, incoming messages appear as toasts in the bottom-right 
 - **Let it sync** - Wait a few seconds after joining before judging sync
 
 ### Network Considerations
-- **Port 3000** - Session server default port must be accessible
+- **Session URL** - Each browser must reach the configured WebSocket URL. For guests outside your network, publish it as `wss://` through a reverse proxy; never expose raw port 3000 to the internet
 - **WebSocket support** - Some firewalls block WebSocket connections
 - **HTTPS** - Use WSS (secure WebSocket) in production
 
@@ -297,7 +297,7 @@ When the chat is closed, incoming messages appear as toasts in the bottom-right 
 ### "Cannot connect to server"
 - Check that the session server is running
 - Verify the WebSocket URL is correct
-- Check firewall rules for port 3000
+- For remote guests, check that the reverse proxy routes `/ws` to the session server
 
 ### "Out of sync with others"
 - This is normal for a few seconds after joining

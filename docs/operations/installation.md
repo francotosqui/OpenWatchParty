@@ -260,7 +260,7 @@ curl http://localhost:3000/health
 ### Test the UI
 
 1. Open any video in Jellyfin
-2. Look for the Watch Party button (group icon) in the top header
+2. Move the pointer over the video and look for the **Watch Party** button (a screen with two viewers) in the player header, next to SyncPlay and Cast
 3. Click to open the panel
 
 ## Environment Variables

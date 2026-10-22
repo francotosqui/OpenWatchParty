@@ -96,7 +96,7 @@ See [Troubleshooting Guide]({{ '/operations/troubleshooting/' | relative_url }}#
 
 ### I can't connect to the session server
 1. Ensure the session server is running
-2. Check that port 3000 is open in your firewall
+2. For remote guests, check that the reverse proxy routes `/ws` to the session server
 3. Verify the WebSocket URL is correct
 
 See [Troubleshooting Guide]({{ '/operations/troubleshooting/' | relative_url }}#cannot-connect-to-session-server) for detailed solutions.
