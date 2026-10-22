@@ -1,8 +1,8 @@
 # Changelog
 
-## [0.7.0] - Unreleased
+## [0.7.0] - 2026-10-22
 
-This release candidate targets Jellyfin 12.0 and 12.1 with target ABI
+This release targets Jellyfin 12.0 and 12.1 with target ABI
 `12.0.0.0`. The WebSocket protocol remains version 1. Rust builds retain the
 1.88 minimum supported toolchain. Plugin automatic updates remain disabled by
 default pending the project's official publication and upgrade-path checks.
