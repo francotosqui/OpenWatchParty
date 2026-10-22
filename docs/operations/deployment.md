@@ -36,7 +36,7 @@ version: '3.8'
 
 services:
   jellyfin:
-    image: jellyfin/jellyfin:latest
+    image: jellyfin/jellyfin:12.1
     container_name: jellyfin
     volumes:
       - ./config:/config
@@ -50,7 +50,7 @@ services:
       - internal
 
   session-server:
-    image: owp-session-server
+    image: ghcr.io/mhbxyz/owp-session-server:0.7.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
     container_name: owp-session
     environment:
       - ALLOWED_ORIGINS=https://jellyfin.example.com
@@ -83,13 +83,14 @@ volumes:
   caddy_config:
 ```
 
+The session-server image is pinned to the published 0.7.0 digest, which fixes [GHSA-fjpr-3g28-27r9](https://github.com/mhbxyz/OpenWatchParty/security/advisories/GHSA-fjpr-3g28-27r9). Do not use a floating `latest` tag for production. The immutable `v0.7.0` source tag still contains a Compose file pointing to the 0.6.0 image; if deploying from that checkout, update the image reference to the 0.7.0 release and verify the effective Compose configuration before pulling.
+
 ### Environment File
 
 ```bash
 # .env
 # Paste the output of: openssl rand -base64 32
 JWT_SECRET=<generated-base64-value>
-ALLOW_INSECURE_NO_AUTH=false
 ```
 
 ## Reverse Proxy Configuration
@@ -262,11 +263,11 @@ Because `owp.example.com` is dedicated to the session server and the tunnel forw
 
 If `cloudflared` runs on the Docker host (not in a container), use the host IP or `host.docker.internal` instead of the service name.
 
-Set `TRUSTED_PROXIES` to the address of the `cloudflared` container (or the host, when the tunnel runs on the host) so the session server can derive the real client address from `X-Forwarded-For` for the per-IP connection limit. Without it, every tunneled client shares the tunnel's address for that limit. See [Reverse Proxy Trust](configuration.md#reverse-proxy-trust) and [Per-IP Limits: Verdict](security.md#per-ip-limits-verdict).
+Set `TRUSTED_PROXIES` to the address of the `cloudflared` container (or the host, when the tunnel runs on the host) so the session server can derive the real client address from `X-Forwarded-For` for the per-IP connection limit. Without it, every tunneled client shares the tunnel's address for that limit. See [Reverse Proxy Trust]({{ '/operations/configuration/' | relative_url }}#reverse-proxy-trust) and [Per-IP Limits: Verdict]({{ '/operations/security/' | relative_url }}#per-ip-limits-verdict).
 
 ### Caching Proxies and CDNs
 
-The plugin injects the web client as `/OpenWatchParty/ClientScript?v=<hash>`, where `<hash>` changes whenever the client code changes. The loader and its modules are served with `Cache-Control: public, max-age=31536000, immutable` while `v` matches the current hash (see [GET /OpenWatchParty/ClientScript](../technical/api.md#get-openwatchpartyclientscript)).
+The plugin injects the web client as `/OpenWatchParty/ClientScript?v=<hash>`, where `<hash>` changes whenever the client code changes. The loader and its modules are served with `Cache-Control: public, max-age=31536000, immutable` while `v` matches the current hash (see [GET /OpenWatchParty/ClientScript]({{ '/technical/api/' | relative_url }}#get-openwatchpartyclientscript)).
 
 **Any cache in front of Jellyfin must keep the query string in its cache key.** A proxy or CDN that ignores query strings drops `v` from the key, so after a plugin update it keeps serving the files it cached for the previous version, and browsers get a stale or mixed client. Such a setup is not supported: Jellyfin's own image and API URLs rely on query values in the same way.
 
@@ -356,7 +357,7 @@ services:
 
 ### 7. Trust Only Your Reverse Proxy
 
-Set `TRUSTED_PROXIES` to the exact addresses or narrow CIDRs of the proxies you operate so the per-IP connection limit sees the real client address. Never trust `X-Forwarded-For` supplied by the public internet. See [Reverse Proxy Trust](configuration.md#reverse-proxy-trust) and the [Threat Model](security.md#threat-model).
+Set `TRUSTED_PROXIES` to the exact addresses or narrow CIDRs of the proxies you operate so the per-IP connection limit sees the real client address. Never trust `X-Forwarded-For` supplied by the public internet. See [Reverse Proxy Trust]({{ '/operations/configuration/' | relative_url }}#reverse-proxy-trust) and the [Threat Model]({{ '/operations/security/' | relative_url }}#threat-model).
 
 ## Health Checks
 
@@ -370,6 +371,8 @@ services:
       retries: 3
       start_period: 5s
 ```
+
+`GET /health` is a liveness check and continues to return 200 during graceful shutdown. Use `GET /ready` for routing decisions: it returns 200 while accepting sessions and 503 after shutdown begins. See the [Monitoring Guide]({{ '/operations/monitoring/' | relative_url }}#health-checks).
 
 ## Logging
 
@@ -441,20 +444,23 @@ tar -czf backup-before-upgrade.tar.gz ./config
 docker compose pull
 ```
 
+Before pulling, update the session-server image to the intended fixed release and digest. Confirm the resolved image reference with `docker compose config`; a plugin-only update does not fix an affected session server. Review the release notes and [security advisory](https://github.com/mhbxyz/OpenWatchParty/security/advisories/GHSA-fjpr-3g28-27r9), and verify downloaded plugin ZIP checksums. Release assets include checksum files, Sigstore bundles and build attestations; follow the published verification instructions when validating those artifacts.
+
 ### 3. Update Plugin
 
 ```bash
 # Download the canonical plugin package
 archive=/tmp/OpenWatchParty-v0.7.0.zip
-curl -fL \
-  https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.7.0/OpenWatchParty-v0.7.0.zip \
-  -o "$archive"
+release=https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.7.0/OpenWatchParty-v0.7.0.zip
+curl -fL "$release" -o "$archive"
+curl -fL "$release.sha256" -o "$archive.sha256"
+(cd /tmp && sha256sum -c "$(basename "$archive").sha256")
 
 # Replace the complete plugin package, including its dependencies and metadata
 rm -rf ./plugins/OpenWatchParty
 mkdir -p ./plugins/OpenWatchParty
 unzip "$archive" -d ./plugins/OpenWatchParty
-rm "$archive"
+rm "$archive" "$archive.sha256"
 ```
 
 ### 4. Restart
@@ -462,6 +468,8 @@ rm "$archive"
 ```bash
 docker compose up -d
 ```
+
+The session server keeps rooms, participants and queues in memory. Restarting or replacing it closes active rooms and discards their queues, so schedule the server update between watch parties and tell participants to create a new room afterward.
 
 ### 5. Verify
 
@@ -471,10 +479,10 @@ docker compose up -d
 
 ## Monitoring
 
-See [Monitoring Guide](monitoring.md) for observability setup.
+See [Monitoring Guide]({{ '/operations/monitoring/' | relative_url }}) for observability setup.
 
 ## Next Steps
 
-- [Security](security.md) - Security best practices
-- [Monitoring](monitoring.md) - Set up monitoring
-- [Troubleshooting](troubleshooting.md) - Common issues
+- [Security]({{ '/operations/security/' | relative_url }}) - Security best practices
+- [Monitoring]({{ '/operations/monitoring/' | relative_url }}) - Set up monitoring
+- [Troubleshooting]({{ '/operations/troubleshooting/' | relative_url }}) - Common issues

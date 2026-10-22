@@ -4,200 +4,57 @@ parent: Development
 nav_order: 5
 ---
 
-# Continuous Integration
+# Continuous Integration and Delivery
 
-OpenWatchParty uses GitHub Actions for continuous integration and security scanning.
+GitHub Actions validates code, audits dependencies and builds release artifacts. The workflow definitions under `.github/workflows/` are authoritative for triggers, tool versions, and pinned actions.
 
-## Workflows
+## CI (`ci.yml`)
 
-### CI Workflow (`ci.yml`)
+Runs on pushes and pull requests targeting `main` or `dev`.
 
-Runs on every push and pull request to `main` and `dev` branches.
+| Job | Checks |
+|---|---|
+| Rust Tests | Rust `1.88.0` formatting, locked Clippy and tests for the session server and `owpctl` |
+| .NET Tests | .NET SDK 10.0.401 locked restore, build, and tests; verifies locked restore rejects dependency drift |
+| JavaScript Lint & Tests | Node 20.20.2 install, recursive ESLint, syntax check, and client unit tests |
+| Release Script Tests | shellcheck, workflow lint and repository release/script/contract regression checks |
 
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Rust Tests    │     │   .NET Tests    │     │   JS Lint       │
-│  (formatting,   │     │  (build, test)  │     │  (syntax check) │
-│  clippy, test)  │     │                 │     │                 │
-└────────┬────────┘     └─────────────────┘     └─────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Build Server   │
-│  (Docker image) │
-└─────────────────┘
-```
+## Security (`security.yml`)
 
-#### Jobs
+Runs on pushes and pull requests to `main` or `dev`, and weekly on Monday at 00:00 UTC. It runs Gitleaks, Cargo Audit for both Rust lockfiles, NuGet and npm audits, Bundler Audit for the documentation dependencies, Trivy on a release-mode server image, and JavaScript CodeQL analysis. Critical and high Trivy findings fail the scan when not ignored as unfixed.
 
-| Job | Steps | Duration |
-|-----|-------|----------|
-| **Rust Tests** | Format check, Clippy, Unit tests | ~3 min |
-| **.NET Tests** | Build, Unit tests | ~2 min |
-| **JavaScript Lint** | Syntax validation | ~30s |
-| **Build Server** | Docker multi-stage build | ~5 min |
+## End-to-end and server hardening
 
-### Security Workflow (`security.yml`)
+`e2e.yml` runs on pull requests that touch the client, server, plugin, dev stack, or end-to-end suite, and supports manual dispatch. It creates a temporary JWT secret, starts the development stack in authenticated mode, and runs Playwright with Chrome. Failed runs upload Playwright reports and print session-server diagnostics. These results describe the checked-out development source, not a deployed release.
 
-Runs on every push/PR and weekly (Monday 00:00 UTC).
+`server-hardening.yml` runs on pushes and pull requests to `main` or `dev`, weekly, and manually. It fuzzes the real WebSocket ingress with a 30-second campaign on regular runs and a 300-second weekly campaign, replays the committed corpus, and runs a bounded 10-room load smoke against a disposable server. Campaigns have explicit time/resource bounds; they do not prove that defects, leaks, excessive RSS, or OOM conditions are absent or occur in production.
 
-| Scan | Tool | Purpose |
-|------|------|---------|
-| **Cargo Audit** | `cargo-audit` | Rust dependency vulnerabilities (RustSec) |
-| **Trivy** | `aquasecurity/trivy` | Container image CVEs |
-| **CodeQL** | `github/codeql-action` | JavaScript static analysis |
+## Publish (`publish.yml`)
 
-Results are uploaded to the GitHub Security tab.
+Changes to server/image build inputs on `main` publish a `beta` image. Publishing a GitHub Release verifies version mirrors and the tag, scans the release image, and publishes the multi-platform versioned server image. The release workflow signs and attests the server image, Jellyfin plugin archive, and cross-platform `owpctl` binaries; it generates SBOMs and checksums, verifies the outputs, attaches them to the release, and updates the self-hosted plugin manifest on `main`.
 
-### Publish Workflow (`publish.yml`)
+For OpenWatchParty `0.7.0`, the source release tag is `v0.7.0`; CI documents its release image marker as `owp-session-server:v0.7.0`. The publish workflow removes the leading `v` for the GHCR semver tag, so the published image reference is `ghcr.io/mhbxyz/owp-session-server:0.7.0`; its source attestation identifies the correct 0.7 source commit `82f5658`. The plugin targets Jellyfin package `Version="12.0.0"` and ABI `12.0.0.0`, resolved from the version properties in `Directory.Build.props`.
 
-Handles Docker image publishing to GHCR and release artifacts.
+After the release image has been published, the current maintainer must update the production Compose image to the new digest and run `infra/scripts/verify-pins.sh`. The publish workflow does not update production Compose. The production pin is a follow-up to image publication because the digest is only known after the build completes. Follow [the release process]({{ '/development/release/' | relative_url }}) for the sequence and verification details.
 
-#### Triggers
-
-| Event | Condition | Tags Generated |
-|-------|-----------|----------------|
-| Push to `main` | Changes in `src/server/**` | `beta` |
-| GitHub Release | Published | `vX.Y.Z`, `vX.Y`, `latest` |
-
-#### Jobs
-
-| Job | Trigger | Description |
-|-----|---------|-------------|
-| **Build & Push Docker Image** | All | Builds multi-platform image (amd64, arm64) and pushes to GHCR |
-| **Build Jellyfin Plugin** | Release only | Builds plugin and creates zip archive |
-| **Upload Release Assets** | Release only | Attaches plugin zip to GitHub Release |
-| **Update Plugin Manifest** | Release only | Updates `manifest.json` for Jellyfin plugin repository |
-
-#### Plugin Repository
-
-On release, the workflow automatically updates the [Jellyfin plugin repository](https://mhbxyz.github.io/OpenWatchParty/jellyfin-plugin-repo/manifest.json):
-
-1. Downloads the built plugin zip
-2. Calculates MD5 checksum
-3. Updates `docs/jellyfin-plugin-repo/manifest.json` with new version
-4. Commits and pushes to `main`
-5. Triggers GitHub Pages deployment
-
-Users can then install/update the plugin directly from Jellyfin's plugin interface.
-
-#### Docker Image
+## Run checks locally
 
 ```bash
-# Latest stable release
-docker pull ghcr.io/mhbxyz/owp-session-server:latest
-
-# Specific version
-docker pull ghcr.io/mhbxyz/owp-session-server:v0.7.0
-
-# Development (latest from main)
-docker pull ghcr.io/mhbxyz/owp-session-server:beta
+just fmt
+just lint
+just test
+just e2e
 ```
 
-## Build Configuration
-
-### Rust (Alpine + musl)
-
-The Docker build uses Alpine with musl libc for smaller images:
-
-```dockerfile
-FROM rust:1.88-alpine AS builder
-# build-base provides the C/C++ compiler required by the aws-lc-sys crypto
-# backend; mold keeps the Rust link step fast.
-RUN apk add --no-cache build-base mold
-# ... build with musl target
-
-FROM alpine:3.21
-# ~26MB final image
-```
-
-**Note:** The repository toolchain is pinned to Rust `1.88.0`. Local development uses glibc (standard Rust). The `.cargo/config.toml` configures the `mold` linker for faster local builds, but this is excluded from Docker builds via `.dockerignore`.
-
-### .NET
-
-The plugin uses NuGet packages from nuget.org:
-
-```xml
-<PackageReference Include="Jellyfin.Controller" Version="12.0.0" />
-<PackageReference Include="Jellyfin.Model" Version="12.0.0" />
-```
-
-CI copies JavaScript files (including subdirectories) to the `Web/` directory before building:
-
-```yaml
-- name: Copy JS files to plugin Web directory
-  run: |
-    mkdir -p OpenWatchParty/Web
-    cp -r ../../clients/jellyfin-web/* OpenWatchParty/Web/
-```
-
-**Note:** The `cp -r` is required because JS modules are now organized in subdirectories (`utils/`, `ui/`, `playback/`, `chat/`, `ws/`, `app/`). The `just` build and test recipes copy the same modules through the single `client_js_files` list in `infra/just/common.just`.
+`just test` includes Rust server, plugin, client, `owpctl`, and release-script checks. `just e2e` starts and provisions the development stack before running Playwright. See [Testing]({{ '/development/testing/' | relative_url }}) for prerequisites and authentication settings.
 
 ## Troubleshooting
 
-### CI Failures
+- Rust formatting: run `just fmt`, then check with `cargo fmt --check` from the affected Rust crate.
+- Clippy errors: run `just lint server` and address the warning before retrying CI.
+- JavaScript failures: from `src/clients/jellyfin-web`, run `npm ci`, `npm run lint`, `npm run check:syntax`, and `npm test`.
+- Plugin build or test failures: run `just test plugin`; it uses the pinned .NET 10.0.401 SDK container and locked restore.
+- Docker image build failures: run `just build image`, then inspect the output from `just logs server` after recreating the service.
+- Workflow validation failures: install both `actionlint` and `shellcheck`, or use Docker as described in [Contributing]({{ '/development/contributing/' | relative_url }}).
 
-**Rust formatting:**
-```bash
-cd src/server && cargo fmt
-git add -u && git commit --amend --no-edit
-```
-
-**Clippy warnings:**
-```bash
-cd src/server && cargo clippy -- -D warnings
-# Fix warnings or add #[allow(...)] with justification
-```
-
-**Docker build fails:**
-```bash
-# Test locally
-docker build -t test ./src/server
-```
-
-## Badges
-
-The README includes CI status badges:
-
-```markdown
-[![CI](https://img.shields.io/github/actions/workflow/status/mhbxyz/OpenWatchParty/ci.yml?branch=main)](https://github.com/mhbxyz/OpenWatchParty/actions/workflows/ci.yml)
-```
-
-| Badge | Meaning |
-|-------|---------|
-| ![CI passing](https://img.shields.io/badge/CI-passing-brightgreen) | All checks pass |
-| ![CI failing](https://img.shields.io/badge/CI-failing-red) | One or more checks failed |
-
-## Security Alerts
-
-View security findings:
-
-1. Go to repository **Security** tab
-2. Click **Code scanning alerts** or **Dependabot alerts**
-3. Review and address as needed
-
-Current alert policy:
-- **CRITICAL/HIGH**: Must fix before release
-- **MEDIUM**: Fix in next release
-- **LOW/NOTE**: Track, fix when convenient
-
-### Repository automation
-
-The repository enables the GitHub security features that feed these alerts:
-
-- **CodeQL** (`security.yml`) runs on every push and pull request to `main`,
-  plus the weekly schedule. Its findings appear under **Code scanning alerts**;
-  fixing the code closes the alert on the next default-branch analysis.
-- **Dependabot alerts** and **Dependabot security updates** are enabled, so a
-  vulnerable dependency raises an alert and opens a fix pull request
-  automatically. Version-update pull requests keep the rest of the dependency
-  set current.
-- **Gitleaks**, `cargo audit`, `npm audit`, `nuget audit`, `bundle-audit` and
-  Trivy run in the same workflow, so a secret leak or a known CVE in a lockfile
-  fails CI before it reaches a release.
-
-## Next Steps
-
-- [Setup](setup) - Development environment
-- [Contributing](contributing) - Contribution guidelines
-- [Testing](testing) - Test documentation
+The security workflow fails on the configured critical/high vulnerability findings. Review the source and dependency path, then update the affected dependency or document why a finding is not applicable before merging.

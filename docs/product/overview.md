@@ -6,63 +6,23 @@ nav_order: 1
 
 # Overview
 
-## What is OpenWatchParty?
+OpenWatchParty is a Jellyfin plugin for watching the same movie or TV episode together in Jellyfin Web. The room host controls seeking; every participant can play or pause for the whole room. Clients use clock synchronization and drift correction to keep playback aligned.
 
-OpenWatchParty is a plugin for [Jellyfin](https://jellyfin.org/) that enables synchronized media playback across multiple clients. It allows users to watch movies, TV shows, and other media together in real-time, regardless of their physical location.
+## How a watch party works
 
-## The Problem
+1. The host starts a video and creates a room from the Watch Party panel.
+2. Guests sign in to the same Jellyfin server and join from the room list or a host's invite link.
+3. The room coordinates playback while each person's Jellyfin client streams the media.
+4. The host can leave the room open for a compatible participant to take over, or close it for everyone.
 
-Watching media together remotely is challenging:
-- Video players drift out of sync over time
-- Pausing, seeking, and resuming must be coordinated manually
-- Network latency makes coordination difficult
-- Different streaming qualities cause timing differences
+Each participant needs an account on the Jellyfin server and access to the media being watched. OpenWatchParty supports direct play and HLS streams; each client receives video according to its Jellyfin playback and network conditions.
 
-## The Solution
+## What you can do
 
-OpenWatchParty provides:
-- **Real-time synchronization** - All participants see the same content at the same time
-- **Host-controlled playback** - One person controls play/pause/seek for everyone
-- **Automatic drift correction** - Playback speed adjusts to keep clients in sync
-- **HLS/transcoding support** - Works with Jellyfin's adaptive streaming
+- Create and join rooms, see who's watching and chat in real time.
+- Share play and pause control while keeping seek control with the host.
+- Invite guests with an expiring, room-specific link.
+- Watch a series with a shared episode queue and synchronized up-next countdown.
+- Check participant playback status, recover the host role after a short reconnect, and optionally adjust your own sync as a guest.
 
-## Target Audience
-
-- **Home media enthusiasts** running their own Jellyfin servers
-- **Friend groups** who want to watch together remotely
-- **Families** spread across different locations
-- **Communities** organizing watch parties
-
-## How It Works
-
-1. **Host creates a room** - Starts a watch party from the Jellyfin player
-2. **Guests join** - Enter the room ID to join the session
-3. **Synchronized playback** - Everyone sees the same frame at the same time
-4. **Continuous sync** - Background algorithms keep everyone aligned
-
-## Key Features
-
-| Feature | Description |
-|---------|-------------|
-| Room management | Create and join watch party rooms |
-| Play/Pause sync | Anyone's play or pause applies to everyone |
-| Seek sync | Jumping to a position syncs everyone |
-| Drift correction | Gradual speed adjustments prevent desync |
-| Auto-reconnect | Handles network interruptions gracefully |
-| JWT authentication | Optional security for rooms |
-
-## Comparison with Alternatives
-
-| Feature | OpenWatchParty | SyncPlay | Teleparty |
-|---------|---------------|----------|-----------|
-| Self-hosted | Yes | Yes | No |
-| Jellyfin native | Yes | Yes | No |
-| Lightweight | Yes | Moderate | Heavy |
-| Browser-based | Yes | No | Yes |
-| Open source | Yes | Yes | No |
-
-## Next Steps
-
-- [Features](features.md) - Detailed feature list
-- [User Guide](user-guide.md) - How to use OpenWatchParty
-- [Installation](../operations/installation.md) - Set up on your server
+See [Features]({{ '/product/features/' | relative_url }}) for current capabilities, the [User Guide]({{ '/product/user-guide/' | relative_url }}) for controls, or the [illustrated walkthrough]({{ '/product/first-watch-party/' | relative_url }}) to try a two-account session.

@@ -11,6 +11,9 @@ disabled. Official listing is still pending; the
 [self-hosted repository]({{ '/operations/installation/#1-install-the-jellyfin-plugin' | relative_url }})
 and manual ZIP installation remain available.
 
+The session-server update is separate from the Jellyfin plugin update. Version
+`0.7.0` fixes [GHSA-fjpr-3g28-27r9](https://github.com/mhbxyz/OpenWatchParty/security/advisories/GHSA-fjpr-3g28-27r9), which affects session-server versions `>=0.1.0,<0.7.0`. Upgrade the server image to `0.7.0` or newer even if you must keep an older plugin compatible with Jellyfin 10.11; updating only the plugin does not fix the server. The WebSocket protocol remains version `1`.
+
 ## How Jellyfin Finds Updates
 
 Jellyfin compares an installed plugin's GUID/version/ABI with versions in its
@@ -80,3 +83,9 @@ Do not restore an old assembly over a running process, leave a newer version
 active alongside the rollback, or remove unrelated plugins. Keep the normal
 [manual install instructions]({{ '/operations/installation/#manual-installation' | relative_url }})
 and release checksums available as a recovery path.
+
+For a downloaded plugin ZIP, fetch its `.sha256` file from the same release
+and verify it before extracting. Release workflows also publish Sigstore
+bundles, build attestations and SBOMs; verify these when your deployment
+process requires provenance checks. For the session server, pin the version
+and OCI digest shown in the current [deployment example]({{ '/operations/deployment/' | relative_url }}#docker-compose-deployment).

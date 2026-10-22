@@ -97,7 +97,7 @@ Generates a JWT token for the authenticated user.
 
 `invite_ttl_seconds` is the configured **Invite TTL** (60-86400 seconds). The client sends it when asking the session server for a new invite link; the session server clamps it again.
 
-`protocol_version` is the WebSocket protocol version the issued token authorizes; it is carried in the client's `auth` message (see the [protocol specification](protocol.md#protocol-version)).
+`protocol_version` is the WebSocket protocol version the issued token authorizes; it is carried in the client's `auth` message (see the [protocol specification]({{ '/technical/protocol/' | relative_url }}#protocol-version)).
 
 **Status Codes:**
 | Code | Description |
@@ -106,11 +106,11 @@ Generates a JWT token for the authenticated user.
 | 401 | Not authenticated or claims missing |
 | 429 | Rate limit exceeded (30 tokens/min) |
 | 500 | Plugin not configured |
-| 503 | JWT authentication configuration missing or secret rejected by the quality policy |
+| 503 | Invalid or missing session destination, automatic discovery not opted into, or JWT signing configuration missing or invalid |
 
 **Rate Limiting:**
-- Maximum 30 tokens per fixed one-minute window per user
-- Window starts with the first accepted request
+- JWT issuance is limited to 30 tokens per fixed one-minute window per user
+- The window starts with the first accepted request; the insecure no-token response does not consume a token slot
 
 **Example:**
 ```bash
@@ -125,6 +125,12 @@ curl -H "Authorization: MediaBrowser Token=\"YOUR_API_KEY\"" \
   "expires_in": 3600,
   "user_id": "d4f8a2b1-c3e4-5f6a-7b8c-9d0e1f2a3b4c",
   "user_name": "admin",
+  "session_server_url": "wss://party.example.com/ws",
+  "hide_native_syncplay_button": false,
+  "show_sync_nudge_button": false,
+  "appearance_opacity": 55,
+  "appearance_text_size": 14,
+  "invite_ttl_seconds": 3600,
   "protocol_version": 1
 }
 ```
@@ -149,9 +155,15 @@ When authentication is enabled, the generated token contains:
   "aud": "OpenWatchParty",
   "iss": "Jellyfin",
   "iat": 1678900000,
-  "exp": 1678903600
+  "exp": 1678903600,
+  "jti": "unique-token-id"
 }
 ```
+
+The default signer is HS256 using the configured shared secret. An activated
+plugin-managed RSA signing key instead issues RS256 tokens; the session server
+can validate them using its configured public-key trust store. `aud` and `iss`
+are string claims, and `jti` is generated per token.
 
 **Claims:**
 | Claim | Description |
@@ -162,6 +174,7 @@ When authentication is enabled, the generated token contains:
 | `iss` | Issuer (configurable) |
 | `iat` | Issued at timestamp |
 | `exp` | Expiration timestamp |
+| `jti` | Unique token identifier |
 
 ## Error Responses
 
@@ -180,6 +193,7 @@ All error responses follow this format:
 | 401 | "User identity not found in claims" | Jellyfin auth failed or claims missing |
 | 429 | "Rate limit exceeded. Try again later." | Too many token requests |
 | 500 | "Plugin not configured" | Plugin configuration issue |
+| 503 | Configuration error | Invalid session URL, automatic discovery not opted into, or unavailable/invalid JWT signing configuration |
 
 ## Using the API
 
@@ -221,6 +235,26 @@ curl -H "Authorization: MediaBrowser Token=\"$TOKEN\"" \
   "http://localhost:8096/OpenWatchParty/Token"
 ```
 
+## Plugin information, diagnostics and signing key
+
+`GET /OpenWatchParty/Info` returns the plugin ID, name and version for the
+configuration UI.
+
+The diagnostics routes require administrator elevation:
+
+- `GET /OpenWatchParty/Diagnostics/Status` returns redacted readiness checks and
+  plugin, Jellyfin, ABI and protocol version details.
+- `POST /OpenWatchParty/Diagnostics/Run` repeats the checks and attempts a
+  session-server `/health` request with a five-second timeout. A failed check is
+  reported in the response rather than changing the plugin configuration.
+
+The RSA signing-key routes also require administrator elevation:
+
+- `GET /OpenWatchParty/SigningKey` returns the public JWK, issuer and whether
+  the plugin-managed key is active. It creates the key if one does not exist.
+- `POST /OpenWatchParty/SigningKey/Activate` activates the key matching the
+  request's `kid` and returns `204`; a mismatch returns `409`.
+
 ## Configuration API
 
 Plugin configuration is managed through Jellyfin's standard plugin configuration API:
@@ -248,10 +282,12 @@ curl -X POST \
     "JwtIssuer": "Jellyfin",
     "TokenTtlSeconds": 3600,
     "InviteTtlSeconds": 3600,
-    "SessionServerUrl": "",
-    "DefaultMaxBitrate": 0,
-    "PreferDirectPlay": true,
-    "AllowHostQualityControl": true
+    "SessionServerUrl": "wss://party.example.com/ws",
+    "AllowAutoDetectedSessionServer": false,
+    "HideNativeSyncPlayButton": false,
+    "ShowSyncNudgeButton": false,
+    "AppearanceOpacity": 55,
+    "AppearanceTextSize": 14
   }' \
   "http://localhost:8096/System/Configuration/Plugin/0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d"
 ```
@@ -268,28 +304,30 @@ curl -X POST \
 | `JwtIssuer` | string | `"Jellyfin"` | The `iss` (issuer) claim in generated tokens. Must match the session server's expected issuer if configured. |
 | `TokenTtlSeconds` | int | `3600` | Token lifetime in seconds. Valid range: 60-86400 (1 min to 24 hours). Values outside this range are clamped. |
 | `InviteTtlSeconds` | int | `3600` | Lifetime of room invite links in seconds. Valid range: 60-86400 (1 min to 24 hours). Values outside this range are clamped. The session server enforces the same bounds when minting a ticket. |
-| `SessionServerUrl` | string | `""` | WebSocket server URL (e.g., `wss://party.example.com/ws`). **When empty**, the client auto-detects using the same hostname with port 3000 (e.g., `ws://jellyfin.local:3000/ws`). |
-| `DefaultMaxBitrate` | int | `0` | Maximum streaming bitrate in bits per second. `0` = Auto (no limit). Common values: `8000000` (1080p), `4000000` (720p), `1500000` (480p). |
-| `PreferDirectPlay` | bool | `true` | When `true`, attempts direct play without transcoding if the client supports the media format. Reduces server load and improves quality. |
-| `AllowHostQualityControl` | bool | `true` | When `true`, the host can change quality settings during a watch party. When `false`, quality is locked to default settings. |
+| `SessionServerUrl` | string | `""` | Absolute WebSocket URL (for example, `wss://party.example.com/ws`). An empty value requires the auto-detection opt-in below. |
+| `AllowAutoDetectedSessionServer` | bool | `false` | Explicitly permits same-host, port-3000 auto-detection when `SessionServerUrl` is empty. Without it, token issuance returns HTTP 503. |
+| `HideNativeSyncPlayButton` | bool | `false` | Hides Jellyfin's built-in SyncPlay controls in Jellyfin Web headers. |
+| `ShowSyncNudgeButton` | bool | `false` | Gives guests a local sync-adjustment control; it does not issue a room seek. |
+| `AppearanceOpacity` | int | `55` | Opacity from 40 to 100, rounded to steps of 5. Applies to the room bar, drop-downs, lobby panel, up-next strip and toasts. |
+| `AppearanceTextSize` | int | `14` | Base text size from 12 to 18 px for those surfaces; icons and spacing scale with it. |
 
 ### SessionServerUrl Behavior
 
-The `SessionServerUrl` field determines how clients connect to the session server:
+The `SessionServerUrl` field determines how clients connect to the session server. A configured URL must be absolute `ws://` or `wss://`, include a host, and have no credentials, query string or fragment. When it is empty, `AllowAutoDetectedSessionServer` must be true for token issuance to succeed:
 
 | Value | Behavior |
 |-------|----------|
-| Empty string `""` | Auto-detect: uses current hostname with port 3000. Protocol matches page (http→ws, https→wss). Example: browsing `https://jellyfin.example.com` connects to `wss://jellyfin.example.com:3000/ws` |
-| Full URL | Uses the specified URL exactly. Must include protocol (`ws://` or `wss://`) and path (`/ws`). Example: `wss://party.example.com/ws` |
+| Empty string `""`, opt-in enabled | Auto-detect: uses current hostname with port 3000. Protocol matches page (http→ws, https→wss). Example: browsing `https://jellyfin.example.com` connects to `wss://jellyfin.example.com:3000/ws` |
+| Full URL | Uses the validated URL after URI normalization. The session server endpoint normally ends in `/ws`. Example: `wss://party.example.com/ws` |
 
 **When to set explicitly:**
 - Session server runs on a different host
-- Using a [reverse proxy](../operations/deployment.md#reverse-proxy-configuration) that routes both `/ws` and `/invite` to the session server
+- Using a [reverse proxy]({{ '/operations/deployment/' | relative_url }}#reverse-proxy-configuration) that routes both `/ws` and `/invite` to the session server
 - Port 3000 is not accessible from clients
 
 ## Session Server API
 
-Besides `/health`, the session server exposes `/ready` and `/metrics` for operators (see the [Monitoring guide](../operations/monitoring.md)) and one endpoint for clients.
+Besides `/health`, the session server exposes `/ready` and `/metrics` for operators (see the [Monitoring guide]({{ '/operations/monitoring/' | relative_url }})) and one endpoint for clients.
 
 ### POST /invite
 
@@ -336,4 +374,4 @@ The session server uses WebSocket for real-time communication:
 
 **Endpoint:** `ws(s)://<host>:3000/ws`
 
-See [Protocol Documentation](protocol.md) for the complete WebSocket message specification.
+See [Protocol Documentation]({{ '/technical/protocol/' | relative_url }}) for the complete WebSocket message specification.

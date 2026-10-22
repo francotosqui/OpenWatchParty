@@ -15,33 +15,44 @@ OpenWatchParty uses multiple algorithms to maintain playback synchronization bet
 ### Problem
 Clients have different system clocks. To synchronize actions, we need to know the offset between client and server clocks.
 
-### Algorithm
+### Samples and offset estimate
+
+The server sends `client_hello` with `server_ts` before authentication; the
+client uses this as a first offset estimate if it has none. It also sends a
+JSON `ping` immediately on socket open, before JWT authentication completes,
+then repeats every 2 seconds until five valid samples and every 30 seconds
+afterward. An offset change greater than 50 ms restarts the fast cadence.
+
+A ping carries the client's send time as `payload.client_ts`. The pong echoes
+that timestamp and carries the server sample in the envelope's `server_ts`:
 
 ```
 Client                          Server
    │                              │
-   ├─── ping { client_ts: T1 } ──►│
-   │                              │
-   │◄── pong { client_ts: T1,     │
-   │           server_ts: T2 } ───┤
+   ├── ping { client_ts: T1 } ───►│
+   │◄── pong { client_ts: T1 } ───┤  server_ts = T2
    │                              │
    T3 (reception)                 │
 ```
 
-**Calculation:**
+The client computes RTT and a candidate offset from the lowest-RTT sample in
+its latest eight valid pongs, then applies EMA smoothing (alpha 0.4):
+
 ```javascript
-rtt = T3 - T1;                           // Round-trip time
-serverTimeAtT3 = T2 + (rtt / 2);         // Estimated current server time
-serverOffsetMs = serverTimeAtT3 - T3;    // Client/server offset
+rtt = T3 - T1;
+sampleOffset = T2 + (rtt / 2) - T3;
+bestSample = lowestRtt(lastEightSamples);
+serverOffsetMs = hasTimeSync
+    ? serverOffsetMs * 0.6 + bestSample.offset * 0.4
+    : bestSample.offset;
 ```
 
-**EMA Smoothing (Exponential Moving Average):**
-```javascript
-// Prevents sudden jumps from latency variations
-serverOffsetMs = hasTimeSync
-    ? (0.6 * serverOffsetMs + 0.4 * newOffset)
-    : newOffset;
-```
+A missing or invalid `client_ts` causes the server to return a pong without a
+payload. The web client's schema validator warns and drops that response; it
+does not contribute a clock sample. The server does not reflect arbitrary ping
+fields or the request's `room` and `client` identifiers. These application
+pings are separate from the server's 20-second WebSocket control-frame ping,
+which keeps transport connections alive but does not estimate clock offset.
 
 ### Usage
 ```javascript
@@ -53,7 +64,7 @@ function getServerNow() {
 ## 2. Synchronized Action Scheduling
 
 ### Problem
-When the host clicks "Play", all clients must start playback at the same instant, despite variable network latency.
+When the host, or a guest with negotiated shared playback control, starts playback, all room members should apply the command at the same server time despite variable network latency.
 
 ### Solution: Target Server Timestamp
 
@@ -201,11 +212,11 @@ Examples:
 - drift = -0.5s  → rate = 1 - sqrt(0.5) * 0.15 = 0.89x (clamped to 0.90x)
 ```
 
-The sqrt curve corrects small drifts gently and larger ones faster, within 0.90x-1.15x: voices still sound natural there (browsers also keep the pitch, `preservesPitch`), at the cost of a slower catch-up (about 10 s from 1.5 s behind to within 0.25 s). Drifts of 2 s or more seek instead, once the cooldown after joining (`INITIAL_SYNC_COOLDOWN_MS`) or after a host play or seek has passed (during the join cooldown only a drift over `INITIAL_SYNC_MAX_DRIFT`, 10 s, seeks); below 2 s, the guest keeps catching up, also when that cooldown ends.
+The sqrt curve applies corrections within 0.90x-1.15x; the client resets playback rate to 1 when correction is unnecessary or unavailable. Drifts of 2 s or more seek instead, once the cooldown after joining (`INITIAL_SYNC_COOLDOWN_MS`) or after a host play or seek has passed (during the join cooldown only a drift over `INITIAL_SYNC_MAX_DRIFT`, 10 s, seeks); below 2 s, the guest keeps catching up, also when that cooldown ends.
 
 ### Paused Rooms
 
-A guest's own play or pause is the room's: the client sends it as a `player_event`, and the server passes it to everyone, the host included. For 1.5 s (`OWN_COMMAND_HOLD_MS`) the guest ignores a state update with the other play state, one the host sent before it applied the command; the server drops the later ones. OWP's own plays and pauses set the room state first, so they are never sent back. Neither are the pause at the end of an episode or when leaving the player, nor a play while the room waits for the host.
+When `shared_playback_control` is negotiated by both the guest and current host, a guest's play or pause becomes a room `player_event`; the server returns the canonical event to all members, including its sender. For 1.5 s (`OWN_COMMAND_HOLD_MS`) the guest ignores a stale host state update with the opposite play state; the server also filters conflicting host state during its command hold. Without that capability, a guest pause stays local. OpenWatchParty's own applied room commands are suppressed to avoid echoes. The player-exit pause and play while the room waits for the host are not guest commands.
 
 A paused room sends no unchanged state updates, so the loop pauses a guest whose video plays while the room is paused and the play did not reach the room (while it waits for the host). It waits while a room command is being applied or a host play is scheduled.
 
@@ -318,19 +329,15 @@ function onEvent() {
 
 ### Server-Side Protection
 
-#### Cooldown After Command
+#### Monotonic Cooldown After Command
 
-```rust
-const COMMAND_COOLDOWN_MS: u64 = 2000;
-
-// After broadcasting player_event
-room.last_command_ts = now_ms();
-
-// On receiving state_update
-if now_ms() - room.last_command_ts < COMMAND_COOLDOWN_MS {
-    return;  // Ignore during cooldown
-}
-```
+After a `player_event`, the server stores a deadline in
+`room.command_cooldown_until` using Tokio's monotonic `Instant`. An unchanged
+`state_update` is ignored while that deadline is in the future. The server also
+uses monotonic `room.last_state_at` to enforce the 500 ms minimum update interval.
+A play-state change is normally accepted immediately, except while it conflicts
+with the hold protecting an accepted guest play/pause command. Wall-clock jumps
+do not lengthen or shorten these filtering intervals.
 
 #### Position Jitter Filtering
 

@@ -8,8 +8,10 @@ nav_order: 3
 
 This walkthrough takes you from a working Jellyfin server to a room with two
 people watching together. Follow **one** setup path, then continue with the
-shared host-and-guest steps. The screenshots show Jellyfin 12.1 and
-OpenWatchParty 0.5.0; labels may vary with your language or version.
+shared host-and-guest steps. The walkthrough screenshots show Jellyfin 12.1
+with OpenWatchParty 0.7.0. The plugin targets Jellyfin ABI 12.0.0.0 and is
+intended for Jellyfin 12. Check the [compatibility matrix]({{ '/operations/compatibility/' | relative_url }})
+before installing on another server version.
 
 ## Choose a setup path
 
@@ -66,34 +68,38 @@ installer download is for Linux x86_64; for another host platform, use the
 
 ![Jellyfin Dashboard API Keys page, with the New API Key button marked 1]({{ '/assets/images/tutorial-api-keys.png' | relative_url }})
 
-**1** — Create the temporary key here. Do not put its value into a screenshot,
+**1:** Create the temporary key here. Do not put its value into a screenshot,
 documentation file or terminal command history.
 
-### 2. Preview the graphical installation
+### 2. Preview and install
 
 Run `owpctl setup --web` on the machine running Docker. This uses your user's
 configuration directory; the user needs permission to run Docker. For a
 system-wide installation, use `sudo owpctl --scope system setup --web` and
 open the one-time URL printed in the terminal yourself if the browser does not
 open. The assistant binds only to `127.0.0.1` and expires after 30 minutes.
+Open the printed link once and keep that page open: refreshing or reopening
+it returns **Invalid or consumed setup token**. If that happens before
+installation, stop and rerun the setup command for a fresh link. When running
+the installer over SSH, use the [remote browser access instructions]({{ '/operations/owpctl/' | relative_url }}#remote-browser-access).
 
-![OpenWatchParty setup form with Jellyfin URL, temporary API token, Preview plan and Install marked 2 through 5]({{ '/assets/images/tutorial-setup-form.png' | relative_url }})
-
-**2** — Enter the Jellyfin address reachable **from the installer's machine**.
+Enter the Jellyfin address reachable **from the installer's machine**.
 For a local-only test this can be `http://localhost:8096`; if guests will use
 `https://jellyfin.example.com`, make that address reachable before running
 the assistant (the Jellyfin proxy site below is one option), then enter the
 public HTTPS address here so the installer's allowed browser origin matches.
-**3** — Paste the temporary API key.
-**4** — Select **Preview plan** and read the operations. **5** — Select
-**Install** only when the URL and plan are correct. Keep the terminal open
-until installation and checks complete.
+Paste the temporary API key, select **Preview plan**, and read the operations.
+Select **Install** only when the URL and plan are correct. Keep the terminal
+open until installation and checks complete. For the full installer options,
+see [Guided Setup and owpctl]({{ '/operations/owpctl/' | relative_url }}).
 
-![Dry-run preview listing the plugin, authentication, session-server and verification operations, marked 6]({{ '/assets/images/tutorial-setup-preview.png' | relative_url }})
+The screenshots show the actual 0.7.0 setup form and a preview against the
+isolated local demo server. The API token field is blank. Your plan lists the
+work `owpctl` intends to perform; previewing does not install anything.
 
-**6** — The preview lists the plugin update, synchronized authentication,
-session-server image and health checks. This capture was made in an isolated
-dry run; its `/tmp/` config path is not an installation instruction.
+![The 0.7.0 owpctl setup form with the local Jellyfin demo URL and an empty temporary API token field]({{ '/assets/images/tutorial-setup-form.png' | relative_url }})
+
+![The real owpctl 0.7.0 preview plan for validation, plugin setup, authentication configuration, session server deployment and health checks]({{ '/assets/images/tutorial-setup-preview.png' | relative_url }})
 
 ### 3. Verify the installation
 
@@ -101,14 +107,19 @@ In Jellyfin, open **Dashboard → Plugins → OpenWatchParty** and run diagnosti
 The plugin, client injection and session server should all report **Ready**.
 If a check is blocked, follow the [installation guide]({{ '/operations/installation/#verification' | relative_url }})
 and [troubleshooting guide]({{ '/operations/troubleshooting/' | relative_url }}) before inviting
-anyone. Keep the temporary key until any remote-network configuration below
-is complete; then delete it from Jellyfin.
+anyone. For remote guests, complete the network configuration below and rerun
+the checks. Keep the temporary key until that configuration is complete;
+then delete it from Jellyfin. If Jellyfin runs in a container, `localhost`
+in a server-side diagnostic means that container, not the Docker host: the
+configured destination must be reachable from Jellyfin as well as from each
+participant's browser.
 
-![OpenWatchParty plugin configuration showing Ready status, authentication enabled and session-server settings]({{ '/assets/images/plugin-configuration.png' | relative_url }})
+Check that the displayed plugin release and session connection match your
+installation. On another device, the configured WebSocket URL must be
+reachable **from that device's browser**. The plugin's **Web Client** settings
+also let an administrator adjust the room interface's opacity and text size.
 
-The screenshot shows a working setup, not values to copy: its private
-WebSocket address belongs to a particular deployment. On another device, the
-configured WebSocket URL must be reachable **from that device's browser**.
+![OpenWatchParty Web Client settings for SyncPlay visibility, optional guest sync adjustment and room opacity and text size]({{ '/assets/images/plugin-configuration.png' | relative_url }})
 
 ### 4. If your guest is on another network
 
@@ -176,20 +187,21 @@ your guest gets ready. Move the pointer over the video to reveal the player
 header, then select the **Watch Party** icon (a screen with two viewers)
 next to **SyncPlay** and **Cast**.
 
-![Jellyfin player header showing the Watch Party button circled, next to SyncPlay and Cast]({{ '/assets/images/tutorial-player-button.png' | relative_url }})
+![Jellyfin player header showing the Watch Party button marked 1, next to SyncPlay and Cast]({{ '/assets/images/tutorial-player-button.png' | relative_url }})
 
-**1** — This is OpenWatchParty's player button, not Jellyfin's own
+**1:** This is OpenWatchParty's player button, not Jellyfin's own
 **SyncPlay** button beside it. On the pages that show the Jellyfin app bar,
 OpenWatchParty adds the same button next to SyncPlay; it opens the same panel.
 
 Check that the panel says **Online**, then select **Create Room**. It will
 turn into a bar at the top right showing `<your username>'s room`; select its
-people icon to see your name with a **Host** badge. Keep the movie open.
+people icon to see your name with a **Host** badge. Keep the movie open while
+the guest joins.
 
-![OpenWatchParty lobby in the player showing Online and the Create Room button marked 2]({{ '/assets/images/tutorial-lobby.png' | relative_url }})
+![OpenWatchParty lobby in the player showing an Online connection, no active rooms and the Create Room button]({{ '/assets/images/tutorial-lobby.png' | relative_url }})
 
-**2** — An empty room list before creation is normal. If you see **Offline**,
-check the [connection troubleshooting]({{ '/operations/troubleshooting/#cannot-connect-to-session-server' | relative_url }}).
+An empty room list before creation is normal. If you see **Offline**, check
+the [connection troubleshooting]({{ '/operations/troubleshooting/#cannot-connect-to-session-server' | relative_url }}).
 
 ## Guest: find and join the room
 
@@ -197,36 +209,61 @@ In a **second browser profile or device**, sign in with a different Jellyfin
 account. On the home page, the **Watch Parties** row shows the host's room and
 movie while the room is active.
 
-![Guest's Jellyfin home page showing a Wing It! watch-party card for testhost's room, marked 3]({{ '/assets/images/tutorial-guest-home.png' | relative_url }})
+![Guest's Jellyfin home page showing the Watch Parties row and the host's Wing It! room card]({{ '/assets/images/tutorial-guest-home.png' | relative_url }})
 
-**3** — The card's movie title and host name let you confirm you picked the
-right room. If the row is absent, reload the page and check that the host is
-still in the room.
+The card's movie title and host name let you confirm you picked the right
+room. If the row is absent, reload the page and check that the host is still
+in the room.
 
-Open the card, then start **the same movie** in the player. The card opens
-the movie details; it does not join by itself. The play overlay may start
-playback and attempt an automatic join, but you can always use the manual
-path: select **Watch Party** in the player, find `<host>'s room` under
-**Available rooms**, and select **Join**.
+Select the card's **Join** button (the play icon on its artwork) to open the
+room's movie and join automatically. Selecting the rest of the card opens the
+movie details without joining. For the manual path, start **the same movie**,
+select **Watch Party** in the player, find `<host>'s room` under **Available
+rooms**, and select **Join**.
 
-![Guest's OpenWatchParty panel showing the host's room and its Join button marked 4]({{ '/assets/images/tutorial-guest-join.png' | relative_url }})
+![Guest's OpenWatchParty panel showing the host's room and its Join button]({{ '/assets/images/tutorial-guest-join.png' | relative_url }})
 
-**4** — Select **Join** for the correct host. You can leave and rejoin while
-the host keeps the movie and room open.
+Select **Join** for the correct host. You can leave and rejoin while the host
+keeps the movie and room open.
 
 Select the people icon in the room bar: it shows **2** and lists both names,
-with a **host** badge on the host. On the guest side the dot at the left of the
+with a **Host** badge on the host. On the guest side the dot at the left of the
 bar turns green when in sync (hover it to read **In sync**). Initial catch-up
-may take a few seconds. Ask the host to resume playback, pause and seek once;
-the guest should follow. Chat opens from the chat icon. The exit icon asks
-before leaving: for the host it closes the room for everyone, for the guest it
-only leaves.
+may take a few seconds. Ask the host to resume playback, then have the guest
+pause and play once: both actions apply to the room. Seeking is still host-only.
+Chat opens from the chat icon. The exit icon asks before leaving; a guest can
+leave, while a host can pass the room to a compatible participant or close it
+for everyone.
 
-![Participant room bar listing both names and the host badge, with the green sync dot marked 5]({{ '/assets/images/tutorial-guest-sync.png' | relative_url }})
+![Participant room bar listing both names and the host badge, with the green sync status]({{ '/assets/images/tutorial-guest-sync.png' | relative_url }})
 
-**5** — The green **In sync** state is the confirmation on the guest side.
+The green **In sync** state is the confirmation on the guest side.
+
+If the host leaves while a compatible participant is present, the
+confirmation names the person who will take over. After the host leaves, that
+participant sees the Host badge and the room stays open.
+
+![Host leave confirmation naming testclient1 as the next host]({{ '/assets/images/watch-party-host-transfer.png' | relative_url }})
+
+![Participant list after the host transfer, with testclient1 marked Host]({{ '/assets/images/watch-party-host-role.png' | relative_url }})
 
 **Done:** two distinct accounts see the same room and movie, and the guest
 follows the host. If the guest can play the movie but cannot join, compare the
 movie on both sides and check the [user guide]({{ '/product/user-guide/' | relative_url }}) and
 [troubleshooting guide]({{ '/operations/troubleshooting/' | relative_url }}).
+
+For a series, the host's player fills a queue with upcoming episodes (up to 20
+items total). The **Queue** control lets the host reorder or remove upcoming
+episodes; guests can view it. Near the credits, a 10-second **Up next** strip
+lets the host cancel the advance or start the next episode immediately. A room
+that is watching a movie does not show a queue.
+
+![OpenWatchParty episode queue with the current episode, the automatically added next episode and host queue controls]({{ '/assets/images/watch-party-queue.png' | relative_url }})
+
+![Live up-next countdown with Cancel and Next controls above the episode queue]({{ '/assets/images/watch-party-up-next.png' | relative_url }})
+
+The administrator can change the room interface opacity and text size under
+**Dashboard → Plugins → OpenWatchParty → Web Client**. If enabled, the guest's
+sync adjustment control nudges only that guest's video toward the host. See
+the [User Guide]({{ '/product/user-guide/' | relative_url }}) for these controls,
+host reconnect behavior and participant status details.

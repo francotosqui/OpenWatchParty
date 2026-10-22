@@ -8,7 +8,7 @@ nav_order: 3
 
 ## Overview
 
-The OpenWatchParty session server is an asynchronous Rust application using Warp for WebSocket handling and Tokio as the async runtime. It manages rooms, clients, and playback synchronization in memory.
+The OpenWatchParty 0.7.0 session server is an asynchronous Rust application using Warp for WebSocket handling and Tokio as the async runtime. The pinned Rust toolchain/MSRV is 1.88.0. It manages rooms, clients, playback synchronization, participant status and media queues in memory.
 
 ## Module Structure
 
@@ -19,7 +19,9 @@ src/
 ├── routes.rs         # Warp route filters
 ├── tasks.rs          # Background tasks (zombie cleanup, shutdown)
 ├── messaging.rs      # Message sending functions
-├── auth.rs           # JWT authentication (optional)
+├── auth.rs           # JWT and invite-ticket validation
+├── trust.rs          # Versioned public-key trust store
+├── metrics.rs        # Prometheus counters and readiness state
 ├── utils.rs          # Utilities (timestamp)
 ├── ws/
 │   ├── mod.rs
@@ -36,11 +38,13 @@ src/
 │       ├── join.rs       # Room joining
 │       ├── misc.rs       # Ping, list_rooms, etc.
 │       ├── playback.rs   # player_event, state_update, ready
+│       ├── status.rs     # participant_status
 │       └── queue.rs      # Room queue messages and the up-next countdown
 └── room/
     ├── mod.rs
-    ├── leave.rs          # Client leave / disconnect
+    ├── leave.rs          # Client leave / disconnect and host recovery
     ├── close.rs          # Room closure
+    ├── participants.rs   # Participant list/status and room capabilities
     └── queue.rs          # Room queue list operations
 ```
 
@@ -59,7 +63,8 @@ let app_tasks = tasks::AppTasks::new();
 `main.rs` passes this state, JWT configuration, origin/ingress configuration and
 the task tracker to `routes::build_routes`. It starts heartbeat and zombie
 cleanup tasks and coordinates their cancellation with graceful server shutdown.
-`HOST` and `PORT` default to `0.0.0.0` and `3000`.
+`HOST` and `PORT` default to `0.0.0.0` and `3000`. `rust-toolchain.toml` pins
+Rust 1.88.0.
 
 ### Global State
 
@@ -164,7 +169,7 @@ WebSocket message format.
 
 ### Outgoing wire types
 
-`WsMessage` uses `ServerMessageType` for the 16 current server message kinds.
+`WsMessage` uses `ServerMessageType` for the 17 current server message kinds.
 Serde preserves their existing snake_case names; `as_str` supplies the same labels
 for metrics and logging. `IncomingMessage` remains separate and retains its
 unknown-client-type handling.
@@ -260,15 +265,25 @@ Seek is host-only; guest play/pause requires negotiated room shared control.
 Applies filtering (cooldown, rate limit, jitter), broadcasts if accepted.
 
 #### `ping`
-Responds with `pong` for latency measurement.
+Responds with `pong` for latency measurement and clock offset. This handler is
+available before authentication: clients can initialize their clock while JWT
+authentication is still pending. The response copies only a valid unsigned
+64-bit `payload.client_ts`; it omits `payload` when the timestamp is missing or
+malformed and never reflects request `room`, `client` or other payload fields.
+The server timestamp is carried in the pong envelope.
 
 #### `queue_add`, `queue_remove`, `queue_move`, `queue_advance`, `queue_countdown`
-Host only. Change the room's queue and send `queue_state` to the members that
-negotiated `media_queue`. An advance, also when a countdown ends, moves the room
-to the item from 0 through the pending-play flow and announces it with
-`room_state`. The queue also keeps `last_added`, the last item `queue_add`
-appended, after that item is removed too, so the host's client fills the queue
-on from it. See [Room queue](protocol.md#room-queue).
+Host only. Change the server-authoritative room queue and send `queue_state`
+only to members that negotiated `media_queue`. Protocol version stays 1 because
+the capability and queue message are additive. The queue holds at most 20 items
+by count; this is not a byte-size or process-memory bound. An advance, including
+one triggered when a countdown ends, moves the room to the item at position 0,
+clears readiness as appropriate, arms a pending play and announces the move
+with `room_state`. `last_added` persists after its item is removed so episode
+filling does not restore an item removed by the host. The pending-play generation
+keeps old host events from changing the new item's initial state while members
+load it. Countdown generations prevent a canceled or replaced timer from
+advancing the room. See [Room queue]({{ '/technical/protocol/' | relative_url }}#room-queue).
 
 ## Module: `room/`
 
@@ -325,10 +340,11 @@ Optional JWT authentication.
 ### Validation
 
 `JwtConfig` validates HS256 or RS256 tokens according to the configured auth
-mode, keys/trust store, issuer and audience.
-Expiration is enforced at the exact Unix second with no clock leeway. The
-connection also tracks session expiration after authentication, so an idle
-socket does not retain access after its token expires.
+mode, keys/trust store, issuer and audience. Expiration is enforced at the exact
+Unix second with no clock leeway. The connection also tracks session expiration
+after authentication, so an idle socket does not retain access after its token
+expires. JSON `ping` is handled before auth; other room operations require an
+authenticated or explicitly insecure-mode connection.
 
 ## Concurrency Model
 

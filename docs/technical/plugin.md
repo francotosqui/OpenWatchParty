@@ -8,319 +8,80 @@ nav_order: 5
 
 ## Overview
 
-The OpenWatchParty plugin integrates with Jellyfin's plugin architecture to serve the client JavaScript and provide configuration management.
+The plugin targets Jellyfin 12 ABI `12.0.0.0` and runs on .NET 10 (`net10.0`). It exposes the JavaScript loader and allow-listed client modules, issues per-user session tokens, serves the administrator configuration page, and provides diagnostics. The target ABI and Jellyfin package version are set in `src/plugins/jellyfin/Directory.Build.props`; the project target framework is set in `OpenWatchPartyPlugin.csproj`.
 
 ## Project Structure
 
 ```
 src/plugins/jellyfin/OpenWatchParty/
-├── Plugin.cs                     # Plugin entry point
-├── OpenWatchParty.csproj         # Project file
+├── Plugin.cs
+├── OpenWatchPartyPlugin.csproj
+├── Configuration/PluginConfiguration.cs
 ├── Controllers/
-│   └── OpenWatchPartyController.cs  # REST API endpoints
-├── Configuration/
-│   └── PluginConfiguration.cs    # Configuration model
-└── Web/
-    ├── configPage.html           # Admin configuration page
-    └── plugin.js                 # Client JavaScript bundle
+│   ├── OpenWatchPartyController.cs
+│   ├── OpenWatchPartyDiagnosticsController.cs
+│   └── SigningKeyController.cs
+├── OpenWatchPartyDiagnosticsService.cs
+├── InjectionDiagnostics.cs
+├── JwtSecretValidator.cs
+├── SessionServerUrlValidator.cs
+└── Web/configPage.html
 ```
 
-## Plugin.cs
+The client modules live in `src/clients/jellyfin-web`; MSBuild embeds those JavaScript files as resources. The plugin loader (`plugin.js`) loads the allow-listed modules from `/OpenWatchParty/Client/{path}` in dependency waves. `/OpenWatchParty/ClientScript` serves the loader, not a concatenated client bundle.
 
-### Description
-The plugin entry point. Implements `BasePlugin<PluginConfiguration>` and `IHasWebPages`.
+## Plugin entry point and configuration
 
-### Key Elements
+`Plugin` derives from `BasePlugin<PluginConfiguration>` and implements `IHasWebPages`. It exposes the plugin GUID and runtime version and registers `Web.configPage.html`. On initialization it logs whether JWT authentication is configured, whether explicit insecure development mode is enabled, or why token issuance is blocked.
 
-```csharp
-public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
-{
-    // Singleton instance - standard Jellyfin plugin pattern
-    public static Plugin? Instance { get; private set; }
+`PluginConfiguration` includes:
 
-    public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer, ILogger<Plugin> logger)
-        : base(applicationPaths, xmlSerializer)
-    {
-        Instance = this;
+| Setting | Default | Contract |
+|---------|---------|----------|
+| `JwtSecret` | empty | Required for shared-secret JWT signing unless an activated RSA signing key is used or explicit insecure mode is enabled. A configured secret must pass the Base64/Base64URL, length, entropy and sequence checks in `JwtSecretValidator`. |
+| `AllowInsecureNoAuth` | `false` | Explicitly allows local development without a JWT. It is ignored when a valid secret or active RSA signer is present. |
+| `JwtAudience`, `JwtIssuer` | `OpenWatchParty`, `Jellyfin` | Claims for the shared-secret token. |
+| `TokenTtlSeconds`, `InviteTtlSeconds` | `3600` each | Clamped to 60–86400 seconds. |
+| `SessionServerUrl` | empty | Optional absolute `ws://` or `wss://` destination. URL validation rejects a missing host, credentials, query or fragment. |
+| `AllowAutoDetectedSessionServer` | `false` | Must be enabled to permit same-host port-3000 discovery when `SessionServerUrl` is empty; otherwise token issuance returns HTTP 503. |
+| `HideNativeSyncPlayButton` | `false` | Controls whether Jellyfin's built-in SyncPlay header controls are hidden in the web client. |
+| `ShowSyncNudgeButton` | `false` | Enables the guest-only local sync adjustment control. |
+| `AppearanceOpacity`, `AppearanceTextSize` | `55`, `14` | Opacity is clamped and rounded to 40–100 by 5; text size is clamped to 12–18 px. These values style the room bar, its menus, lobby panel, up-next strip and toasts. |
 
-        // Log JWT configuration status
-        if (string.IsNullOrWhiteSpace(Configuration.JwtSecret))
-        {
-            _logger.LogError("[OpenWatchParty] JwtSecret not configured. Token issuance blocked.");
-        }
-    }
+The admin page reads and saves these fields through Jellyfin's standard plugin configuration API. Its configuration read includes `JwtSecret` so the page can populate the password field; that API response is not a redaction boundary. The dedicated diagnostics responses do not serialize the configuration or secret. The signing key endpoint is separate from `PluginConfiguration`: its private key is kept in the plugin data folder, and the public JWK and activation state are exposed only to administrators.
 
-    public override string Name => "OpenWatchParty";
-    public override Guid Id => new("0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d");
+## HTTP endpoints
 
-    public IEnumerable<PluginPageInfo> GetPages()
-    {
-        return new[]
-        {
-            new PluginPageInfo
-            {
-                Name = "OpenWatchParty",
-                EmbeddedResourcePath = GetType().Namespace + ".Web.configPage.html"
-            }
-        };
-    }
-}
-```
+### Client assets
 
-### Singleton Pattern
+- `GET /OpenWatchParty/ClientScript` returns the small loader script. Its ETag supports conditional requests. `v` determines caching: the current content hash receives one-year immutable caching, any other supplied value receives `no-store`, and a request without `v` receives one-hour public caching.
+- `GET /OpenWatchParty/Client/{path}` serves only paths in `AllowedClientModules`. It uses the same versioned cache policy and per-asset ETag behavior. Unknown modules return 404 and invalid paths return 400.
 
-The `Instance` static property follows Jellyfin's standard plugin pattern. It's set once during plugin initialization and provides access to the plugin configuration from controllers.
+The allow-list contains the 39 modules loaded by `plugin.js`; test files and arbitrary embedded resources are not routable through this endpoint.
 
-## OpenWatchPartyController.cs
+### Session token
 
-### Description
-ASP.NET Core controller providing REST API endpoints.
+`GET /OpenWatchParty/Token` requires Jellyfin authentication and a user ID claim. It returns the session WebSocket URL, protocol version 1, appearance and SyncPlay settings, invite TTL, and either a JWT or an explicit insecure-mode response. Shared-secret tokens use HS256; an activated plugin-managed RSA key uses RS256. A JWT includes `sub`, `name`, `aud`, `iss`, `iat`, `exp` and a unique `jti`; issuer and audience are serialized as strings.
 
-### Endpoints
+The endpoint rejects invalid session URLs and unapproved automatic discovery with HTTP 503 before returning a token. JWT issuance is limited to 30 requests per user in a fixed one-minute window. The no-token insecure response is returned before that limiter is acquired. See [REST API]({{ '/technical/api/' | relative_url }}#get-openwatchpartytoken) for response shapes and status codes.
 
-#### `GET /OpenWatchParty/ClientScript`
+### Diagnostics and signing keys
 
-Serves the client JavaScript bundle with caching support.
+`GET /OpenWatchParty/Diagnostics/Status` returns redacted configuration, injection and version checks to an administrator. `POST /OpenWatchParty/Diagnostics/Run` adds a session-server health request with a five-second timeout. Checks report authentication configuration, session destination, observed native injection, HTTP reachability and protocol compatibility; they do not serialize the plugin configuration or secret.
 
-```csharp
-[HttpGet("ClientScript")]
-[Produces("text/javascript")]
-public ActionResult GetClientScript()
-{
-    var (content, etag) = _scriptCache.Value;
+`GET /OpenWatchParty/SigningKey` creates or returns the plugin's RSA public JWK and whether it is active. `POST /OpenWatchParty/SigningKey/Activate` activates the key matching the supplied `kid`; these routes require administrator elevation.
 
-    // The cache lifetime follows the requested client hash. Headers are set
-    // before the 304 check, so a Not Modified response keeps the current policy.
-    Response.Headers["Cache-Control"] = GetClientAssetCacheControl(Request.Query, ClientAssetVersion.Value);
-    Response.Headers["ETag"] = etag;
+## Session destination and token configuration
 
-    if (RequestMatchesETag(etag))
-    {
-        return StatusCode(304); // Not Modified
-    }
+When an explicit session URL is supplied, the plugin accepts only an absolute WebSocket URL with a host and no credentials, query or fragment. When the URL is empty and automatic discovery is enabled, the token response uses the request host with port `3000` and maps HTTP to `ws`, HTTPS to `wss`, at `/ws`. Both token generation and diagnostics use this same destination rule.
 
-    return Content(content, "text/javascript");
-}
-```
+The shared JWT secret must be Base64 or Base64URL encoded, represent at least 32 random bytes, and satisfy the minimum estimated entropy check. If a valid secret is configured while `AllowInsecureNoAuth` is true, JWT mode takes precedence. The server validates JWT expiry without clock leeway and disconnects an authenticated WebSocket when the token expires.
 
-**Features:**
-- Embedded resource loading, cached after the first load
-- ETag-based cache validation, including weak and list `If-None-Match` values
-- HTTP 304 Not Modified support
-- Cache lifetime from the `v` query value, the content hash of the loader and modules: `public, max-age=31536000, immutable` for the current hash, `no-store` for any other value, `public, max-age=3600` without `v` (see the [API reference](api.md#get-openwatchpartyclientscript))
+## Build inputs
 
-#### `GET /OpenWatchParty/Token`
+- Target framework: `net10.0`
+- Jellyfin packages: `12.0.0`
+- Jellyfin target ABI: `12.0.0.0`
+- JWT libraries: `System.IdentityModel.Tokens.Jwt` and `Microsoft.IdentityModel.Tokens`, version `6.35.0`
 
-Generates JWT tokens for authenticated users.
-
-```csharp
-[HttpGet("Token")]
-[Authorize]
-[Produces("application/json")]
-public ActionResult GetToken()
-{
-    // Get user from authenticated context
-    var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-    var userName = User.FindFirst(ClaimTypes.Name)?.Value;
-
-    // Validate claims
-    if (string.IsNullOrEmpty(userId))
-    {
-        return Unauthorized(new { error = "User identity not found" });
-    }
-
-    // Rate limiting: 30 tokens per minute per user
-    if (!CheckRateLimit(userId))
-    {
-        return StatusCode(429, new { error = "Rate limit exceeded" });
-    }
-
-    // Check if JWT is configured
-    if (string.IsNullOrEmpty(config.JwtSecret))
-    {
-        if (!config.AllowInsecureNoAuth)
-        {
-            return StatusCode(503, new { error = "JWT authentication is not configured" });
-        }
-        return Ok(new {
-            token = (string?)null,
-            auth_enabled = false,
-            insecure_mode = true,
-            user_id = userId,
-            user_name = userName,
-            session_server_url = sessionServerUrl,
-            hide_native_syncplay_button = config.HideNativeSyncPlayButton,
-            show_sync_nudge_button = config.ShowSyncNudgeButton,
-            protocol_version = ProtocolVersion
-        });
-    }
-
-    var token = GenerateJwtToken(userId, userName, config);
-
-    return Ok(new {
-        token,
-        auth_enabled = true,
-        expires_in = config.TokenTtlSeconds,
-        user_id = userId,
-        user_name = userName,
-        session_server_url = sessionServerUrl,
-        hide_native_syncplay_button = config.HideNativeSyncPlayButton,
-        show_sync_nudge_button = config.ShowSyncNudgeButton,
-        protocol_version = ProtocolVersion
-    });
-}
-```
-
-**Features:**
-- Jellyfin authentication required
-- Rate limiting (30 tokens/minute/user)
-- JWT token generation
-- Graceful handling when JWT not configured
-- `protocol_version` advertises the WebSocket protocol version the token authorizes (see the [protocol specification](protocol.md#protocol-version))
-
-### JWT Token Generation
-
-```csharp
-private static string GenerateJwtToken(string userId, string userName, PluginConfiguration config)
-{
-    var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config.JwtSecret));
-    var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
-
-    var claims = new[]
-    {
-        new Claim(JwtRegisteredClaimNames.Sub, userId),
-        new Claim(JwtRegisteredClaimNames.Name, userName),
-        new Claim(JwtRegisteredClaimNames.Aud, config.JwtAudience),
-        new Claim(JwtRegisteredClaimNames.Iss, config.JwtIssuer),
-        new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString()),
-    };
-
-    var token = new JwtSecurityToken(
-        issuer: config.JwtIssuer,
-        audience: config.JwtAudience,
-        claims: claims,
-        expires: DateTime.UtcNow.AddSeconds(config.TokenTtlSeconds),
-        signingCredentials: credentials
-    );
-
-    return new JwtSecurityTokenHandler().WriteToken(token);
-}
-```
-
-## PluginConfiguration.cs
-
-### Description
-Configuration model with validation.
-
-```csharp
-public class PluginConfiguration : BasePluginConfiguration
-{
-    private string _jwtSecret = string.Empty;
-    private int _tokenTtlSeconds = 3600;
-    private int _inviteTtlSeconds = 3600;
-
-    /// <summary>
-    /// JWT secret. Required unless insecure development is explicitly enabled.
-    /// </summary>
-    public string JwtSecret
-    {
-        get => _jwtSecret;
-        set => _jwtSecret = value ?? string.Empty;
-    }
-
-    public bool AllowInsecureNoAuth { get; set; }
-
-    /// <summary>
-    /// JWT audience claim. Defaults to "OpenWatchParty".
-    /// </summary>
-    public string JwtAudience { get; set; } = "OpenWatchParty";
-
-    /// <summary>
-    /// JWT issuer claim. Defaults to "Jellyfin".
-    /// </summary>
-    public string JwtIssuer { get; set; } = "Jellyfin";
-
-    /// <summary>
-    /// Token TTL in seconds. Clamped between 60 and 86400.
-    /// </summary>
-    public int TokenTtlSeconds
-    {
-        get => _tokenTtlSeconds;
-        set => _tokenTtlSeconds = Math.Clamp(value, 60, 86400);
-    }
-
-    /// <summary>
-    /// Invite TTL in seconds. Clamped between 60 and 86400.
-    /// </summary>
-    public int InviteTtlSeconds
-    {
-        get => _inviteTtlSeconds;
-        set => _inviteTtlSeconds = Math.Clamp(value, 60, 86400);
-    }
-
-    /// <summary>
-    /// WebSocket server URL. If empty, uses default (same host, port 3000).
-    /// </summary>
-    public string SessionServerUrl { get; set; } = string.Empty;
-}
-```
-
-**Validation:**
-- TTL values are clamped to valid range (1 minute to 24 hours)
-- Null JWT secret is converted to empty string
-
-## configPage.html
-
-### Description
-Admin configuration page rendered in Jellyfin dashboard.
-
-### Features
-
-- **JWT Secret** - Password input field (never exposed in GET response)
-- **JWT Audience** - Configurable audience claim
-- **JWT Issuer** - Configurable issuer claim
-- **Save button** - Persists configuration
-
-### Security Considerations
-
-- JWT secret is never sent back to the client
-- Password field prevents shoulder surfing
-- Only admins can access the plugin configuration page
-
-## Embedded Resources
-
-The project file configures embedded resources:
-
-```xml
-<ItemGroup>
-  <EmbeddedResource Include="Web\configPage.html" />
-  <EmbeddedResource Include="Web\plugin.js" />
-</ItemGroup>
-```
-
-Resources are accessed via:
-```csharp
-assembly.GetManifestResourceStream("OpenWatchParty.Plugin.Web.plugin.js");
-```
-
-## Dependencies
-
-```xml
-<ItemGroup>
-  <PackageReference Include="Jellyfin.Controller" Version="12.0.0" />
-  <PackageReference Include="Jellyfin.Model" Version="12.0.0" />
-  <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.35.0" />
-</ItemGroup>
-```
-
-## Building
-
-```bash
-# Build with dotnet
-dotnet build
-
-# Or use just (from project root)
-just build plugin
-```
-
-The built DLL and dependencies are placed in `bin/Debug/net10.0/`.
+Build the plugin from the repository root with `just build plugin`; the project output uses the `net10.0` target directory. Rust server MSRV is documented separately in [Server]({{ '/technical/server/' | relative_url }}).

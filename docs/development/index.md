@@ -8,9 +8,9 @@ has_children: true
 
 Contribute to OpenWatchParty development.
 
-- [Setup](setup) - Development environment
-- [Contributing](contributing) - How to contribute
-- [Testing](testing) - Running tests
-- [CI/CD](ci) - Continuous integration
-- [Release](release) - Release process
-- [File Transformation Integration](file-transformation-integration) - Automatic script injection
+- [Setup]({{ '/development/setup/' | relative_url }}) - Development environment
+- [Contributing]({{ '/development/contributing/' | relative_url }}) - How to contribute
+- [Testing]({{ '/development/testing/' | relative_url }}) - Running tests
+- [CI/CD]({{ '/development/ci/' | relative_url }}) - Continuous integration
+- [Release]({{ '/development/release/' | relative_url }}) - Release process
+- [File Transformation Integration]({{ '/development/file-transformation-integration/' | relative_url }}) - Automatic script injection

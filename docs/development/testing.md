@@ -6,337 +6,82 @@ nav_order: 3
 
 # Testing Guide
 
-## Overview
+## Run the project checks
 
-OpenWatchParty uses a combination of automated tests and manual testing procedures.
-
-## Automated Tests
-
-### Rust Session Server
+From the repository root:
 
 ```bash
+just test       # server, plugin, client, owpctl, and release-script checks
+just lint       # Rust/owpctl Clippy and client ESLint
+just fmt        # format Rust code
+just e2e        # start the dev stack and run Playwright
+```
+
+`just test` runs locked Cargo tests for the session server and `owpctl`, .NET tests using the pinned .NET 10 SDK container, JavaScript unit tests, and release-script/contract checks. The JavaScript checks can also be run from `src/clients/jellyfin-web` with `npm ci`, `npm run lint`, `npm run check:syntax`, and `npm test`. The plugin suite can be run through `just test plugin`.
+
+### Run one test suite or case
+
+```bash
+just test server
+just test plugin
+just test client
+just test owpctl
+
+# Run one Rust server test with output
 cd src/server
-
-# Run all tests
-cargo test
-
-# Run with output
-cargo test -- --nocapture
-
-# Run specific test
-cargo test test_name
-
-# Run with coverage (requires cargo-tarpaulin)
-cargo tarpaulin
+cargo test --locked test_name -- --nocapture
 ```
 
-#### Test Categories
+The Rust toolchain is pinned to 1.88.0. Run Cargo commands from the relevant crate directory so the repository toolchain file is applied.
 
-| Test Type | Description |
-|-----------|-------------|
-| Unit tests | Individual function tests |
-| Integration tests | Module interaction tests |
+## End-to-end tests
 
-#### Example Test
+The Playwright suite drives the development stack with separate browser contexts for `testhost`, `testclient1`, and `testclient2`, plus a second tab in the host's browser context. It covers room creation and joining, shared playback controls, host recovery and transfer, guest departure, reconnection, and room-card updates. These are development-stack test results; they do not establish the behavior of an already deployed release.
 
-```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_all_ready_empty_room() {
-        let room = Room {
-            clients: vec![],
-            ready_clients: HashSet::new(),
-            ..Default::default()
-        };
-        assert!(all_ready(&room));
-    }
-
-    #[test]
-    fn test_all_ready_partial() {
-        let room = Room {
-            clients: vec!["a".into(), "b".into()],
-            ready_clients: HashSet::from(["a".into()]),
-            ..Default::default()
-        };
-        assert!(!all_ready(&room));
-    }
-}
-```
-
-### C# Plugin
+The server's dev Compose default is unauthenticated. The end-to-end suite requires authenticated host recovery, so use one disposable JWT key for the plugin and server:
 
 ```bash
-cd src/plugins/jellyfin/OpenWatchParty
-
-# Run tests
-dotnet test
-
-# With coverage
-dotnet test --collect:"XPlat Code Coverage"
-```
-
-### JavaScript Client
-
-```bash
-cd src/clients/jellyfin-web
-
-# Unit tests, lint and syntax checks
-npm test
-npm run lint
-```
-
-### End-to-End (Playwright)
-
-The `e2e` suite drives the real Jellyfin Web UI with two browser contexts
-(`testhost` and `testclient1`) against the development stack. It covers room
-creation and joins, play/pause/seek propagation, guests' shared play and pause, leaving,
-reconnection and the home card lifecycle.
-
-```bash
-# Boots the stack, then runs the suite
+export JWT_SECRET="$(openssl rand -base64 32)"
+export ALLOW_INSECURE_NO_AUTH=false
 just e2e
-
-# Iterate without rebuilding the stack
-cd e2e
-npm test
 ```
 
-The suite uses the installed Google Chrome (`OWP_BROWSER_CHANNEL` to override)
-so H.264 playback works without extra downloads. See `e2e/README.md` for the
-environment variables and the test list.
+The CI workflow creates an ephemeral key and uses the same authenticated development setup. For iteration against an already running stack built from current source, run `npm ci && npm test` in `e2e/`. The suite uses installed Google Chrome by default so H.264 playback is available; see [`e2e/README.md`](https://github.com/mhbxyz/OpenWatchParty/blob/main/e2e/README.md) for environment variables and scenario limits.
 
 ## Manual Testing
 
-### Test Environment
+Start the development environment with `just up`, then sign in as `testhost` and `testclient1` in separate browser profiles. See [Development logins]({{ '/development/setup/' | relative_url }}#development-logins) for local credentials.
 
-1. Start the development environment:
-   ```bash
-   just up
-   ```
+| Scenario | Expected behavior |
+|---|---|
+| Create and join a room | Host starts a room; guest joins from the room list, home card, or invite link. |
+| Shared playback | Play, pause, and seek changes reach the other room members. |
+| Guest departure | Guest leaves; the room remains open for the host and other guests. |
+| Host recovery | Authenticated host reconnects during the recovery window and retains host role. |
+| Host Leave | Host uses Leave to transfer the room; use Close for everyone to end the room. |
+| Client refresh | Reload the Jellyfin page and confirm injection, session connection, and room state recover as expected. |
 
-2. Open Jellyfin in two browser windows/tabs
+These are manual checks against the development stack. The automated E2E scenarios cover additional lifecycle orderings and report their limits in [`e2e/README.md`](https://github.com/mhbxyz/OpenWatchParty/blob/main/e2e/README.md).
 
-3. Log in to both
+## Fuzz and load workflows
 
-### Test Scenarios
-
-#### Room Management
-
-| Test | Steps | Expected Result |
-|------|-------|-----------------|
-| Create room | Click Watch Party > Enter name > Start Room | Room created, you are host |
-| Join room | Click Watch Party > Select room > Join | Joined room, synced to host |
-| Leave room | In room > Leave | Left room, panel shows lobby |
-| Host leaves | Host leaves room | All participants see "Room closed" |
-
-#### Playback Sync
-
-| Test | Steps | Expected Result |
-|------|-------|-----------------|
-| Play sync | Host plays | All clients start playing |
-| Pause sync | Host pauses | All clients pause |
-| Seek sync | Host seeks to position | All clients seek to same position |
-| Drift correction | Play for 5 minutes | Clients stay within 200ms |
-
-#### Edge Cases
-
-| Test | Steps | Expected Result |
-|------|-------|-----------------|
-| Rapid seek | Seek multiple times quickly | Only last seek applied |
-| Buffering | Let video buffer mid-play | No false pause sent |
-| Disconnect | Disconnect network briefly | Auto-reconnect when restored |
-| Different quality | Clients use different quality | Sync maintained |
-
-### Browser Testing
-
-| Browser | Status | Notes |
-|---------|--------|-------|
-| Chrome | Primary | Full support |
-| Firefox | Secondary | Full support |
-| Safari | Test | May need WebSocket fixes |
-| Edge | Test | Same as Chrome |
-| Mobile Chrome | Test | Touch interactions |
-| Mobile Safari | Test | iOS-specific issues |
-
-### Network Testing
-
-#### Simulate Latency
-
-```bash
-# Linux (requires tc)
-tc qdisc add dev eth0 root netem delay 200ms
-
-# Reset
-tc qdisc del dev eth0 root
-```
-
-#### Test Scenarios
-
-| Condition | Test |
-|-----------|------|
-| High latency (500ms+) | Sync should work but feel delayed |
-| Packet loss (5%) | Should recover gracefully |
-| Disconnect/reconnect | Auto-reconnect after 3s |
-
-## Load Testing
-
-### WebSocket Connections
-
-Using `websocat`:
-
-```bash
-# Multiple concurrent connections
-for i in {1..100}; do
-  websocat -n ws://localhost:3000/ws &
-done
-```
-
-### Stress Test Script
-
-```python
-#!/usr/bin/env python3
-import asyncio
-import websockets
-import json
-
-async def client(client_id):
-    async with websockets.connect('ws://localhost:3000/ws') as ws:
-        # Receive client_hello
-        await ws.recv()
-
-        # Create room
-        await ws.send(json.dumps({
-            'type': 'create_room',
-            'payload': {'name': f'Room {client_id}'},
-            'ts': 0
-        }))
-
-        # Wait
-        await asyncio.sleep(60)
-
-async def main():
-    tasks = [client(i) for i in range(50)]
-    await asyncio.gather(*tasks)
-
-asyncio.run(main())
-```
-
-## Performance Testing
-
-### Sync Accuracy
-
-1. Start playing video with precise timestamp
-2. Record actual playback time from multiple clients
-3. Calculate drift over time
-
-Target: < 200ms drift after 10 minutes
-
-### Message Latency
-
-```javascript
-// In browser console
-const start = Date.now();
-OWP.ws.send(JSON.stringify({type: 'ping', ts: start}));
-// Check pong response for round-trip time
-```
-
-Target: < 100ms RTT on local network
+The `Server Hardening` workflow runs a bounded inbound WebSocket fuzz campaign on pushes and pull requests, with a longer weekly campaign. It replays the committed corpus and runs a disposable load smoke scenario. These jobs exercise test builds under stated time and resource limits; they do not prove the absence of defects or establish production RSS, memory exhaustion, or OOM behavior. See the [fuzzing guide](https://github.com/mhbxyz/OpenWatchParty/blob/main/src/server/fuzz/README.md) for local reproduction.
 
 ## Test Data
 
-### Sample Media
-
-For testing, use:
-- `just up`'s **Blender Open Movies (Dev)** library (*Wing It!* and *Sprite Fright*)
-- Short video clips (1-5 minutes)
-- Various formats (MP4, MKV)
-- HLS streams (to test buffering)
-
-### Test Users
-
-`just up` creates `testhost` (admin/host), `testclient1` and `testclient2`
-(guests) automatically. All use the local-only password `owp-dev-test` by
-default; see [Development logins](setup.md#development-logins) for overrides.
-
-## Continuous Integration
-
-Tests run automatically on every push and pull request via GitHub Actions. See [CI/CD](ci.md) for details on the CI pipeline.
+`just up` creates the development movie library with *Wing It!* and *Sprite Fright* and provisions `testhost`, `testclient1`, and `testclient2`. Use short media clips when checking playback synchronization; the development suite uses the bundled sample films. See [Development Setup]({{ '/development/setup/' | relative_url }}#sample-movie-library) for media provenance and credentials.
 
 ## Debugging Test Failures
 
-### Rust Test Failures
-
-```bash
-# Run with backtrace
-RUST_BACKTRACE=1 cargo test
-
-# Run single test with logging
-RUST_LOG=debug cargo test test_name -- --nocapture
-```
-
-### JavaScript Issues
-
-1. Check browser console for errors
-2. Enable debug logging:
-   ```javascript
-   OWP.constants.DEBUG = true;
-   ```
-
-### Network Issues
-
-```bash
-# Check WebSocket is accessible
-curl http://localhost:3000/health
-
-# Test WebSocket connection
-wscat -c ws://localhost:3000/ws
-```
+- Check server and Jellyfin logs with `just logs server` and `just logs jellyfin`.
+- Run server tests with `RUST_BACKTRACE=1 just test server` to get Rust backtraces.
+- Check the browser console and network panel for failed client module or WebSocket requests.
+- Confirm both sides use the same JWT secret and authentication mode for authenticated development tests.
 
 ## Writing New Tests
 
-### Test File Location
+Rust server tests are generally colocated with modules under `src/server/src/`; the `owpctl` CLI has integration tests under `src/owpctl/tests/`. Plugin tests live in `src/plugins/jellyfin/OpenWatchParty.Tests/`, client tests in `src/clients/jellyfin-web/tests/`, and Playwright scenarios in `e2e/`. Add a focused regression case with behavior changes and run the relevant `just test` module.
 
-| Component | Location |
-|-----------|----------|
-| Rust | `src/server/src/*.rs` (inline) |
-| Rust integration | `src/server/tests/` |
-| C# | `src/plugins/jellyfin/OpenWatchParty.Tests/` |
+## CI
 
-### Test Naming
-
-```rust
-// Rust
-#[test]
-fn test_function_name_scenario() { }
-
-// Example
-#[test]
-fn test_all_ready_returns_false_when_not_all_clients_ready() { }
-```
-
-```csharp
-// C#
-[Fact]
-public void MethodName_Scenario_ExpectedResult() { }
-
-// Example
-[Fact]
-public void GetToken_WhenAuthenticated_ReturnsValidToken() { }
-```
-
-## Test Coverage Goals
-
-| Component | Goal |
-|-----------|------|
-| Rust business logic | 80% |
-| C# controllers | 70% |
-| JavaScript | Manual testing |
-
-## Next Steps
-
-- [Contributing](contributing.md) - How to submit tests
-- [Setup](setup.md) - Development environment
-- [Release](release.md) - Release process
+GitHub Actions runs Rust and `owpctl` formatting, Clippy, and locked tests; .NET restore/build/tests; JavaScript lint, syntax, and unit tests; and release-script checks. The `E2E` workflow runs on relevant pull requests and manually. See [CI/CD]({{ '/development/ci/' | relative_url }}) for workflow triggers and security checks.

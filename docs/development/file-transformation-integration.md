@@ -21,7 +21,7 @@ When Jellyfin loads OpenWatchParty, the plugin detects whether the [file-transfo
 
 `<hash>` is a content hash of the embedded client files. The loader forwards it to every module URL, so browsers reuse their cached client files until the client code changes. A script tag added by hand without `v` keeps the previous behaviour: the loader is cached for an hour and the modules are requested again on every page load.
 
-If file-transformation is not installed, the admin can still inject the script manually via Dashboard > General > Custom HTML.
+The plugin also has native Jellyfin response middleware that injects the client script into `index.html`. File Transformation is an optional integration for the same injection, including its home-chunk fallback. If both mechanisms are unavailable, an administrator can use Dashboard > General > Custom HTML as a manual fallback.
 
 ## File-Transformation API
 
@@ -73,18 +73,7 @@ public static string TransformIndexHtml(object payload)
         .GetValue(payload)?
         .ToString();
 
-    if (string.IsNullOrEmpty(contents) || contents.Contains("/OpenWatchParty/ClientScript"))
-    {
-        return contents ?? string.Empty;
-    }
-
-    int bodyEndIndex = contents.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
-    if (bodyEndIndex >= 0)
-    {
-        return contents.Insert(bodyEndIndex, "<script src=\"/OpenWatchParty/ClientScript\"></script>\n");
-    }
-
-    return contents;
+    return ClientScriptInjection.InjectIntoHtml(contents);
 }
 
 public static string TransformHomeChunkScript(object payload)
@@ -99,9 +88,11 @@ public static string TransformHomeChunkScript(object payload)
         return contents ?? string.Empty;
     }
 
-    return contents + "\n;(function(){if(window.__owpClientScriptInjected)return;window.__owpClientScriptInjected=true;var s=document.createElement('script');s.src='/OpenWatchParty/ClientScript';s.defer=true;document.head.appendChild(s);}());\n";
+    return contents + "\n;(function(){if(window.__owpClientScriptInjected||(window.OpenWatchParty&&window.OpenWatchParty.__loaded))return;window.__owpClientScriptInjected=true;var s=document.createElement('script');s.src='" + ClientScriptInjection.ScriptUrl + "';s.defer=true;document.head.appendChild(s);}());\n";
 }
 ```
+
+`ClientScriptInjection.InjectIntoHtml` adds the same versioned script tag used by the middleware. `ClientScriptInjection.ScriptUrl` appends the content hash, which the loader forwards to module URLs for cache invalidation.
 
 ## Implementation Files
 
@@ -115,11 +106,11 @@ public static string TransformHomeChunkScript(object payload)
 
 | Scenario | Behavior |
 |----------|----------|
-| Plugin not installed | Log info, fallback to manual |
-| Incompatible version | Log warning, fallback to manual |
-| Exception during registration | Log debug, fallback to manual |
+| File Transformation plugin not installed | Log info; native response middleware remains active |
+| Incompatible version | Log warning; native response middleware remains active |
+| Exception during registration | Log warning; native response middleware remains active |
 | Script already present | Return unchanged (idempotent) |
-| Runtime callback without `</body>` in target | Log warning, fallback to chunk loader |
+| Runtime callback without `</body>` in the index payload | Log warning; no index transformation is made |
 
 ## Runtime Diagnostics
 
@@ -147,7 +138,7 @@ Verify the following scenarios:
 
 | Scenario | Expected Behavior |
 |----------|-------------------|
-| Without file-transformation installed | Manual method works via Custom HTML |
+| Without file-transformation installed | Native middleware injects the client script |
 | With file-transformation installed | Script is automatically injected |
 | Custom HTML removed, file-transformation active | Plugin still works |
 | File-transformation uninstalled | Graceful fallback to manual method |

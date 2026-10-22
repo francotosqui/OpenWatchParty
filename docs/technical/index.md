@@ -8,10 +8,12 @@ has_children: true
 
 Deep dive into the architecture and implementation.
 
-- [Architecture](architecture) - System overview and components
-- [Protocol](protocol) - WebSocket message protocol
-- [Server](server) - Rust session server
-- [Client](client) - JavaScript web client
-- [Plugin](plugin) - Jellyfin C# plugin
-- [Sync Algorithms](sync) - Clock and playback synchronization
-- [REST API](api) - HTTP endpoints
+- [Architecture]({{ '/technical/architecture/' | relative_url }}) - System overview and components
+- [Protocol]({{ '/technical/protocol/' | relative_url }}) - WebSocket message protocol
+- [Server]({{ '/technical/server/' | relative_url }}) - Rust session server
+- [Client]({{ '/technical/client/' | relative_url }}) - JavaScript web client
+- [Client State Lifecycle]({{ '/technical/client-state/' | relative_url }}) - Field ownership, resets and cancellation boundaries
+- [Plugin]({{ '/technical/plugin/' | relative_url }}) - Jellyfin C# plugin
+- [Sync Algorithms]({{ '/technical/sync/' | relative_url }}) - Clock and playback synchronization
+- [REST API]({{ '/technical/api/' | relative_url }}) - HTTP endpoints
+- [Jellyfin SyncPlay Reference]({{ '/technical/jellyfin-syncplay-reference/' | relative_url }}) - Historical upstream comparison snapshot

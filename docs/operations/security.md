@@ -20,6 +20,12 @@ OpenWatchParty includes several security features to protect your installation:
 
 ## Authentication
 
+### JWT Modes and Key Rotation
+
+Manual installations can use `hs256` (a shared secret), `hybrid` (shared-secret HS256 plus trusted RS256 during migration), or `asymmetric` (trusted RS256 only). The plugin signs tokens with the configured shared secret or its active RSA key; the session server must be configured to accept the matching key type, audience and issuer. In asymmetric mode, the plugin keeps its RSA private key in Jellyfin's plugin data and the server stores only the public key. `owpctl setup` defaults to hybrid; `owpctl pair` registers the plugin public key and switches the managed server to asymmetric mode. Back up the trust store with the managed configuration and protect it from unauthorized writes.
+
+For a managed HS256 or hybrid install, rotate the shared secret on both sides with `owpctl configure --rotate-jwt-secret --yes --api-token-file <protected-file>`. Rotation restarts the managed server and invalidates outstanding HS256 tokens and invite tickets. In asymmetric mode, revoke a compromised key with `owpctl trust --store <trust-store> revoke --kid <key-id>`. The current `owpctl pair` command reads the plugin's existing signing key; it does not rotate that key. Back up the plugin configuration, secrets and trust store before changing keys. Invite links require a shared secret and are unavailable in asymmetric-only mode.
+
 ### How It Works
 
 1. User authenticates with Jellyfin
@@ -28,6 +34,8 @@ OpenWatchParty includes several security features to protect your installation:
 4. Server validates token before allowing actions
 
 ### Enabling Authentication
+
+The steps below configure shared-secret HS256 authentication. For hybrid or asymmetric mode, see [JWT Modes and Key Rotation](#jwt-modes-and-key-rotation) and use `owpctl pair` for a managed installation.
 
 #### 1. Generate a Secret
 
@@ -80,7 +88,7 @@ Configurable in plugin settings:
 
 ### Why It Matters
 
-CORS prevents unauthorized websites from connecting to your session server.
+The server checks browser `Origin` values against this allowlist before upgrading a WebSocket. This is a browser-origin filter, not authentication: non-browser clients can forge `Origin`, so production must also require JWT authentication.
 
 ### Configuration
 
@@ -103,7 +111,7 @@ Using `*` logs a warning:
 SECURITY: Wildcard origin (*) configured - ALL origins allowed!
 ```
 
-This allows any website to connect to your session server.
+This removes the browser-origin filter. JWT authentication is still required because non-browser clients can forge the `Origin` header.
 
 ## Rate Limiting and Connection Limits
 
@@ -132,9 +140,13 @@ This allows any website to connect to your session server.
 ### Message Size
 
 - **Limit:** 64 KiB per WebSocket frame and per assembled message
-- **Purpose:** Prevents memory exhaustion attacks
+- **Purpose:** Bounds individual frames and messages; this is not a process-wide memory limit or proof against every memory-exhaustion condition
 - **Enforcement:** `MAX_FRAME_SIZE` and `MAX_MESSAGE_SIZE` in `src/server/src/ws/constants.rs`, applied to the connection in `src/server/src/routes.rs` and re-checked in `src/server/src/ws/dispatch.rs`
 - **Test:** `transport_limits_are_fixed_at_sixty_four_kibibytes` in `src/server/src/routes.rs`
+
+### Published session-server advisory
+
+[GHSA-fjpr-3g28-27r9](https://github.com/mhbxyz/OpenWatchParty/security/advisories/GHSA-fjpr-3g28-27r9) affects session-server releases `>=0.1.0,<0.7.0`. Before 0.7.0, an unauthenticated client could send oversized application-level pings that were reflected into queued pong responses. Version `0.7.0` fixes this by returning a bounded response containing only a validated clock-sync timestamp. The regression tests measure serialized queued-pong response sizes; there is no demonstrated RSS increase or out-of-memory incident. Upgrade the **session server** to `0.7.0` or newer; changing only the Jellyfin plugin does not install this fix.
 
 ### Playback Command Cooldown (Server)
 
@@ -148,6 +160,7 @@ This allows any website to connect to your session server.
 | Limit | Value | Code and tests |
 |-------|-------|----------------|
 | Clients per room | 20 (`MAX_CLIENTS_PER_ROOM`) | Enforced in `src/server/src/ws/handlers/join.rs` (`ROOM_FULL`); tests `full_destination_preserves_previous_membership` and `full_room_returns_explicit_error` |
+| Queue items per room | 20 (`MAX_QUEUE_ITEMS`) | `src/server/src/room/queue.rs` and `src/server/src/ws/handlers/queue.rs`; queue bounds tests in the latter |
 | JWT authentication deadline | 10 s (`AUTH_TIMEOUT_SECONDS`) | Scheduled in `src/server/src/ws/connection.rs`, configured in `src/server/src/routes.rs`; test `unauthenticated_jwt_connection_times_out_and_is_cleaned_up` |
 | Name length | 100 characters (`MAX_NAME_LENGTH`) | `src/server/src/ws/validation.rs`; tests `test_is_valid_name_invalid` and `test_sanitize_name_truncation`. Mirrored in the browser by `MAX_NAME_LENGTH` in `src/clients/jellyfin-web/ws/validation.js` |
 | Chat message length | 500 characters (`MAX_CHAT_MESSAGE_LENGTH`) | Enforced in `src/server/src/ws/handlers/chat.rs`; tests `validate_chat_too_long` and `validate_chat_counts_characters_not_bytes`. Mirrored in the browser by `MAX_CHAT_LENGTH` in `src/clients/jellyfin-web/ws/validation.js` |
@@ -176,7 +189,7 @@ location /ws {
 }
 ```
 
-This rate-limit excerpt covers `/ws` only. The proxy must also route `/invite` to the session server; see [Reverse Proxy Configuration](deployment.md#reverse-proxy-configuration) for complete examples.
+This rate-limit excerpt covers `/ws` only. The proxy must also route `/invite` to the session server; see [Reverse Proxy Configuration]({{ '/operations/deployment/' | relative_url }}#reverse-proxy-configuration) for complete examples.
 
 ```yaml
 # Traefik example
@@ -198,7 +211,7 @@ http:
 
 ### Setup
 
-1. **Configure reverse proxy with SSL** (see [Deployment](deployment.md))
+1. **Configure reverse proxy with SSL** (see [Deployment]({{ '/operations/deployment/' | relative_url }}))
 2. **Update Session Server URL** to use `wss://`:
    ```
    wss://jellyfin.example.com/ws
@@ -206,24 +219,13 @@ http:
 
 ### Certificate Validation
 
-The session server validates certificates by default. For self-signed certificates (development only), you may need to disable validation in the client or add the CA to the trust store.
+The browser validates the TLS certificate for a `wss://` connection. Use a certificate trusted by each participant's browser; do not disable certificate validation. For private deployments, install your private CA on every client device.
 
 ## Input Validation
 
-### URL Validation
+### Session-server URL Validation
 
-Image URLs are validated to prevent XSS:
-```javascript
-// Only allows http(s) URLs
-if (imageUrl && /^https?:\/\//i.test(imageUrl)) {
-  // Safe to use
-}
-```
-
-This blocks:
-- `javascript:` URLs
-- `data:` URLs
-- Other potentially malicious schemes
+The client accepts an absolute `ws://` or `wss://` URL with a hostname. It rejects credentials, query strings and fragments, requires `wss://` from an HTTPS Jellyfin page, and asks for confirmation before saving a different host or effective port. The client repeats destination checks on the plugin's token response and immediately before opening the WebSocket. See `src/clients/jellyfin-web/utils/url.js` and [Configuration]({{ '/operations/configuration/' | relative_url }}#url-format).
 
 ### Message Validation
 
@@ -237,8 +239,8 @@ The server validates:
 
 ### Production Checklist
 
-- [ ] JWT authentication enabled
-- [ ] JWT secret generated with `openssl rand -base64 32`
+- [ ] JWT authentication configured and verified for the selected mode
+- [ ] For HS256 or hybrid, a strong secret generated with `openssl rand -base64 32` is configured on both sides
 - [ ] CORS restricted to specific origins
 - [ ] HTTPS enabled (via reverse proxy)
 - [ ] Session server not directly exposed to internet
@@ -299,7 +301,7 @@ This model assumes production settings: JWT authentication enabled (`JWT_SECRET`
 |-------|----------------|----------------|
 | Jellyfin identity | Maps a connection to a Jellyfin user and decides who may create, join or control a room | Jellyfin user database; asserted to the session server through plugin-signed JWTs |
 | Session JWTs | Bearer credential for the session server; anyone holding a valid one can act as that user until it expires | Signed by the plugin, held by the browser, validated in `src/server/src/auth.rs` |
-| Room state | Participants, host, playback position and scheduled play/pause/seek commands | In memory in the session server; never persisted |
+| Room state | Participants, host, playback position, scheduled commands, queue items and countdown | In memory in the session server; never persisted |
 | Media access | Ability to play the Jellyfin library items a room is watching | Jellyfin's own authorization and stream URLs; the session server never proxies or stores media credentials |
 
 ### Actors
@@ -318,7 +320,7 @@ This model assumes production settings: JWT authentication enabled (`JWT_SECRET`
 |----------|-----------------|----------|
 | Browser (Jellyfin Web origin) to session server WebSocket | WebSocket upgrade with an `Origin` header | Exact-match origin allowlist (`ALLOWED_ORIGINS`) checked before upgrade in `src/server/src/routes.rs`; JWT authentication for every room, chat and playback action |
 | Network to session server HTTP/WS ingress | TCP connections, WebSocket frames | Global and per-IP connection caps, 64 KiB frame limit, 10 s authentication deadline, 30 messages/1000 ms window, `TRUSTED_PROXIES`-gated `X-Forwarded-For` |
-| Browser to plugin endpoints (Jellyfin) | HTTP requests with Jellyfin authentication | Jellyfin `[Authorize]` and elevation policies; token issuance rate limited per user; the JWT secret never leaves the plugin and session server configuration |
+| Browser/Jellyfin UI to plugin API and configuration | Plugin settings, diagnostics, client script, and per-user session JWT | Jellyfin restricts plugin configuration to administrators; diagnostics require administrator elevation and the custom diagnostics responses omit secret values. The standard authenticated administrator configuration GET returns the full plugin configuration, including `JwtSecret`, which the admin page loads into its password field. Treat administrator API credentials and configuration responses as secret-bearing, and never log or expose them. The public client script and ordinary viewing-client/token endpoint responses do not include the secret; token issuance requires Jellyfin authentication and is rate limited per user. |
 | Browser to Jellyfin media API | Playback and library requests | Jellyfin library permissions; OpenWatchParty does not proxy media or store Jellyfin credentials |
 
 ### STRIDE Threats
@@ -331,8 +333,8 @@ This model assumes production settings: JWT authentication enabled (`JWT_SECRET`
 | Denial of service | Message flooding | 30 messages per 1000 ms per connection; violations receive `RATE_LIMITED` and are closed with policy code `1008` | `update_rate_limit` in `src/server/src/ws/dispatch.rs`; tests `check_rate_limit_at_limit` and `rate_limit_violation_is_terminal` |
 | Denial of service | Oversized frames or messages | 64 KiB limits for both individual frames and assembled messages, applied at the transport before assembly, with an application-level `MESSAGE_TOO_LARGE` check as a second line of defense | `MAX_FRAME_SIZE` and `MAX_MESSAGE_SIZE` in `src/server/src/ws/constants.rs`; `src/server/src/routes.rs`; test `transport_limits_are_fixed_at_sixty_four_kibibytes` |
 | Spoofing, Tampering | Cross-origin WebSocket connections | The `Origin` header must exactly match `ALLOWED_ORIGINS` before the upgrade; wildcard origin logs a warning and disables this control. Non-browser clients can forge `Origin`, so JWT authentication remains the real control. | `get_allowed_origins` and `is_origin_allowed` in `src/server/src/routes.rs`; tests `is_origin_allowed_exact_match`, `is_origin_allowed_no_match` and `is_origin_allowed_wildcard` |
-| Information disclosure, Denial of service | Proxy or CDN misconfiguration | `X-Forwarded-For` is honored only when the direct peer belongs to `TRUSTED_PROXIES`, and the selected address is the first untrusted hop counting from the right; connection caps still apply. Deployments must terminate TLS correctly, avoid caching or buffering WebSockets, and never expose port 3000 directly. | `parse_trusted_proxies` and `client_ip` in `src/server/src/routes.rs`; test `forwarded_for_requires_a_trusted_proxy`; [Configuration](configuration.md#reverse-proxy-trust) and [Deployment](deployment.md#security-hardening) |
-| Repudiation | No durable audit trail: security-relevant events are logs only | Rejections and violations are logged at warn level; room state is ephemeral by design. Operators who need durable attribution must collect container logs. | `src/server/src/ws/dispatch.rs`, `src/server/src/routes.rs`; [Monitoring](monitoring.md) |
+| Information disclosure, Denial of service | Proxy or CDN misconfiguration | `X-Forwarded-For` is honored only when the direct peer belongs to `TRUSTED_PROXIES`, and the selected address is the first untrusted hop counting from the right; connection caps still apply. Deployments must terminate TLS correctly, avoid caching or buffering WebSockets, and never expose port 3000 directly. | `parse_trusted_proxies` and `client_ip` in `src/server/src/routes.rs`; test `forwarded_for_requires_a_trusted_proxy`; [Configuration]({{ '/operations/configuration/' | relative_url }}#reverse-proxy-trust) and [Deployment]({{ '/operations/deployment/' | relative_url }}#security-hardening) |
+| Repudiation | No durable audit trail: security-relevant events are logs only | Rejections and violations are logged at warn level; room state is ephemeral by design. Operators who need durable attribution must collect container logs. | `src/server/src/ws/dispatch.rs`, `src/server/src/routes.rs`; [Monitoring]({{ '/operations/monitoring/' | relative_url }}) |
 
 Every control above is implemented in the referenced code, and the authentication, rate limiting, size limiting, origin checking and proxy-trust behaviours each have the cited tests. The repudiation row records a known gap rather than a control: the service emits logs, not an audit trail. The properties of the authentication boundary are covered by `authenticated_session_is_valid_before_its_expiration`, `authenticated_session_expires_without_inbound_traffic_and_is_cleaned_up` and `valid_refresh_rearms_the_session_expiration` in `src/server/src/routes.rs`.
 
@@ -375,7 +377,7 @@ The verdict is revisited if real deployments report flooding spread across many 
 | No room passwords | Planned |
 | No per-user permissions inside a room (the host seeks, everyone can play, pause and chat) | Planned |
 | Ephemeral sessions and rooms | By design |
-| Single JWT secret per deployment | By design |
+| Automated asymmetric signing-key rotation | Not available; the operator must coordinate key replacement and trust-store updates |
 | Message rate limiting per connection, not per IP | Documented above (see [Per-IP Limits: Verdict](#per-ip-limits-verdict)) |
 | No per-token revocation | By design (short TTL; rotate the secret or revoke the signing key) |
 | No durable audit log | By design (warn-level logs only) |
@@ -391,12 +393,13 @@ It's important to understand the scope of JWT authentication. While it verifies 
 | **Room creation** | Any authenticated user can create rooms | By design - all Jellyfin users are trusted |
 | **Room joining** | Any authenticated user can join any room | Planned: room passwords |
 | **Room enumeration** | All users see all active rooms | By design - rooms are public within your Jellyfin instance |
-| **Token revocation** | Tokens valid until expiration | Rotate JWT secret to invalidate all tokens |
+| **Token revocation** | Tokens remain valid until expiration unless their verification key is changed or revoked | Rotate the shared secret to invalidate HS256 tokens; revoke a trusted RSA key to invalidate RS256 tokens |
 
 ### Token Lifecycle
 
 - **Tokens cannot be individually revoked** - Once issued, a token is valid until it expires
-- **Secret rotation invalidates ALL tokens** - Changing the JWT secret requires all users to re-authenticate
+- **Shared-secret rotation invalidates HS256 tokens and invite tickets** - It does not invalidate tokens signed with an active asymmetric key
+- **Revoking an RSA public key invalidates RS256 tokens signed by that key**
 - **No refresh tokens** - Users get a new token on each session, not a refresh mechanism
 
 ### Trust Model
@@ -422,12 +425,11 @@ Internet → [Jellyfin Auth] → Trusted Zone → [OpenWatchParty]
 
 ## Incident Response
 
-### If Secret is Compromised
+### If a JWT Key Is Compromised
 
-1. **Immediately** change the JWT secret on both plugin and server
-2. Restart all services
-3. All existing tokens become invalid
-4. Users must re-authenticate
+1. For HS256 or hybrid, immediately rotate the shared secret on the plugin and session server; restart the server. Existing HS256 tokens and invite tickets become invalid.
+2. For asymmetric mode, revoke the compromised key from the session-server trust store. There is no automated signing-key rotation command, so coordinate replacement-key generation and pairing before relying on asymmetric authentication again.
+3. Ask users to reload Jellyfin Web to obtain a fresh session token.
 
 ### If Suspicious Activity Detected
 
@@ -440,12 +442,7 @@ Internet → [Jellyfin Auth] → Trusted Zone → [OpenWatchParty]
 
 ### Base Image
 
-The session server uses **Alpine Linux** as its base image for minimal attack surface:
-
-| Image | Size | CVEs |
-|-------|------|------|
-| `debian:bookworm-slim` | ~100MB | 30+ |
-| `alpine:3.24` | ~26MB | ~0 (see posture below) |
+The session-server runtime uses Alpine Linux. Its base image is pinned by digest, and the Dockerfile upgrades Alpine packages during the image build; the installed package versions can therefore change between builds from the same source commit.
 
 The runtime stage is pinned by digest (`alpine:3.24@sha256:…`) and Dependabot
 re-pins it weekly (docker ecosystem, `infra/docker`). The builder stage
@@ -479,9 +476,11 @@ the installed packages to the latest security state of the branch.
 
 ### Current Security Posture
 
-Last verified against Trivy 0.70 (CI-equivalent flags: `--severity
-CRITICAL,HIGH --ignore-unfixed`): **0 findings**, and 0 findings at any
-severity with `--ignore-unfixed`.
+The release build recorded 0 findings against Trivy 0.70 with CI-equivalent
+flags (`--severity CRITICAL,HIGH --ignore-unfixed`), and 0 findings at any
+severity with `--ignore-unfixed`. This is a result for that scanned build, not
+a guarantee about future image rebuilds. Check the current Security workflow
+and the digest of the image you deploy.
 
 ### Hardening Recommendations
 
@@ -534,7 +533,7 @@ Stay informed about security updates:
 If you discover a security vulnerability:
 
 1. **Do not** open a public issue
-2. Email the maintainer directly
+2. Use [GitHub Private Vulnerability Reporting](https://github.com/mhbxyz/OpenWatchParty/security/advisories/new), as described in `SECURITY.md`.
 3. Include:
    - Description of the vulnerability
    - Steps to reproduce
@@ -542,6 +541,6 @@ If you discover a security vulnerability:
 
 ## Next Steps
 
-- [Deployment](deployment.md) - Production deployment
-- [Monitoring](monitoring.md) - Monitor for issues
-- [Troubleshooting](troubleshooting.md) - Common problems
+- [Deployment]({{ '/operations/deployment/' | relative_url }}) - Production deployment
+- [Monitoring]({{ '/operations/monitoring/' | relative_url }}) - Monitor for issues
+- [Troubleshooting]({{ '/operations/troubleshooting/' | relative_url }}) - Common problems

@@ -6,346 +6,120 @@ nav_order: 4
 
 # Release Process
 
-## Versioning
+Releases are versioned from `version.json`. The repository scripts verify the mirrored versions, package the Jellyfin plugin, and validate release inputs. GitHub Actions builds and publishes the server image and release artifacts.
 
-OpenWatchParty uses [Semantic Versioning](https://semver.org/):
+## Prepare a release
 
-```
-MAJOR.MINOR.PATCH
-```
+1. Update the changelog and documentation, complete the checks in [Testing]({{ '/development/testing/' | relative_url }}), and open a focused release PR.
+2. In the release branch, run `just bump X.Y.Z` (for example, `just bump 0.8.0`), inspect the files it changes, and run `infra/scripts/verify-versions.sh`. Commit and merge the version update to `main`.
+3. From the merged release commit, create and push the matching annotated tag, such as `v0.8.0`, then publish a GitHub Release for that tag. The `publish.yml` workflow verifies the tag against `version.json`.
+4. Wait for the workflow's image build and release assets to finish. Confirm the release is available on GitHub and the versioned image is available in GHCR. Verify the downloaded artifacts as described below before advising users to install or upgrade.
+5. Update the production image digest manually, after the image has been published, as described in **Production image pin**. The release workflow does not update `infra/docker/prod/docker-compose.yml`.
 
-- **MAJOR**: Breaking changes
-- **MINOR**: New features (backwards compatible)
-- **PATCH**: Bug fixes (backwards compatible)
-
-### Automated bump
-
-Run `just bump 0.5.0` (or `infra/scripts/bump-version.sh 0.5.0`) to rewrite every mirror of the product version from `version.json` in one shot, adding `--dry-run` to preview the files that would change without writing them. Finish with `infra/scripts/verify-versions.sh`, which fails if any mirror still disagrees.
-
-### Plugin Automatic-Update Readiness
-
-`version.json` controls the packaged `meta.json` through the boolean
-`jellyfinPluginAutoUpdate`. It remains **false** until the maintainer agrees
-with Jellyfin on official publication and verifies the upgrade path described
-in the [plugin update guide]({{ '/operations/plugin-updates/' | relative_url }}).
-The metadata writer rejects non-booleans before replacing its output; old
-version-file fixtures without the field keep the previous `false` default.
-
-This is local plugin metadata, not a field in the repository's `manifest.json`.
-Jellyfin can obtain updates from any configured compatible repository; official
-listing is a publication condition for this project, not a protocol requirement.
-The existing self-hosted repository and manual installation path remain supported.
-
-Official publication requires coordination with the repository owner and the
-Jellyfin maintainers. The current official build tools discover
-`jellyfin-plugin-*` repositories in the Jellyfin organization, and build them
-with JPRM and `build.yaml`: see the
-[official plugin tools](https://github.com/jellyfin/jellyfin-meta-plugins).
-OpenWatchParty is currently an independently owned monorepo. Agree on its
-ownership/build layout and the bundled client's build process before proposing
-an official entry; adding an external URL to those tools does not establish an
-official listing.
-
-Once accepted and published, confirm the official catalog entry has the same
-plugin GUID (`0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d`), compatible ABI, correct
-release URL/checksum and complete client assets. Then set
-`jellyfinPluginAutoUpdate` to `true` in a reviewed release commit, package and
-validate it normally, and run the disposable upgrade/rollback checks. Do not
-rewrite users' installed manifests from plugin startup or overwrite an admin's
-local opt-out. Publishing a flag does not migrate older installations that
-already have `autoUpdate: false`; document their explicit opt-in separately.
-
-## Release Checklist
-
-### Pre-Release
-
-- [ ] All tests pass
-- [ ] Documentation updated
-- [ ] CHANGELOG updated
-- [ ] Version numbers updated
-- [ ] Manual testing completed
-
-### Version Locations
-
-Update version in:
-
-1. **Rust (`Cargo.toml`)**:
-   ```toml
-   [package]
-   version = "0.2.0"
-   ```
-
-2. **C# Plugin (`.csproj`)**:
-   ```xml
-   <Version>0.2.0</Version>
-   ```
-
-3. **Plugin metadata (`Plugin.cs`)** if applicable
-
-### CHANGELOG Format
-
-```markdown
-# Changelog
-
-## [0.2.0] - 2024-01-15
-
-### Added
-- New feature description
-
-### Changed
-- Change description
-
-### Fixed
-- Bug fix description
-
-### Security
-- Security fix description
-
-## [0.1.0] - 2024-01-01
-
-Initial release.
-```
-
-## Build Process
-
-### Build All Components
+For a new version, the release branch update can be prepared with:
 
 ```bash
-just build
+VERSION=0.8.0
+git switch -c "release/v$VERSION"
+just bump "$VERSION"
+infra/scripts/verify-versions.sh
+git diff --check
+git add -u
+git commit -m "Release v$VERSION"
+git push -u origin "release/v$VERSION"
 ```
 
-### Build Individually
+Open and merge the release PR before tagging the merged commit on `main`:
 
 ```bash
-# Rust session server
-cd src/server
-cargo build --release
-
-# C# plugin
-cd src/plugins/jellyfin/OpenWatchParty
-dotnet build -c Release
+git switch main
+git pull --ff-only origin main
+git tag -a "v$VERSION" -m "Version $VERSION"
+git push origin "v$VERSION"
+gh release create "v$VERSION" --title "v$VERSION" --notes-file release-notes.md
 ```
 
-### Build Artifacts
+Replace `release-notes.md` with the reviewed notes for that release. Creating a GitHub Release publishes it and triggers the workflow; do not create it until the tagged commit is on `main`.
 
-| Component | Output Location |
-|-----------|-----------------|
-| Session Server | `src/server/target/release/session-server` |
-| Plugin DLL | `src/plugins/jellyfin/OpenWatchParty/bin/Release/net10.0/OpenWatchParty.dll` |
+For example, the source tag `v0.7.0` contains a production Compose file that still referenced `ghcr.io/mhbxyz/owp-session-server:0.6.0@sha256:d4b425ef7915ab2c40a0195c49d02297571806f1987535e6a7360b6b84289ed3`. That stale Compose reference does not describe the published `0.7.0` registry image: its source attestation identifies the correct 0.7 source commit `82f5658`, and the image reports server version 0.7. The bounded 92-byte pong check also passed against that image. Main commit `6f60744` later corrected the production Compose reference to `ghcr.io/mhbxyz/owp-session-server:0.7.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20`. Keep these two facts separate: the release image was correct, while the immutable source tag retained an older Compose pin.
 
-## Release Steps
+## Automated publication
 
-### 1. Create Release Branch
+Publishing a GitHub Release builds a multi-platform (`linux/amd64`, `linux/arm64`) session-server image and pushes version, major/minor, and `latest` tags. The workflow builds the plugin archive and cross-platform `owpctl` binaries, generates SPDX and CycloneDX SBOMs, creates Sigstore signatures and GitHub provenance attestations, verifies them, and attaches the release assets. It also updates the Jellyfin plugin repository manifest on `main` after publication.
+
+Pushes to `main` that change server or image build inputs publish the `beta` image. This development image is separate from a versioned release.
+
+The verified 0.7 release image is available as `ghcr.io/mhbxyz/owp-session-server:0.7.0`; its source attestation identifies commit `82f5658`. The project version tag in Compose and the digest pin must both match the built release image.
+
+## Production image pin
+
+After the release workflow reports a successful image build and the image is available in GHCR, resolve its digest from the workflow output or registry. The current maintainer must update `infra/docker/prod/docker-compose.yml` to pair the release version tag with that exact registry digest, for example:
+
+```yaml
+image: ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:<digest-from-the-successful-release-build>
+```
+
+Commit the Compose pin update, then run `infra/scripts/verify-pins.sh` and review the pinned digest against the successful release build. For the 0.7 source after the follow-up update, the reference is `ghcr.io/mhbxyz/owp-session-server:0.7.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20`. Production Compose keeps JWT authentication required (`ALLOW_INSECURE_NO_AUTH=false`); coordinate server and plugin JWT configuration as described in [deployment]({{ '/operations/deployment/' | relative_url }}) and [configuration]({{ '/operations/configuration/' | relative_url }}).
+
+## Artifact verification
+
+The release includes checksum files for the plugin ZIP and `owpctl` binaries, plus Sigstore bundles and provenance files for those artifacts and the session-server image. The image is identified by its registry digest rather than a downloadable checksum file; release SBOMs describe the shipped components. Confirm the GitHub Release and versioned GHCR image are available first, then verify checksums, signatures, and attestations before advising users to upgrade. For example, after installing Cosign and GitHub CLI, download the release assets and confirm they are published:
 
 ```bash
-git checkout main
-git pull origin main
-git checkout -b release/v0.2.0
+gh release view vX.Y.Z --repo mhbxyz/OpenWatchParty
+gh release download vX.Y.Z --repo mhbxyz/OpenWatchParty --dir artifacts
+(cd artifacts && sha256sum --check OpenWatchParty-vX.Y.Z.zip.sha256)
+
+cosign verify-blob \
+  --bundle artifacts/OpenWatchParty-vX.Y.Z.zip.sigstore.json \
+  --certificate-identity 'https://github.com/mhbxyz/OpenWatchParty/.github/workflows/publish.yml@refs/tags/vX.Y.Z' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  artifacts/OpenWatchParty-vX.Y.Z.zip
+gh attestation verify artifacts/OpenWatchParty-vX.Y.Z.zip \
+  --repo mhbxyz/OpenWatchParty \
+  --bundle artifacts/OpenWatchParty-vX.Y.Z.zip.provenance.jsonl \
+  --cert-identity 'https://github.com/mhbxyz/OpenWatchParty/.github/workflows/publish.yml@refs/tags/vX.Y.Z'
 ```
 
-### 2. Update Versions
-
-Update all version numbers as listed above.
-
-### 3. Update CHANGELOG
-
-### 4. Commit Changes
+Use the exact asset names, release tag and certificate identity from the release. Verify the image too, using the image digest and the release's `owp-session-server.sigstore.json` and `owp-session-server.provenance.jsonl` assets:
 
 ```bash
-git add -A
-git commit -m "Release v0.2.0"
+cosign verify \
+  --certificate-identity 'https://github.com/mhbxyz/OpenWatchParty/.github/workflows/publish.yml@refs/tags/vX.Y.Z' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/mhbxyz/owp-session-server@sha256:<release-digest>
+gh attestation verify oci://ghcr.io/mhbxyz/owp-session-server@sha256:<release-digest> \
+  --repo mhbxyz/OpenWatchParty \
+  --bundle artifacts/owp-session-server.provenance.jsonl \
+  --cert-identity 'https://github.com/mhbxyz/OpenWatchParty/.github/workflows/publish.yml@refs/tags/vX.Y.Z'
 ```
 
-### 5. Create Tag
+The workflow performs these checks during publication; maintainers should independently verify the published assets and image before announcing availability. Inspect the attached SBOMs if dependency inventory is needed.
 
-```bash
-git tag -a v0.2.0 -m "Version 0.2.0"
-```
+## Plugin update readiness
 
-### 6. Push Release
+`version.json` controls the packaged `meta.json` field `jellyfinPluginAutoUpdate`. It remains `false` unless the project has agreed on official Jellyfin publication and verified the upgrade path in the [plugin update guide]({{ '/operations/plugin-updates/' | relative_url }}). This local metadata field is separate from the self-hosted `manifest.json`; manual installation and the self-hosted repository remain supported.
 
-```bash
-git push origin release/v0.2.0
-git push origin v0.2.0
-```
+Before enabling automatic updates, confirm the official catalog entry uses the same plugin GUID, compatible ABI, correct release URL and checksum, and complete client assets. Then set the flag in a reviewed release commit, package and validate it, and run disposable upgrade and rollback checks. Do not change installed manifests during plugin startup or overwrite an administrator's opt-out.
 
-### 7. Create GitHub Release
+## Version and packaging checks
 
-Using the GitHub CLI (recommended):
+`just bump X.Y.Z` updates mirrored product-version values from `version.json`; it does not create a release or update the production image digest. `infra/scripts/verify-versions.sh` checks version mirrors and an optional release tag. `just release` runs workflow-permission, pin, secret-scan, and pre-commit checks before packaging the plugin. `just test release` runs the release-script and contract regression checks. Use `infra/scripts/package-plugin.sh` to build and validate the plugin archive locally; it requires Docker, the pinned SDK container, and `zip`.
 
-```bash
-gh release create v0.2.0 --title "v0.2.0"
-```
+The package script uses the repository's pinned .NET SDK 10.0.401 container, targets Jellyfin package version `12.0.0` / ABI `12.0.0.0`, embeds client assets, and writes `dist/OpenWatchParty-vX.Y.Z.zip`. The published workflow also builds `owpctl` for Linux, macOS, and Windows with Rust 1.88.0.
 
-Or via GitHub UI:
+## Release tags and artifacts
 
-1. Go to GitHub > Releases > New Release
-2. Select tag `v0.2.0`
-3. Title: `v0.2.0`
-4. Description: Copy from CHANGELOG
-5. Click **Publish release**
+The publish workflow creates the GHCR tags `X.Y.Z`, `X.Y`, and `latest` for a release; a `main` push that changes image inputs publishes `beta`. The versioned, digest-pinned Compose reference belongs in the production configuration. The 0.7 production image reference after the follow-up update is `ghcr.io/mhbxyz/owp-session-server:0.7.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20`.
 
-The workflow will automatically:
-- Build and push Docker images to GHCR
-- Build and attach the Jellyfin plugin zip
-
-### 8. Merge to Main
-
-```bash
-git checkout main
-git merge release/v0.2.0
-git push origin main
-```
-
-### 9. Clean Up
-
-```bash
-git branch -d release/v0.2.0
-```
-
-## Docker Images
-
-Docker images are automatically built and pushed to GitHub Container Registry (GHCR).
-
-### Available Tags
-
-| Tag | Description | Updated |
-|-----|-------------|---------|
-| `latest` | Latest stable release | On release |
-| `vX.Y.Z` | Specific version (e.g., `v0.1.0`) | On release |
-| `vX.Y` | Minor version (e.g., `v0.1`) | On release |
-| `beta` | Latest development build | On push to main |
-
-### Pull Images
-
-```bash
-# Latest stable
-docker pull ghcr.io/mhbxyz/owp-session-server:latest
-
-# Specific version
-docker pull ghcr.io/mhbxyz/owp-session-server:v0.1.0
-
-# Development
-docker pull ghcr.io/mhbxyz/owp-session-server:beta
-```
-
-### Build Locally (optional)
-
-```bash
-docker build -t owp-session-server:local ./src/server
-```
-
-## Automated Releases
-
-Releases are fully automated via GitHub Actions (`.github/workflows/publish.yml`).
-
-### What Happens on Release
-
-When you create a GitHub Release:
-
-1. **Docker Image**: Built for amd64 and arm64, pushed to GHCR with version + `latest` tags
-2. **Jellyfin Plugin**: Built, zipped, and attached to the release
-3. **Plugin Repository**: `manifest.json` updated with new version and deployed to GitHub Pages
-
-### What Happens on Push to Main
-
-When server code changes (`src/server/**`) are pushed to `main`:
-
-1. **Docker Image**: Built and pushed with `beta` tag
-2. Allows testers to always have the latest development version
-
-### Plugin Distribution
-
-Users can install the plugin in two ways:
-
-#### Via Jellyfin UI (Recommended)
-
-1. Go to Dashboard > Plugins > Repositories
-2. Add: `https://mhbxyz.github.io/OpenWatchParty/jellyfin-plugin-repo/manifest.json`
-3. Go to Catalog > Find "OpenWatchParty" > Install
-4. Restart Jellyfin
-
-#### Via Direct Download
-
-1. Go to [Releases](https://github.com/mhbxyz/OpenWatchParty/releases)
-2. Download `OpenWatchParty-vX.Y.Z.zip`
-3. Extract to Jellyfin plugins folder
-4. Restart Jellyfin
+The plugin archive is `dist/OpenWatchParty-vX.Y.Z.zip` when built locally. CI publishes the plugin archive, platform-specific `owpctl` binaries, image/plugin/binary SBOMs, SHA-256 checksums for the plugin and binaries, Cosign signature bundles, and provenance bundles. Use the release download and verification commands above before pointing users to an artifact.
 
 ## Hotfix Process
 
-For critical bug fixes:
-
-1. Branch from the release tag:
-   ```bash
-   git checkout -b hotfix/v0.2.1 v0.2.0
-   ```
-
-2. Apply fix and commit
-
-3. Update patch version
-
-4. Follow normal release process with new tag `v0.2.1`
-
-5. Merge fix back to main:
-   ```bash
-   git checkout main
-   git merge hotfix/v0.2.1
-   ```
-
-## Deprecation Policy
-
-- Announce deprecations in release notes
-- Maintain for at least one minor version
-- Provide migration guide when removing features
+For a critical fix, branch from the currently supported release commit, apply the fix and regression coverage, and increment the patch version through `just bump X.Y.Z`. Merge the reviewed fix/version change to the intended release source commit, then follow the normal tag and publication sequence. Merge the fix back to `main` if the hotfix was prepared on a separate support branch. Update production Compose only after the new image has been published, and verify the new pin.
 
 ## Rollback Process
 
-If a release has critical issues:
+For a production server rollback, restore the last known good version and digest in `infra/docker/prod/docker-compose.yml`, then run `infra/scripts/verify-pins.sh` and deploy that verified configuration. For a plugin rollback, retrieve the previous release archive and verify its checksum, signature, and provenance before installing it. Record the affected release and rollback status in the GitHub Release notes and relevant support issue before advising users.
 
-1. **Immediate**: Advise users to use previous version
-2. **GitHub**: Mark release as pre-release or delete
-3. **Fix**: Create hotfix release
-4. **Communicate**: Update the relevant issue or release notes with status
-
-## Release Communication
-
-### Channels
-
-- GitHub Releases (primary)
-- GitHub Issues (follow-up on reported problems)
-- Jellyfin forums (if applicable)
-
-### Template
-
-```markdown
-## What's New
-
-Brief summary of changes.
-
-## Highlights
-
-- Feature 1
-- Feature 2
-
-## Breaking Changes
-
-List any breaking changes and migration steps.
-
-## Installation
-
-See [Installation Guide](docs/operations/installation.md).
-
-## Upgrading
-
-See [Upgrade Procedure](docs/operations/deployment.md#upgrade-procedure).
-
-## Changelog
-
-```
-
-## Next Steps
-
-- [Contributing](contributing.md) - How to contribute
-- [Testing](testing.md) - Testing before release
-- [Deployment](../operations/deployment.md) - Production deployment
+For user installation and upgrades, see [Installation]({{ '/operations/installation/' | relative_url }}) and [Deployment]({{ '/operations/deployment/' | relative_url }}).
