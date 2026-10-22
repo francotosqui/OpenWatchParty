@@ -174,7 +174,9 @@ As the host, play **the same movie** your guest can access. For the local
 demo, choose *Wing It!* from **Blender Open Movies (Dev)**. Pause while
 your guest gets ready. Move the pointer over the video to reveal the player
 header, then select the **Watch Party** icon (a screen with two viewers)
-next to **Cast**.
+next to **SyncPlay** and **Cast**.
+
+![Jellyfin player header showing the Watch Party button circled, next to SyncPlay and Cast]({{ '/assets/images/tutorial-player-button.png' | relative_url }})
 
 **1** — This is OpenWatchParty's player button, not Jellyfin's own
 **SyncPlay** button beside it. On the pages that show the Jellyfin app bar,
