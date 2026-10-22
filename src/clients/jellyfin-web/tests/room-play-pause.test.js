@@ -516,6 +516,22 @@ describe('play and pause shared by the room', () => {
       assert.deepEqual(playerEvents().map(m => m.payload.position), [40]);
     });
 
+    it('holds back the seek it causes when it aligns an already paused video', () => {
+      video.paused = true;
+      video.currentTime = 12.3;
+      h.handlePlayerEvent(playerEvent('pause', 12, { client: 'guest' }), video);
+      assert.equal(video.currentTime, 12);
+      video.dispatch('seeked');
+      assert.deepEqual(playerEvents(), []);
+    });
+
+    it('aligns a small offset when it applies a guest pause', () => {
+      video.currentTime = 12.3;
+      h.handlePlayerEvent(playerEvent('pause', 12, { client: 'guest' }), video);
+      assert.equal(video.paused, true);
+      assert.equal(video.currentTime, 12);
+    });
+
     it('pauses for a guest, at the guest position, without sending it back', () => {
       video.currentTime = 14;
       h.handlePlayerEvent(playerEvent('pause', 12, { client: 'guest' }), video);
