@@ -822,7 +822,7 @@ The endpoint is rate limited per authenticated user. Responses:
 | 401 | `{ "error": "Authentication required" }` | Missing or invalid session JWT |
 | 403 | `{ "error": "Only the room host can create invite links" }` | The caller is not the room host |
 | 404 | `{ "error": "Room not found" }` | The room does not exist (or has closed) |
-| 429 | `{ "error": "Rate limit exceeded" }` | Too many ticket requests |
+| 429 | `{ "error": "Rate limit exceeded" }` | Too many ticket requests from this user, or 1024 other users are already within their 60-second windows |
 | 503 | `{ "error": "..." }` | Invite links require a shared JWT secret |
 
 The ticket is an HS256 JWT signed with the session server's shared secret:

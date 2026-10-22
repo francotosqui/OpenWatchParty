@@ -16,7 +16,8 @@ const DEFAULT_MAX_CONNECTIONS_PER_IP: usize = 32;
 const DEFAULT_AUTH_TIMEOUT_SECONDS: u64 = 10;
 const DEFAULT_INVITE_REQUESTS_PER_MINUTE: u32 = 10;
 const INVITE_RATE_WINDOW: Duration = Duration::from_secs(60);
-// Bounded bookkeeping: entries are pruned once this many inviters are tracked.
+// Bounded bookkeeping: once this many inviters are tracked, expired entries are
+// pruned, and a new inviter is refused while every entry is still in its window.
 const MAX_TRACKED_INVITERS: usize = 1024;
 const MAX_INVITE_REQUEST_BYTES: u64 = 1024;
 
@@ -225,20 +226,28 @@ impl InviteRateLimiter {
     }
 
     fn allow(&self, key: &str) -> bool {
-        let now = Instant::now();
+        self.allow_at(key, Instant::now())
+    }
+
+    fn allow_at(&self, key: &str, now: Instant) -> bool {
         let mut clients = self
             .clients
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if clients.len() >= MAX_TRACKED_INVITERS && !clients.contains_key(key) {
             let window = self.window;
-            clients.retain(|_, entry| now.duration_since(entry.started) < window);
+            clients.retain(|_, entry| now.saturating_duration_since(entry.started) < window);
+            if clients.len() >= MAX_TRACKED_INVITERS {
+                return false;
+            }
         }
         let entry = clients.entry(key.to_string()).or_insert(InviteWindow {
             started: now,
             count: 0,
         });
-        if now.duration_since(entry.started) >= self.window {
+        // A request that waited for the lock can carry an instant from before
+        // the entry's current window began.
+        if now.saturating_duration_since(entry.started) >= self.window {
             entry.started = now;
             entry.count = 0;
         }
@@ -1345,6 +1354,55 @@ mod tests {
                 .reply(&route)
                 .await;
         assert_eq!(other_client.status(), 200);
+    }
+
+    fn full_invite_limiter(now: Instant) -> InviteRateLimiter {
+        let limiter = InviteRateLimiter::new(10, Duration::from_secs(60));
+        for index in 0..MAX_TRACKED_INVITERS {
+            assert!(limiter.allow_at(&format!("user-{index}"), now));
+        }
+        limiter
+    }
+
+    fn tracked_inviters(limiter: &InviteRateLimiter) -> usize {
+        limiter.clients.lock().unwrap().len()
+    }
+
+    #[test]
+    fn a_full_invite_limiter_refuses_new_inviters_and_keeps_the_tracked_ones() {
+        let start = Instant::now();
+        let limiter = full_invite_limiter(start);
+        let later = start + Duration::from_secs(30);
+
+        assert!(!limiter.allow_at("newcomer", later));
+        assert_eq!(tracked_inviters(&limiter), MAX_TRACKED_INVITERS);
+        assert!(limiter.allow_at("user-0", later));
+        assert!(limiter.allow_at(&format!("user-{}", MAX_TRACKED_INVITERS - 1), later));
+        assert_eq!(tracked_inviters(&limiter), MAX_TRACKED_INVITERS);
+
+        // Their windows end a minute after they started, as `allow` counts them.
+        assert!(limiter.allow_at("newcomer", start + Duration::from_secs(60)));
+        assert_eq!(tracked_inviters(&limiter), 1);
+    }
+
+    #[test]
+    fn a_full_invite_limiter_makes_room_from_expired_inviters() {
+        let start = Instant::now();
+        let limiter = full_invite_limiter(start);
+        let half_window = Duration::from_secs(30);
+        // Half of them ask again later, so their windows start over.
+        for index in 0..MAX_TRACKED_INVITERS / 2 {
+            assert!(limiter.allow_at(&format!("user-{index}"), start + Duration::from_secs(60)));
+        }
+
+        let expired = start + Duration::from_secs(60) + half_window;
+        assert!(limiter.allow_at("newcomer", expired));
+        assert_eq!(tracked_inviters(&limiter), MAX_TRACKED_INVITERS / 2 + 1);
+        assert!(limiter.allow_at("another", expired));
+
+        // A request stamped before the window it lands in counts inside it.
+        assert!(limiter.allow_at("user-0", start + half_window));
+        assert_eq!(limiter.clients.lock().unwrap()["user-0"].count, 2);
     }
 
     #[tokio::test]
