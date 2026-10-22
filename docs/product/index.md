@@ -8,7 +8,7 @@ has_children: true
 
 Learn about OpenWatchParty and how to use it.
 
-- [Overview](overview) - What is OpenWatchParty?
-- [Features](features) - Current capabilities
-- [User Guide](user-guide) - How to use the plugin
-- [FAQ](faq) - Common questions
+- [Overview]({{ '/product/overview/' | relative_url }}) - What is OpenWatchParty?
+- [Features]({{ '/product/features/' | relative_url }}) - Current capabilities
+- [User Guide]({{ '/product/user-guide/' | relative_url }}) - How to use the plugin
+- [FAQ]({{ '/product/faq/' | relative_url }}) - Common questions

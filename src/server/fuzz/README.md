@@ -32,11 +32,13 @@ create-room prefix in insecure mode reaches stateful dispatch; `$ROOM` in
 sequence inputs is replaced with that room's id.
 
 Input size, frame/message size, outbound channels, state cardinality and time
-are bounded. Assertions check bidirectional room membership, unique members,
-readiness/status membership, host ownership, valid positions, bounded names and
-connection cleanup. Reconnect rooms intentionally retained at shutdown are
-allowed only when empty and marked pending reconnect. libFuzzer's RSS limit
-also fails excessive memory use. The panic hook aborts on panics in detached
+are bounded. The configured RSS limit constrains this fuzz process; it does not
+establish deployed-server memory use or prove an RSS or OOM failure. Assertions
+check bidirectional room membership, unique members, readiness/status
+membership, host ownership, valid positions, bounded names and connection
+cleanup. Reconnect rooms intentionally retained at shutdown are allowed only
+when empty and marked pending reconnect. libFuzzer's RSS limit also fails
+excessive memory use. The panic hook aborts on panics in detached
 Tokio tasks so they cannot silently escape the fuzzer.
 
 `Server Hardening` runs a 30-second campaign on pull requests and a 300-second

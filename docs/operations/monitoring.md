@@ -139,6 +139,8 @@ curl http://localhost:3000/metrics
 
 `/metrics` has no authentication and no CORS headers: it is meant for a scraper on the internal network. Keep it off the public reverse proxy, which only needs to forward `/ws`. The metrics carry counts only, never a user name, room name, token or id, and every label value comes from a fixed list, so clients cannot create new series.
 
+The endpoint has no process-memory or queue-length gauge. Use container monitoring for actual CPU and memory. Do not infer RSS or OOM behavior from the serialized queue-response size regression tests; those test wire payload bounds, not process memory usage.
+
 ### Metric Reference
 
 | Metric | Type | Labels | Description |
@@ -509,6 +511,6 @@ services:
 
 ## Next Steps
 
-- [Troubleshooting](troubleshooting.md) - Fix issues
-- [Security](security.md) - Secure your installation
-- [Deployment](deployment.md) - Production setup
+- [Troubleshooting]({{ '/operations/troubleshooting/' | relative_url }}) - Fix issues
+- [Security]({{ '/operations/security/' | relative_url }}) - Secure your installation
+- [Deployment]({{ '/operations/deployment/' | relative_url }}) - Production setup

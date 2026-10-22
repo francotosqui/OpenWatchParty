@@ -42,18 +42,38 @@ printed in the terminal if it does not launch a browser. The
 shows where to create a temporary Jellyfin API key, what to enter in the
 assistant and how to verify the result.
 
-The command opens a one-time URL bound to `127.0.0.1`. The browser assistant:
+The command opens a one-time URL bound to `127.0.0.1`. **Preview plan** parses
+the Jellyfin URL and lists the planned operations without installing anything;
+it does not test connectivity or validate the administrator token. A token is
+not required for the preview. **Install** validates Docker and Jellyfin,
+installs or upgrades the plugin, configures authentication, deploys the signed
+session-server image and verifies health before stopping the assistant.
 
-1. connects to your existing Jellyfin;
-2. previews every operation;
-3. installs or upgrades the plugin;
-4. deploys the signed session-server image;
-5. configures authentication on both sides;
-6. verifies health before stopping itself.
-
-The Jellyfin administrator token is held in memory and deleted immediately after setup. The web assistant stops after installation or 30 minutes.
+Open the printed URL once and keep the page open. Reloading it or opening it
+again returns **Invalid or consumed setup token**. If this happens before
+installation, stop the setup command and rerun it for a fresh session.
+The web assistant stops after installation or 30 minutes. It does not write
+the supplied administrator API token to its configuration files. Close the
+page and revoke the temporary API key in Jellyfin after setup and diagnostics.
 
 `install`, `upgrade` and `configure` write only the plugin settings owpctl manages: the JWT secret, audience and issuer, the token and invite lifetimes, and the session server URL, and it turns off unauthenticated access and the auto-detected session server. Every other plugin setting, such as hiding Jellyfin's SyncPlay button, keeps the value it had before the update. A setting the new plugin version no longer has, or now stores with a different type, takes that version's default.
+
+## Remote Browser Access
+
+When `owpctl setup --web` runs over SSH, its loopback URL belongs to the
+remote machine, not your computer. Keep that setup process running and create
+an SSH local forward in another terminal on your computer. For example, if
+the printed URL uses port `43123`:
+
+```bash
+ssh -N -L 127.0.0.1:43123:127.0.0.1:43123 user@jellyfin-host
+```
+
+Replace the host and both port numbers with your server and the printed port.
+Use the same local and remote port so the assistant's origin check still
+matches. Open the original one-time URL in your local browser, then keep that
+page and the SSH forward open until setup finishes. Do not publish the setup
+port or share the URL/token. Alternatively, use headless setup below.
 
 ## Headless Setup
 
@@ -96,9 +116,9 @@ owpctl upgrade --yes --api-token-file /run/owp-jellyfin-token
 owpctl backup
 owpctl logs                  # follow the session server logs
 owpctl logs --tail 200 --no-follow
-owpctl configure --set session.log-level=debug
+owpctl configure --set session.log-level=debug --api-token-file /run/owp-jellyfin-token
 owpctl configure --rotate-jwt-secret --yes --api-token-file /run/owp-jellyfin-token
-owpctl uninstall --yes --keep-config
+owpctl uninstall --yes --keep-config --api-token-file /run/owp-jellyfin-token
 ```
 
 `install`, `upgrade` and `configure` retain plugin settings that owpctl does not
@@ -110,10 +130,10 @@ all values, including unknown future secrets.
 
 ## Asymmetric Pairing
 
-New installations start in hybrid mode so existing HS256 sessions are not interrupted. Pairing registers only the plugin public RSA key in the session-server trust store, activates RS256 issuance, then restarts the managed server in asymmetric mode without injecting the shared secret.
+`owpctl setup` defaults to hybrid mode, which accepts shared-secret HS256 tokens and trusted RS256 tokens. Pairing registers the plugin public RSA key in the session-server trust store, activates RS256 issuance, then restarts the managed server in asymmetric mode without injecting the shared secret.
 
 ```bash
-owpctl pair \
+sudo owpctl --scope system pair \
   --jellyfin-url https://jellyfin.example.com \
   --api-token-file /run/owp-jellyfin-token \
   --trust-store /var/lib/openwatchparty/trust-store.json
@@ -122,11 +142,11 @@ owpctl pair \
 List or revoke trusted keys:
 
 ```bash
-owpctl trust --store /var/lib/openwatchparty/trust-store.json list
-owpctl trust --store /var/lib/openwatchparty/trust-store.json revoke --kid KEY_ID
+sudo owpctl --scope system trust --store /var/lib/openwatchparty/trust-store.json list
+sudo owpctl --scope system trust --store /var/lib/openwatchparty/trust-store.json revoke --kid KEY_ID
 ```
 
-The RSA private key remains in Jellyfin's plugin data directory with owner-only permissions. The session server stores public keys only.
+The RSA private key remains in Jellyfin's plugin data directory with owner-only permissions. The session server stores public keys only. `pair` reads or creates the plugin's current signing key and is safe to repeat; it does not rotate that key. Revoking a trusted key rejects later authentication attempts using tokens signed by it. Already-authenticated WebSocket sessions are not immediately disconnected by a trust-store edit; their existing expiry and reconnect rules still apply. There is no automated signing-key rotation command, so plan key replacement and pairing before revoking the active key.
 
 ## Managed Files
 

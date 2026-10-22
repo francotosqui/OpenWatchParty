@@ -13,19 +13,19 @@ nav_order: 5
 3. [ ] Client injection ready in the OpenWatchParty plugin dashboard? (Custom HTML is only a fallback.)
 4. [ ] Browser cache cleared? (Ctrl+F5)
 5. [ ] Correct WebSocket URL?
-6. [ ] Firewall allowing port 3000?
+6. [ ] Reverse proxy routes `/ws` to the session server, and the server port is reachable only from trusted hosts?
 
 **Related documentation:**
-- [Architecture - Edge Cases](../technical/architecture.md#edge-cases-and-behavior) - Expected behavior in various scenarios
-- [Security Guide](security.md) - Authentication and CORS issues
-- [Configuration](configuration.md) - Server and plugin settings
+- [Architecture - Edge Cases]({{ '/technical/architecture/' | relative_url }}#edge-cases-and-behavior) - Expected behavior in various scenarios
+- [Security Guide]({{ '/operations/security/' | relative_url }}) - Authentication and CORS issues
+- [Configuration]({{ '/operations/configuration/' | relative_url }}) - Server and plugin settings
 
 ## Common Issues
 
 ### Watch Party Button Not Visible
 
 **Symptoms:**
-- No group icon in the video player header
+- No Watch Party button (a screen with two viewers) in the video player header
 - Panel doesn't appear
 
 **Solutions:**
@@ -83,14 +83,12 @@ nav_order: 5
    curl http://localhost:3000/health
    ```
 
-2. **Check firewall**
+2. **Check the network path**
    ```bash
-   # Test connection
+   # Test the local server health endpoint
    nc -zv localhost 3000
-
-   # Open port (UFW)
-   sudo ufw allow 3000/tcp
    ```
+   Keep raw port 3000 private. For remote guests, publish HTTPS/WSS through the reverse proxy and route `/ws` to the session server; see [Deployment]({{ '/operations/deployment/' | relative_url }}#reverse-proxy-configuration).
 
 3. **Check WebSocket URL**
    - Browser console will show the attempted URL
@@ -102,7 +100,7 @@ nav_order: 5
 
 ### Invite button says Room not found (or 404)
 
-The reverse proxy is not routing `/invite` to the session server. Configure both the WebSocket and invite routes as shown in [Reverse Proxy Configuration](deployment.md#reverse-proxy-configuration).
+The reverse proxy is not routing `/invite` to the session server. Configure both the WebSocket and invite routes as shown in [Reverse Proxy Configuration]({{ '/operations/deployment/' | relative_url }}#reverse-proxy-configuration).
 
 ### Sync Issues
 
@@ -134,7 +132,16 @@ The reverse proxy is not routing `/invite` to the session server. Configure both
    - Different versions may have different durations
    - Ensure all users can access the media
 
-**Technical details:** See [Architecture - Clock Skew Tolerance](../technical/architecture.md#clock-skew-tolerance) and [Sync Algorithms](../technical/sync.md)
+**Technical details:** See [Architecture - Clock Offset and Playback Drift]({{ '/technical/architecture/' | relative_url }}#clock-offset-and-playback-drift) and [Sync Algorithms]({{ '/technical/sync/' | relative_url }})
+
+### Room queue is missing or does not advance
+
+- Queue controls are available to the host in a room only when the server and client negotiate the `media_queue` capability. Confirm both sides are current and compatible; older clients can still follow the current room item but do not receive queue state.
+- A queue can contain up to 20 Jellyfin items. Episode autofill applies to the host's episodic item; it does not create a queue for a movie.
+- Only the host can change the queue. The countdown is 10 seconds and is canceled by a pause, the host seeking back before the credits, removing the next item, or changing the room item.
+- Rooms and queues live in memory. A server restart closes the room and clears its queue; reconnect by creating a new room.
+
+See [Configuration: Room queue and lifecycle]({{ '/operations/configuration/' | relative_url }}#room-queue-and-lifecycle) for the persistence and capability details.
 
 ### Room Closes Unexpectedly
 
@@ -150,14 +157,14 @@ The reverse proxy is not routing `/invite` to the session server. Configure both
    - Host's computer went to sleep
 
 2. **Server restart**
-   - Rooms are in-memory (ephemeral)
+   - Rooms, participant lists, queues and countdowns are in-memory (ephemeral)
    - Check if server was restarted
 
 3. **Network issues**
    - Check host's connection
    - Check server logs for errors
 
-**Technical details:** See [Architecture - Host Network Disconnect](../technical/architecture.md#host-network-disconnect)
+**Technical details:** See [Architecture - Host Network Disconnect]({{ '/technical/architecture/' | relative_url }}#host-network-disconnect)
 
 ### Authentication Errors
 
@@ -168,9 +175,11 @@ The reverse proxy is not routing `/invite` to the session server. Configure both
 
 **Solutions:**
 
-1. **Check JWT configuration matches**
-   - Plugin JWT Secret must match server JWT_SECRET
-   - Both must be configured or both must be empty
+1. **Check the selected JWT mode and keys**
+   - In `hs256`, the plugin JWT Secret must match server `JWT_SECRET`; both are required in production.
+   - In `hybrid`, the shared secret is still required for legacy HS256 tokens, and the server also needs a valid public-key trust store for RS256.
+   - In `asymmetric`, the plugin's active RSA key must be present in the server trust store; `JWT_SECRET` is not used.
+   - Empty secrets are allowed only in explicitly enabled local development mode on both sides. Never expose that mode.
 
 2. **Check token expiration**
    - Default: 1 hour
@@ -190,12 +199,12 @@ The reverse proxy is not routing `/invite` to the session server. Configure both
 
 Jellyfin 12 disables legacy authorization. The `DisableLegacyAuthorization` migration turns off `EnableLegacyAuthorization`, so the legacy `X-Emby-Token` header no longer resolves and only `Authorization: MediaBrowser Token="..."` is accepted.
 
-OpenWatchParty `0.5.0` and `0.4.0` (Jellyfin 12) and `0.3.4` (Jellyfin 10.11) send the modern `Authorization` header. `0.3.3` and earlier do not, so they cannot authenticate against Jellyfin 12.
+OpenWatchParty `0.7.0` is the current Jellyfin 12 plugin release and sends the modern `Authorization` header. `0.3.4` is the current release for Jellyfin 10.11. Do not assume historical plugin releases target or support Jellyfin 12; check the [compatibility matrix]({{ '/operations/compatibility/' | relative_url }}).
 
 **Solutions:**
 
 1. **Upgrade OpenWatchParty**
-   - This is the supported fix. Install `0.5.0` on Jellyfin 12, or `0.3.4` on Jellyfin 10.11, from the plugin repository or manually.
+   - Install `0.7.0` on Jellyfin 12, or `0.3.4` on Jellyfin 10.11, from the compatible plugin repository entry or manually.
    - Verify the installed version in **Dashboard** > **Plugins** > **OpenWatchParty**.
 
 2. **Temporary stopgap only**
@@ -219,14 +228,14 @@ OpenWatchParty `0.5.0` and `0.4.0` (Jellyfin 12) and `0.3.4` (Jellyfin 10.11) se
 
 **Cause:**
 
-The plugin signs each session token with its own `JwtSecret`; the session server verifies it with `JWT_SECRET`. When the two values differ, every authentication attempt fails with `InvalidSignature` even though both components look healthy on their own.
+In `hs256` and `hybrid` modes, the plugin signs with `JwtSecret` and the server verifies with `JWT_SECRET`; mismatched values cause `InvalidSignature`. In `asymmetric` mode, check that the plugin's active RSA key is present in the server trust store and that the issuer and audience match.
 
 The plugin's **Allow insecure unauthenticated development** setting does not work around this. It only makes the plugin omit the token, it is ignored while a `JwtSecret` is configured, and the session server independently requires `ALLOW_INSECURE_NO_AUTH=true` before it accepts unauthenticated clients.
 
 **Solutions:**
 
-1. **Managed deployments** (installed with `owpctl`): run `owpctl doctor`, which performs an authenticated WebSocket ping/pong and reports this failure directly. Use `owpctl configure --rotate-jwt-secret` (or `owpctl pair`) to bring both sides back in sync.
-2. **Manual deployments**: set the same value in *Dashboard → Plugins → OpenWatchParty → JWT secret* and in the session server's `JWT_SECRET` environment variable, then restart the session server. Confirm from its logs that it started with `JWT authentication is enabled` and that no `InvalidSignature` appears after a browser reload.
+1. **Managed deployments** (installed with `owpctl`): run `owpctl doctor`, which performs an authenticated WebSocket ping/pong and reports this failure directly. For HS256 or hybrid, use `owpctl configure --rotate-jwt-secret --yes --api-token-file <protected-file>` to update the shared secret on both sides. In asymmetric mode, verify the trust store and use `owpctl pair` to register the plugin's current signing key.
+2. **Manual HS256 or hybrid deployments**: set the same strong value in *Dashboard → Plugins → OpenWatchParty → JWT secret* and in the session server's `JWT_SECRET` environment variable, then restart the session server. For asymmetric mode, ensure the active plugin public key is in the server trust store. Confirm the server started with `JWT authentication is enabled` and check for `InvalidSignature` after a browser reload.
 
 ### Diagnostics report the session server as unreachable
 
@@ -298,23 +307,24 @@ HLS (HTTP Live Streaming) breaks video into small segments (typically 2-10 secon
    - May report `readyState` differently during buffering
    - Workaround: Keep Safari tab in focus, or use Chrome/Firefox
 
-**Technical details:** See [Sync Algorithms - HLS Handling](../technical/sync.md#5-hls-handling-and-feedback-loop-prevention)
+**Technical details:** See [Sync Algorithms - HLS Handling]({{ '/technical/sync/' | relative_url }}#5-hls-handling-and-feedback-loop-prevention)
 
 ### Rate Limiting Issues
 
 **Symptoms:**
 - "Rate limit exceeded" error
-- 429 HTTP status code
+- `429` while requesting a Jellyfin token or opening a WebSocket at the connection limit
+- WebSocket closes with policy code `1008` after exceeding the per-connection message limit
 - Cannot get new token
-- Messages being dropped
 
 **Types of rate limiting:**
 
-| Limit | Value | Applies To |
+| Limit | Value | Applies to |
 |-------|-------|------------|
-| Token requests | 30/min | Per user, fixed one-minute window |
-| WebSocket messages | 30/sec | Per client connection |
-| Message size | 64 KB | Per message |
+| Token requests | 30 per fixed 60-second window | Per Jellyfin user; excess token requests return HTTP `429` |
+| WebSocket messages | 30 per 1000 ms window | Per connection; excess closes the WebSocket with policy code `1008` |
+| WebSocket connections | 256 total; 32 per effective IP by default | Excess upgrades return HTTP `429` |
+| Message size | 64 KiB per frame and assembled message | WebSocket input |
 
 **Solutions:**
 
@@ -327,8 +337,8 @@ HLS (HTTP Live Streaming) breaks video into small segments (typically 2-10 secon
 
 2. **Message rate limit (30/sec)**
    ```
-   Cause: Rapid playback actions (spam play/pause/seek)
-   Solution: Slow down interactions
+   Cause: A client sent over 30 messages within a 1000 ms window
+   Solution: Wait for the client to reconnect; avoid rapid repeated actions
    Note: Normal usage won't hit this limit
    ```
 
@@ -337,9 +347,7 @@ HLS (HTTP Live Streaming) breaks video into small segments (typically 2-10 secon
    # Check server logs for rate limit messages
    docker logs session-server 2>&1 | grep -i "rate"
 
-   # Look for:
-   # "Rate limit exceeded for client X"
-   # "Message dropped due to rate limit"
+   # Token endpoint logs "Token rate limit exceeded"; the session server logs "Rate limited"
    ```
 
 4. **If rate limited frequently**
@@ -454,7 +462,7 @@ wscat -c ws://localhost:3000/ws
 
 **Session Server:**
 - Check number of rooms/clients
-- Consider scaling (future feature)
+- Compare active connections and rooms with the configured limits; the server does not share in-memory rooms between replicas.
 
 **Client:**
 - Reduce video quality
@@ -465,9 +473,9 @@ wscat -c ws://localhost:3000/ws
 
 **Session Server:**
 - Rooms are in-memory
-- Each client: ~1KB
-- Each room: ~5KB + clients
-- Restart to clear if needed
+- There is no verified per-client or per-room RSS estimate. Use [container metrics and the measured load runs]({{ '/operations/monitoring/' | relative_url }}#capacity-planning) for your deployment; the sample measurements are not a capacity guarantee.
+- The room queue is capped at 20 media items. Its serialized-size regression tests do not establish a process memory or out-of-memory result.
+- Restarting the server closes rooms and discards the in-memory queue state.
 
 ### Slow Sync
 

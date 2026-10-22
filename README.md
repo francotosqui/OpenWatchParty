@@ -21,6 +21,12 @@ OpenWatchParty enables synchronized media playback for [Jellyfin](https://jellyf
   <img src="docs/assets/images/watch-party-panel.png" alt="A synchronized watch party in the Jellyfin player" width="720">
 </p>
 
+OpenWatchParty 0.7 adds shared playback controls for room members, room queues
+with an up-next countdown, expiring room invite links, and host recovery and
+transfer. Browse the [feature guide](https://mhbxyz.github.io/OpenWatchParty/product/features/)
+for the current capabilities and the [first watch-party tutorial](https://mhbxyz.github.io/OpenWatchParty/product/first-watch-party/)
+for an illustrated setup.
+
 ## Quick Start
 
 ### Users
@@ -32,10 +38,11 @@ Already running Jellyfin? Follow the [illustrated first watch-party tutorial](ht
 ```bash
 git clone https://github.com/mhbxyz/OpenWatchParty.git
 cd OpenWatchParty
+just setup
 just up
 ```
 
-See the [Development Setup Guide](https://mhbxyz.github.io/OpenWatchParty/development/setup/) and then the [illustrated two-user walkthrough](https://mhbxyz.github.io/OpenWatchParty/product/first-watch-party/#host-create-a-room).
+The development Compose stack binds to loopback and defaults to unauthenticated local development when `JWT_SECRET` is empty. Production requires JWT authentication configured on both the plugin and session server. See the [Development Setup Guide](https://mhbxyz.github.io/OpenWatchParty/development/setup/) for details, then follow the [illustrated two-user walkthrough](https://mhbxyz.github.io/OpenWatchParty/product/first-watch-party/#host-create-a-room).
 
 ## Documentation
 

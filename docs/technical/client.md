@@ -10,7 +10,7 @@ nav_order: 4
 
 The OpenWatchParty client is a set of JavaScript modules (IIFE pattern) injected into Jellyfin's web interface. These modules handle playback synchronization between multiple users via WebSocket.
 
-See [Client State Lifecycle](client-state.md) for field ownership, domain
+See [Client State Lifecycle]({{ '/technical/client-state/' | relative_url }}) for field ownership, domain
 factories, reset boundaries and cancellation rules.
 
 ## Module Architecture
@@ -19,7 +19,7 @@ factories, reset boundaries and cancellation rules.
 plugin.js                    # Loader - loads modules in parallel waves
     ├── state.js             # Global state and constants
     ├── utils/               # Utility functions
-    │   ├── log.js, media.js, misc.js, time.js, video.js
+    │   ├── i18n.js, log.js, media.js, misc.js, time.js, url.js, video.js
     ├── ui/                  # User interface
     │   ├── cards.js, guest-controls.js, header.js, home.js, indicators.js
     │   ├── panel-elements.js, lobby.js, participants.js, leave-confirm.js, room.js
@@ -30,14 +30,16 @@ plugin.js                    # Loader - loads modules in parallel waves
     │   ├── input.js, messages.js
     ├── ws/                  # WebSocket communication
     │   ├── send.js, auth.js, connection.js
+    │   ├── validation.js
     │   └── handlers/
     │       ├── clock.js, playback.js, room.js, sync.js
     └── app/                 # Initialization and cleanup
         ├── cleanup.js, invite.js, lifecycle.js, queue.js
 ```
 
-Modules are loaded in dependency waves, parallelizing where possible:
-`state.js` → `utils/*` → `ui/*` → `playback/*` → `chat/*` → `ws/send` → `ws/auth` → `ws/handlers/*` → `ws/connection` → `app/*`
+The 39 modules are loaded in dependency waves, parallelizing where possible:
+`state.js` → utility waves → UI waves → playback and chat → `ws/send` →
+`ws/auth` → `ws/validation` → WebSocket handlers → `ws/connection` → `app/*`.
 
 ### Panel views
 
@@ -94,6 +96,9 @@ Defines global shared state and configuration constants.
 | `SYNC_LOOP_MS` | number | `500` | Sync loop interval (ms) |
 
 ### State (`OWP.state`)
+
+This is a representative list of fields used across modules, not the complete
+state inventory; see [Client State Lifecycle]({{ '/technical/client-state/' | relative_url }}).
 
 | Property | Type | Description |
 |----------|------|-------------|
@@ -177,11 +182,13 @@ Explicit leave cancels automatic rejoin. `disconnect()` disables reconnect,
 invalidates pending connection/authentication work and resets room state;
 full cleanup also cancels the remaining deferred operations.
 
-Application clock pings run every 2s until five valid samples have arrived,
-then every 30s. An offset change greater than 50ms restores the fast cadence.
-These JSON pings measure clock offset and latency; the server's separate
-20s WebSocket control-frame heartbeat maintains transport liveness even when
-JavaScript timers are throttled.
+On socket open the client sends a JSON `ping` immediately, before JWT
+authentication completes, then starts an adaptive interval: every 2s until five
+valid pong samples, then every 30s. An offset change greater than 50ms restores
+the fast cadence. These JSON pings measure clock offset and latency; the server's
+separate WebSocket control-frame heartbeat maintains transport liveness even
+when JavaScript timers are throttled. The server also supplies an initial clock
+sample in `client_hello` before authentication.
 
 When adding a state field, identify its owner, whether it survives transport
 loss, and which room reset or full-cleanup path clears it. Preserve user
@@ -254,7 +261,7 @@ return position + (elapsed / 1000);
 #### `scheduleAt(serverTs: number, fn: Function) -> void`
 Schedules function execution at a given server timestamp.
 
-## Module: `playback.js`
+## Module: `playback/`
 
 ### Description
 Manages HTML5 video element interaction and playback synchronization.
@@ -286,32 +293,28 @@ Waits for the room media to play (`getPlayingItemId()`, which ignores the hidden
 Binds video events to synchronization handlers.
 
 **Events listened:**
-- `waiting`: Sets `isBuffering = true`
+- `waiting`: Sets `isBuffering = true`; the host reports `buffering` when appropriate
 - `canplay`: Sets `isBuffering = false`
-- `playing`: Sets `isBuffering = false`
-- `play`: Sends `player_event` if host
-- `pause`: Sends `player_event` if host (ignored if buffering)
-- `seeked`: Sends `player_event` if host
+- `playing`: Sets `isBuffering = false`; a host may report the end of a stream reload
+- `play`: A host reports it; a guest reports it only with negotiated `sharedPlaybackControl`
+- `pause`: A host reports it (ignored if buffering); a guest reports it only with negotiated shared control
+- `seeked`: The host reports it; guests cannot seek the room
 
 **Send logic (`sendStateUpdate`):**
 ```
-If NOT host → ignore
-If isSyncing → ignore (anti-feedback lock)
-If isSeeking → ignore (HLS lies during seek)
-If isBuffering OR readyState < 3 → ignore
-If < 1000ms since last send → ignore
+If NOT host → ignore (periodic state updates are host-only)
+If guestPaused, isSyncing, a room action/media load is pending, or a stream is reloading → ignore
+If isSeeking, isBuffering, or readyState < 3 → ignore
+If less than STATE_UPDATE_MS (1000ms) since the previous send → ignore
 Otherwise → send state_update
 ```
 
-**Event logic (`onEvent`):**
+**Event logic:**
 ```
-If NOT host → ignore
-If isSyncing → ignore
-If readyState < 3 → ignore
-If pause AND (isBuffering OR isSeeking) → ignore (not user-initiated)
-If play AND isSeeking → ignore
-If seek AND < 500ms since last OR diff < SEEK_THRESHOLD → ignore
-Otherwise → send player_event
+Host → send permitted play, pause, seek and buffering events
+Guest → send only a play/pause that reverses the current room state and only when shared playback control is negotiated
+All senders → suppress room echoes and stale events during room/media work
+Host-only → seek and buffering; a guest's pause can remain private when shared control is unavailable
 ```
 
 #### `syncLoop() -> void`
@@ -336,7 +339,7 @@ Synchronization loop called every 500 ms (`SYNC_LOOP_MS`, non-hosts only).
    rate = clamp(1 + sign(drift) * sqrt(|drift|) * DRIFT_GAIN, 0.90, 1.15)
 ```
 
-## Module: `ws.js`
+## Module: `ws/`
 
 When `host_changed` promotes a privately paused guest, `syncPromotedGuest()`
 applies the tracked room position and play state before host events or periodic
@@ -349,7 +352,7 @@ previous drift-correction status.
 ### Description
 Manages WebSocket communication with the session server.
 
-Every new connection resets `serverFeatures` and shared-control availability and advertises `features: ["host_transfer", "participant_status", "shared_playback_control"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
+Every new connection resets `serverFeatures` and shared-control availability and advertises `features: ["host_transfer", "participant_status", "shared_playback_control", "media_queue"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
 
 `room_capabilities` enables shared play/pause only while the current host supports it. Otherwise guests retain their private pause and cannot play a paused room. Canonical playback acknowledgements clear the optimistic command hold and apply in server order, with event suppression to prevent echoes. Host-side commands retry a temporarily missing video until `VIDEO_ACTION_MAX_WAIT_MS`, preserving the room, role and playback-attempt guards. Pending retries gate authoritative heartbeats; a stream reload still defers the latest command until it completes.
 
@@ -417,7 +420,7 @@ Receives client ID assigned by server.
 #### `room_state`
 Response to `create_room` or `join_room`:
 1. Updates local state (roomId, roomName, isHost, etc.)
-2. Synchronizes clock on first connection
+2. Initializes the clock from `server_ts` only if `client_hello` or a valid pong has not already done so
 3. Applies initial playback state (seek + play/pause)
 4. Loads media if non-host
 
@@ -429,6 +432,9 @@ Stores the participants' names for the current room and shows them instead of th
 
 #### `participant_statuses`
 Stores each participant's status, when the list has the same length as the participants, and shows it under the name. It also marks the server as accepting `participant_status`, so `playback.reportStatus()` (run on every sync tick in a room) sends this client's status, from `playback.ownStatus()`, once it has held for `PARTICIPANT_STATUS_HOLD_MS`. The same sends go to a server that declared `participant_status` in its `auth_success` features; a server that does neither receives nothing.
+
+#### `queue_state` and media queue
+The client advertises `media_queue` and receives queue snapshots only from a server that acknowledges that capability. The host's `app/queue.js` adds and removes Jellyfin items, fills upcoming episodes, moves to another item and starts/cancels the server countdown; guests receive authoritative `queue_state` and follow the room's `room_state` media. The queue holds at most 20 items by count. `last_added` is a persistent fill cursor, so an item the host removed is not re-added after reload or host transfer. The server owns the 10-second countdown and invalidates cancelled or replaced countdown tasks by generation. This count limit is not a byte or process-memory bound.
 
 #### `host_changed`
 Updates `isHost` for the current room and shows the new-host toast. When this client becomes host it only resets drift correction (playback rate, *catching up*); a room command or media load it accepted as a guest still completes, and it sends no host events or state heartbeat until then: until the scheduled time, or at most as long as a guest waits for the room's media. The existing room bar is updated in place so Invite and the current leave choices change without replacing chat or keyboard focus. All playback broadcasts, the host state heartbeat, and the invite button read `state.isHost` at use time.
@@ -453,15 +459,16 @@ Periodic update from host:
 3. Update sync timestamps
 
 #### `pong`
-Response to ping for RTT calculation:
-```javascript
-rtt = now - payload.client_ts;
-// EMA adjustment of server offset
-sampleOffset = server_ts + (rtt / 2) - now;
-serverOffsetMs = hasTimeSync ? (0.6 * old + 0.4 * sample) : sample;
-```
+A valid pong echoes only `payload.client_ts`; its `server_ts` is the server
+clock sample. The client computes RTT from the echo and estimates offset from
+`server_ts + RTT / 2 - clientNow`. It keeps the lowest-RTT sample among the
+latest eight, then smooths the selected offset with EMA alpha 0.4; the first
+valid sample initializes the offset directly. If a ping has a missing or
+non-unsigned-64-bit timestamp, the server omits the pong payload. That fails the
+client schema check, produces an `Invalid WebSocket message schema` warning,
+and is ignored for clock sync; malformed values are not reflected back.
 
-## Module: `ui.js`
+## Module: `ui/`
 
 ### Description
 Manages the plugin user interface.
@@ -526,10 +533,11 @@ To add a locale, copy the complete `en` catalog in `utils/i18n.js` (and in `conf
 
 The literal guard scans all client scripts together, preserving their IIFE scopes and original file/line locations. It follows local bindings and statically named `OWP` helper exports (including namespace aliases) across files to DOM text, attributes, HTML-writing methods and toast/confirmation sinks. Unknown `OWP.ui` helpers conservatively reject literal string arguments; use catalog lookups for their labels. Dynamic property names and runtime-generated text are outside this static guard's analysis. HTML-writing sinks reject uncatalogued literal text, including short labels and markup; this does not make translated HTML safe or change the client's createElement-based rendering.
 
-## Module: `app.js`
+## Module: `app/` lifecycle and cleanup
 
-### Description
-Main entry point, initialization loops, and cleanup management.
+`app/lifecycle.js` initializes the panel, captures invite links, starts the
+WebSocket connection and owns the UI, home and sync intervals. `app/cleanup.js`
+performs full teardown. The `plugin.js` loader itself is the script entry point.
 
 ### Function `init()`
 
@@ -543,7 +551,7 @@ Main entry point, initialization loops, and cleanup management.
 | Interval | Frequency | Action |
 |----------|-----------|--------|
 | UI check | 2000ms | Inject header buttons, update "Create Room", bind video, detect video player exit |
-| Ping | 10000ms | Send ping for RTT measurement |
+| Ping | Connection-owned | Immediate ping on socket open, then every 2s until five valid samples and every 30s afterward; an offset change over 50ms restarts the fast cadence |
 | Home render | 5000ms | Refresh watch parties on home page |
 | Sync loop | 500ms | Execute synchronization loop (non-hosts only) |
 

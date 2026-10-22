@@ -7,7 +7,7 @@ nav_order: 8
 # Jellyfin SyncPlay Reference
 
 {: .note }
-This document describes Jellyfin's native SyncPlay implementation for reference when developing OpenWatchParty. Last updated: January 2026.
+This document preserves a historical reference snapshot of Jellyfin's native SyncPlay material checked in January 2026; it is not a statement about later Jellyfin releases. The OpenWatchParty comparison rows reflect product 0.7.0 and protocol 1 as of October 2026.
 
 ## Overview
 
@@ -19,7 +19,7 @@ Jellyfin SyncPlay is the built-in synchronized playback feature that allows mult
 |--------|-------------------|----------------|
 | Architecture | Integrated into Jellyfin | Standalone plugin + server |
 | Transport | REST API + Jellyfin messages | Dedicated WebSocket |
-| Time sync | Min-delay selection | EMA smoothing |
+| Time sync | Min-delay selection | Lowest-RTT of eight samples, then EMA smoothing |
 | Server | C# (same as Jellyfin) | Rust |
 | Client support | All official clients | Web only (currently) |
 
@@ -369,11 +369,11 @@ Based on GitHub issues:
 
 | Aspect | Jellyfin SyncPlay | OpenWatchParty |
 |--------|-------------------|----------------|
-| Algorithm | Min-delay selection | EMA smoothing (α=0.4) |
-| Samples | 8 (sliding window) | Continuous |
-| Selection | Best (lowest RTT) | Weighted average |
+| Algorithm | Min-delay selection | Lowest-RTT of recent eight samples, then EMA (α=0.4) |
+| Samples | 8 (sliding window) | 8-sample window |
+| Selection | Best (lowest RTT) | Lowest RTT sample, then EMA smoothing |
 | Initial sync | 3 fast pings | First measurement direct |
-| Maintenance | 60s polling | 10s polling |
+| Maintenance | 60s polling | 2s until five valid samples, then 30s; a clock-offset change over 50ms restarts the fast cadence |
 
 **Trade-offs:**
 - Min-delay is more resistant to outliers

@@ -13,25 +13,18 @@ This page summarizes the compatibility encoded by the repository's canonical ver
 | OpenWatchParty | Jellyfin packages | Jellyfin target ABI | Jellyfin image | File Transformation | Status |
 |----------------|-------------------|---------------------|-----------------|---------------------|--------|
 | `0.7.0` | `12.0.0` | `12.0.0.0` | `12.1` | `3.0.1.0` | Supported |
-| `0.6.0` | `12.0.0` | `12.0.0.0` | `12.1` | `3.0.1.0` | Supported |
-| `0.5.0` | `12.0.0` | `12.0.0.0` | `12.1` | `3.0.1.0` | Supported |
-| `0.4.0` | `12.0.0` | `12.0.0.0` | `12.1` | `3.0.1.0` | Supported |
 | `0.3.4` | `10.11.3` | `10.11.0.0` | `10.11.3` | `2.5.3.0` | Supported |
-| `0.3.3` | `10.11.3` | `10.11.0.0` | `10.11.3` | `2.5.3.0` | Supported |
-| `0.3.2` | `10.11.3` | `10.11.0.0` | `10.11.3` | `2.5.3.0` | Supported |
-| `0.3.1` | `10.11.3` | `10.11.0.0` | `10.11.3` | `2.5.3.0` | Supported |
-| `0.3.0` | `10.11.3` | `10.11.0.0` | `10.11.3` | `2.5.3.0` | Supported |
-| `0.2.1` | `10.11.3` | `10.11.0.0` | `10.11.3` | `2.5.3.0` | Supported |
-| `0.2.0` | `10.11.3` | `10.11.0.0` | `10.11.3` | `2.5.3.0` | Supported |
+
+This matrix lists the current recommended plugin release for each Jellyfin line; it is not the complete support policy. The project also supports plugin `0.4.x` on Jellyfin 12 as stated in the [root security policy](https://github.com/mhbxyz/OpenWatchParty/blob/main/SECURITY.md#supported-versions). A release omitted from this recommendation matrix is not thereby unsupported.
 
 ## Notes
 
-- OpenWatchParty `0.5.0` targets Jellyfin 12. It is compiled against Jellyfin packages `12.0.0` and declares target ABI `12.0.0.0`, so it loads on Jellyfin 12.0 and 12.1.
-- OpenWatchParty `0.3.4` is the current release for the Jellyfin 10.11 line (0.3.3 and earlier remain installable). It is compiled against Jellyfin packages `10.11.3` and declares target ABI `10.11.0.0`.
-- Both lines are published from the same plugin repository manifest, so Jellyfin can offer the release that matches its own ABI.
-- Development and integration testing use the Jellyfin `12.1` image.
-- Automatic client injection uses File Transformation `3.0.1.0` (archive ABI `12.0.0`).
-- The target ABI is the plugin compatibility contract; the image version is the environment tested by this repository.
+- OpenWatchParty `0.7.0` is the current release for Jellyfin 12. Its plugin targets ABI `12.0.0.0`; the repository builds and tests against Jellyfin `12.1`. The target ABI is a compatibility declaration, not a guarantee for every Jellyfin 12 release.
+- OpenWatchParty `0.3.4` is the current release for the Jellyfin 10.11 line. It targets ABI `10.11.0.0` and is built against packages `10.11.3`.
+- The shared manifest contains multiple historical plugin packages. Their presence or matching target ABI does not establish current support for an older release or Jellyfin line; use the current release listed above for that line.
+- Development and integration testing use the Jellyfin `12.1` image for the 0.7 line.
+- Automatic client injection in 0.7 uses File Transformation `3.0.1.0` (archive ABI `12.0.0`). Native injection is preferred; see [installation]({{ '/operations/installation/' | relative_url }}#client-injection-compatibility-fallbacks) for fallbacks.
+- The target ABI is the plugin compatibility declaration; the image version is the environment tested by this repository. WebSocket protocol version `1` is separate from the Jellyfin plugin ABI. Session server and `owpctl` source builds require Rust `1.88` or newer.
 
 ## How to Verify Locally
 

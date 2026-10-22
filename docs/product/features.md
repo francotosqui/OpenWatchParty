@@ -6,144 +6,46 @@ nav_order: 2
 
 # Features
 
-## Current Features
+OpenWatchParty 0.7.0 adds shared playback controls, host recovery, participant status, episode queues and player appearance settings. It runs in Jellyfin Web; it does not add controls to Jellyfin's native mobile or TV apps.
 
-### Room Management
-- **Create rooms** - Start a watch party with a custom name
-- **Join rooms** - Enter a room ID to join an existing session
-- **Leave rooms** - Exit cleanly with proper cleanup
-- **Room list** - See all active rooms on the server
-- **Participant count** - Track how many people are watching
-- **Invite links** - Hosts copy a short-lived link (`?owp_invite=<ticket>`); opening it joins the room automatically. The ticket is room-scoped, expires, and stops working when the room closes
-- **Room queue** - While the room watches a series, the host's player queues the next episodes; at the credits an up-next countdown moves everyone to the next one together
+## Rooms and playback
 
-### Playback Synchronization
-- **Play/Pause sync** - Anyone in the room can pause or resume it for everyone
-- **Seek sync** - Jumping to a position syncs everyone
-- **Position sync** - Continuous updates keep clients aligned
-- **Drift correction** - Automatic playback speed adjustment (0.90x-1.15x)
-- **HLS support** - Works with Jellyfin's adaptive streaming
+- Create a room from the video player. The host's current media starts the room.
+- Join from the Watch Party panel, an invite link, or a Watch Parties home row when available.
+- Play and pause are shared by the host and guests. Seeking remains host-only.
+- Clients correct playback drift automatically. The host can leave a room open for a compatible participant to take over; a short disconnect gives the same host 10 seconds to reconnect first.
+- Hosts can create short-lived, room-specific invite links. The invite ticket does not contain a Jellyfin password, API token, or session token. Invites require configured JWT authentication.
+- The room bar shows connection and synchronization state, participant names and (with a compatible session server) participant playback status.
 
-### User Interface
-- **Header button** - Watch Party button in the Jellyfin app bar (next to SyncPlay, Cast and Search) and in the player header (next to SyncPlay and Cast); joining from it starts the room's media
-- **Hide native SyncPlay** - Optional admin setting that hides Jellyfin's SyncPlay button
-- **Slide-out panel** - Room list and controls; opened from the header, it hangs from the button like a speech bubble
-- **First-run help** - The panel opens by itself once per browser, with a short help that its **?** button brings back
-- **Home section** - Watch parties shown on Jellyfin homepage
-- **System notifications** - Centered toasts for play/pause, join/leave events
-- **Chat notifications** - Stacking toasts for incoming messages (top-right)
-- **Sync indicator** - Visual status showing sync state (synced/syncing/waiting)
-- **Connection status** - Online/offline indicator
+## Series queue
 
-### Chat
-- **Text chat** - Real-time messaging within watch party rooms
-- **Username display** - Shows sender's Jellyfin username
-- **Timestamps** - Message timestamps for context
-- **Unread badge** - Notification when new messages arrive
-- **XSS protection** - Messages are escaped to prevent injection
+When the room is watching a TV episode, the host's client can fill a shared queue with the current episode and up to five following episodes. The room queue supports up to 20 items. The host can start an upcoming episode, move or remove upcoming items, and use Previous or Next; guests can view the queue. Missing episodes are skipped. A removed item is not restored by a page reload or host change.
 
-### Networking
-- **WebSocket communication** - Low-latency real-time sync
-- **Auto-reconnect** - Automatic reconnection on disconnect
-- **Clock synchronization** - NTP-like time sync between clients
-- **Rate limiting** - Protection against abuse (30 tokens/min)
+Near an episode's outro, or near its end when no outro segment is available, the room shows a 10-second **Up next** countdown. The host can cancel it or advance immediately. Pausing or seeking back before the outro cancels the countdown. This feature requires a session server and clients that support the queue; older clients can still follow a room when it advances.
 
-### Security
-- **JWT authentication** - Optional token-based auth
-- **Configurable secret** - Admin-controlled JWT signing key
-- **CORS protection** - Origin validation (configurable)
-- **Message size limits** - 64KB max message size
-- **Expiring invite tickets** - Invite links never carry the Jellyfin API token or session JWT; tickets are host-only, room-scoped, rate limited and rejected after the room closes
+## Interface and accessibility
+
+- Watch Party is available in the Jellyfin app bar beside SyncPlay and Cast, and in the video player's controls beside Cast. The player control is available while media is playing.
+- The slide-out panel lists active rooms and contains the room bar, chat, participant list, queue and invite controls when applicable.
+- First-run help appears once per browser and can be reopened from the panel's **?** control.
+- Administrators can hide Jellyfin's native SyncPlay control and adjust the room interface's opacity (40 to 100 percent, default 55) and base text size (12 to 18 px, default 14) under **Web Client** in plugin settings. Changes apply after Jellyfin Web reloads. If the operating system requests reduced transparency, the interface stays opaque.
+- Controls have accessible names, and the participant, chat, queue and leave sections can be operated with the keyboard. The panel follows the Jellyfin display language; English, Spanish, French and German are included.
 
 ## Compatibility
 
-### Jellyfin Versions
-| Version | Status |
-|---------|--------|
-| 12.0 / 12.1 | Validated package (`12.0.0`, ABI `12.0.0.0`) and image (`12.1`) for OpenWatchParty `0.5.0` |
-| ABI 12.0.0.0 | Plugin compatibility target |
-| 10.11.3 / ABI 10.11.0.0 | Last supported by OpenWatchParty `0.3.4` |
-| Others | See compatibility matrix |
+OpenWatchParty **0.7.0** targets Jellyfin ABI **12.0.0.0**. Its plugin package is built against Jellyfin packages **12.0.0**, and the project validates the plugin on Jellyfin **12.1**. The plugin is for Jellyfin 12; use the release and compatibility information for the supported Jellyfin 10.11 line when running that server version.
 
-Full details: [Compatibility Matrix](../operations/compatibility.md)
+See the [Compatibility Matrix]({{ '/operations/compatibility/' | relative_url }}) for release-specific details. Client features are negotiated with the session server, so older servers or clients may not show newer controls.
 
-### Browsers
+## Security and updates
 
-| Browser | Version | Status | Notes |
-|---------|---------|--------|-------|
-| Chrome/Chromium | 80+ | Fully supported | Recommended for best experience |
-| Firefox | 75+ | Fully supported | |
-| Edge | 80+ | Fully supported | Chromium-based versions |
-| Safari | 14+ | Supported | See known issues below |
-| Safari (iOS) | 14+ | Partial | See mobile limitations |
-| Chrome (Android) | 80+ | Partial | See mobile limitations |
-| Firefox (Android) | 79+ | Partial | See mobile limitations |
+The Jellyfin plugin and session server are separate components. For 0.7.0, update the session server to 0.7.0 to receive its security fix; updating only the plugin does not fix an older session server. Keep the plugin version compatible with your Jellyfin line. Follow the [installation guide]({{ '/operations/installation/' | relative_url }}) and [security guide]({{ '/operations/security/' | relative_url }}) for upgrade steps.
 
-#### Safari Known Issues
+## Other capabilities
 
-Safari uses its native HLS implementation which behaves differently:
+- Real-time WebSocket messaging for playback, room activity and chat
+- Clock synchronization and playback drift correction
+- Optional JWT authentication, origin validation, bounded messages and rate limiting
+- HLS and direct-play media support
 
-- **Buffering state reporting** - Safari may report incorrect `readyState` during HLS segment loading, causing brief sync hiccups
-- **Playback rate limits** - Safari may clamp playback rates more aggressively than other browsers
-- **Background tab throttling** - Aggressive throttling can affect sync when tab is not focused
-
-**Workarounds:**
-- Keep the Safari tab in focus during watch parties
-- If sync issues persist, try leaving and rejoining the room
-
-#### Mobile Browser Limitations
-
-Mobile browsers have reduced functionality due to platform restrictions:
-
-| Feature | Desktop | Mobile |
-|---------|---------|--------|
-| Background playback | Yes | Limited (OS may pause) |
-| Playback rate adjustment | Full range | May be restricted |
-| Auto-play | Yes | Requires user interaction |
-| Picture-in-picture sync | Yes | Not supported |
-
-**Mobile-specific notes:**
-- **iOS Safari** - Auto-play restrictions require tapping play after joining
-- **Android Chrome** - Background tabs may be suspended by the OS
-- **Data saver modes** - May interfere with WebSocket connections
-
-### Media Types
-| Type | Status |
-|------|--------|
-| Movies | Supported |
-| TV Episodes | Supported |
-| HLS streams | Supported |
-| Direct play | Supported |
-| Live TV | Not supported |
-
-## Known Limitations
-
-1. **Host-only seeking** - Only the host can seek; play and pause are shared
-2. **Single media** - One media item per room (by design)
-3. **Ephemeral rooms** - Rooms are closed when the host leaves or server restarts (by design)
-4. **Web only** - Only works in web browsers (no native mobile/TV apps planned)
-5. **No message history** - Chat messages are not persisted; late joiners won't see previous messages
-6. **Invite links need authentication** - With insecure development mode (`ALLOW_INSECURE_NO_AUTH`), there is no shared secret to sign tickets, so the Invite button reports an error
-
-## Roadmap
-
-### Planned Features
-
-| Feature | Priority | Status |
-|---------|----------|--------|
-| Text chat | High | Done |
-| Message history for late joiners | Medium | Planned |
-| Democratic mode | Medium | Planned |
-| Automatic host transfer | Medium | Planned |
-| Room passwords | Low | Planned |
-
-### Feature Descriptions
-
-- **Message history for late joiners** - Send last N messages to clients joining a room
-- **Democratic mode** - Allow all participants to control playback, not just the host
-- **Automatic host transfer** - When host disconnects, transfer control to another participant instead of closing the room
-- **Room passwords** - Optional password protection for private rooms
-
-### Long-term Goals
-
-- **Official Jellyfin plugin repository** - Publish to the [official Jellyfin plugin repository](https://jellyfin.org/docs/general/server/plugins/#official-plugins) for native discoverability and installation
+See the [User Guide]({{ '/product/user-guide/' | relative_url }}) for the room controls and the [First Watch Party walkthrough]({{ '/product/first-watch-party/' | relative_url }}) for an illustrated two-account example.

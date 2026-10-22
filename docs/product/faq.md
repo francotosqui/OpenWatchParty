@@ -1,7 +1,7 @@
 ---
 title: FAQ
 parent: Getting Started
-nav_order: 4
+nav_order: 5
 ---
 
 # Frequently Asked Questions
@@ -37,13 +37,13 @@ No in the supported Jellyfin environment. OpenWatchParty includes native client 
 ## Usage
 
 ### Who controls playback?
-The person who creates the room (the host) controls seeking. Play and pause are shared: anyone in the room can pause or resume it for everyone.
+The host controls seeking. Play and pause are shared: a guest can pause or resume playback for everyone, including the host.
 
 ### Can participants control playback?
 Play and pause, yes: a guest's pause pauses the whole room, the host included, and anyone's play resumes everyone. Seeking stays with the host.
 
-### What happens if the host leaves?
-The room closes and all participants are disconnected. A participant cannot become the new host.
+### What happens if the host leaves or disconnects?
+On a compatible session server, another participant using a compatible client can become host when the host leaves. If the host briefly disconnects, the server holds the host role for 10 seconds so the same signed-in user can reconnect. If no compatible participant can take over, the room closes. The host can also choose **Close for everyone**.
 
 ### Can I chat with other viewers?
 Yes! A text chat is available from the chat icon in the room bar. Messages are sent to all room participants in real time via the session server.
@@ -53,32 +53,37 @@ No. Each client transcodes independently based on their connection and device. S
 
 ## Sync Quality
 
-### How accurate is the sync?
-Typically within 100-200ms. The system uses clock synchronization and drift correction to maintain sync.
+### How does synchronization work?
+The clients synchronize their clocks and compare playback position. Small drift is corrected gradually; larger differences may trigger a seek. Network delay, buffering and browser behavior affect how closely playback stays aligned, so there is no fixed accuracy guarantee.
 
 ### Why do I see slight speed changes?
-OpenWatchParty adjusts playback speed (0.95x-1.05x) to gradually correct drift without jarring seeks. This is imperceptible in most cases.
+OpenWatchParty temporarily adjusts playback speed to correct drift. The allowed adjustment range is 0.90x to 1.15x; the client may seek when drift is too large to correct this way.
 
-### What if I'm several seconds behind?
-If drift exceeds 2.5 seconds, the client automatically seeks to the correct position instead of adjusting speed.
+### Can a guest adjust synchronization manually?
+If the administrator enables **Show the sync adjustment button in rooms**, guests can move their own video up to half a second toward the host. It does not affect anyone else's playback or allow guests to seek the room.
 
 ### Does buffering affect sync?
-Yes, buffering can cause temporary desync. The system waits for all clients to be "ready" before starting playback, and continuously corrects drift afterward.
+Yes. A buffering client may fall behind while its video loads; the participant list can show its status when the session server supports participant status.
+
+### Does OpenWatchParty queue TV episodes?
+Yes. For an episode, the host's client can fill the room queue with up to five following episodes. The room queue holds up to 20 items, including the current one. The host controls the queue and can cancel the 10-second up-next countdown. Queue controls require compatible client and session-server versions.
 
 ## Technical
 
 ### What ports are used?
-- **8096** - Jellyfin web interface (default)
-- **3000** - Session server WebSocket (default)
+Jellyfin commonly uses port **8096** and the session server commonly uses port **3000**, but deployments can configure different ports or use reverse proxies. Remote participants' browsers must be able to reach the configured WebSocket endpoint.
 
 ### What protocol is used?
-WebSocket with JSON messages. See the [Protocol Documentation](../technical/protocol.md) for details.
+WebSocket with JSON messages. See the [Protocol Documentation]({{ '/technical/protocol/' | relative_url }}) for details.
 
 ### Is the connection encrypted?
-It can be. Use WSS (WebSocket Secure) with HTTPS for encrypted connections. See [Security Guide](../operations/security.md).
+Use HTTPS for Jellyfin Web and WSS (WebSocket Secure) for the session server when serving the service remotely. See the [Security Guide]({{ '/operations/security/' | relative_url }}).
 
 ### How is authentication handled?
-Optional JWT tokens can be configured. When enabled, clients must authenticate with Jellyfin before joining rooms. See [Security Guide](../operations/security.md).
+The plugin issues signed session tokens after Jellyfin authentication. Production installations require a configured JWT secret; the unauthenticated mode is for isolated development only. Invite links also require JWT authentication. See the [Security Guide]({{ '/operations/security/' | relative_url }}).
+
+### Does updating the Jellyfin plugin update the session server?
+No. They are separate components. OpenWatchParty 0.7.0 includes a session-server security fix, so update the session server to 0.7.0 as well as keeping the plugin compatible with your Jellyfin version. See [Plugin Updates]({{ '/operations/plugin-updates/' | relative_url }}).
 
 ## Troubleshooting
 
@@ -87,27 +92,27 @@ Optional JWT tokens can be configured. When enabled, clients must authenticate w
 2. Open the OpenWatchParty plugin dashboard and verify client injection
 3. Hard refresh the page (Ctrl+F5)
 
-See [Troubleshooting Guide](../operations/troubleshooting.md#watch-party-button-not-visible) for detailed solutions.
+See [Troubleshooting Guide]({{ '/operations/troubleshooting/' | relative_url }}#watch-party-button-not-visible) for detailed solutions.
 
 ### I can't connect to the session server
 1. Ensure the session server is running
-2. Check that port 3000 is open in your firewall
+2. For remote guests, check that the reverse proxy routes `/ws` to the session server
 3. Verify the WebSocket URL is correct
 
-See [Troubleshooting Guide](../operations/troubleshooting.md#cannot-connect-to-session-server) for detailed solutions.
+See [Troubleshooting Guide]({{ '/operations/troubleshooting/' | relative_url }}#cannot-connect-to-session-server) for detailed solutions.
 
 ### We're out of sync
 1. Wait a few seconds - sync corrects automatically
 2. If persistent, have the host pause and play again
 3. Check network quality (high latency = worse sync)
 
-See [Troubleshooting Guide](../operations/troubleshooting.md#sync-issues) for detailed solutions.
+See [Troubleshooting Guide]({{ '/operations/troubleshooting/' | relative_url }}#sync-issues) for detailed solutions.
 
 ### The room keeps closing
 1. Check if the host is having connection issues
 2. Verify the session server is stable
 
-See [Troubleshooting Guide](../operations/troubleshooting.md#room-closes-unexpectedly) for detailed solutions.
+See [Troubleshooting Guide]({{ '/operations/troubleshooting/' | relative_url }}#room-closes-unexpectedly) for detailed solutions.
 
 ## Support
 
@@ -115,7 +120,7 @@ See [Troubleshooting Guide](../operations/troubleshooting.md#room-closes-unexpec
 Open an issue on the [GitHub repository](https://github.com/mhbxyz/OpenWatchParty/issues).
 
 ### How can I contribute?
-See the [Contributing Guide](../development/contributing.md) for how to submit pull requests.
+See the [Contributing Guide]({{ '/development/contributing/' | relative_url }}) for how to submit pull requests.
 
 ### Where can I get help?
 - [GitHub Issues](https://github.com/mhbxyz/OpenWatchParty/issues/new/choose) for bugs, feature requests, and questions

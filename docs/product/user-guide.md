@@ -9,6 +9,11 @@ nav_order: 4
 New here? Start with the [illustrated first watch-party tutorial]({{ '/product/first-watch-party/' | relative_url }})
 for installation, screenshots and a complete two-user example.
 
+OpenWatchParty 0.7.0 targets Jellyfin ABI 12.0.0.0 and is validated on Jellyfin
+12.1. See the [compatibility matrix]({{ '/operations/compatibility/' | relative_url }})
+for other release lines. The Jellyfin plugin and session server are separate
+components; update the session server to 0.7.0 to receive its security fix.
+
 ## Getting Started
 
 Before using OpenWatchParty, ensure your Jellyfin administrator has:
@@ -26,7 +31,7 @@ Before using OpenWatchParty, ensure your Jellyfin administrator has:
 
 The Watch Party button in the Jellyfin header opens the same panel, but **Create Room** stays disabled, with a hint, until something is playing: a room always starts from the video you are watching.
 
-The **?** next to the panel's close button shows a short help. The first time Jellyfin Web runs in a browser, the panel opens by itself below the header button with this help; it is not shown again in that browser.
+The **?** next to the panel's close button shows a short help. On the first run in a browser, the panel opens below the header button with this help; it is not shown again in that browser.
 
 As the host, you control playback for everyone. When you play, pause, or seek, all participants follow. Guests can play and pause too, for the whole room.
 
@@ -39,7 +44,7 @@ As the host, you control playback for everyone. When you play, pause, or seek, a
 2. **Find the room** - Rooms appear in the list with participant counts
 3. **Click "Join"** - OpenWatchParty starts the room's movie and syncs you to the host's position
 
-A room marked **No media** has nothing to start for you: play something first, then join it from the player panel.
+A room marked **No media** has no video to join yet. Ask the host to start a video and create a room from the player.
 
 ### From the Player
 1. **Open any video** - The same video the host is watching
@@ -62,12 +67,12 @@ The Jellyfin homepage displays active watch parties in a dedicated "Watch Partie
    - Participant count (e.g., "2 watching")
    - Play button overlay for quick join
 3. **Join options:**
-    - **Click the card** - Opens the movie details; play the movie, then join from the player panel
-    - **Click the play overlay** - Attempts to start playback and join automatically; use the player panel if it does not complete
+    - **Select the Join button (play icon)** on the card - Opens the room's media and joins automatically
+    - **Select the card itself** - Opens the media details without joining; start the video, then join from the player panel
 
 **What happens when you click:**
 
-1. The movie details open; start playback if needed
+1. The Join button starts the room's current media and attempts to join automatically. If you opened the media details instead, start playback there.
 2. In the player, open **Watch Party** and select **Join** if you are not already in the room
 3. Your playback syncs to the host's current position after a brief catch-up period
 
@@ -102,10 +107,18 @@ As the host, your actions control everyone:
 | Seek | All clients jump to that position |
 | Invite | Copies a short-lived room invite link |
 | Close panel | Room stays active |
-| Leave the player | Host role passes immediately to the earliest participant using a compatible client; the room stays open |
+| Leave the player | Host role passes to the earliest compatible participant; the room stays open |
 | Connection drops | Your host role is held for 10 seconds while the client reconnects; after that it passes to a compatible participant |
 | Leave room | When another participant can take over, leaves while the room stays open with that participant as host |
 | Close for everyone | Room closes for everyone |
+
+The leave confirmation names the participant who will take over before you
+leave. The promoted participant then sees the **Host** badge in the room's
+participant list.
+
+![Host leave confirmation naming testclient1 as the next host]({{ '/assets/images/watch-party-host-transfer.png' | relative_url }})
+
+![Participant list after transfer, with testclient1 marked Host]({{ '/assets/images/watch-party-host-role.png' | relative_url }})
 
 ## Participant Experience
 
@@ -130,7 +143,7 @@ The panel follows the Jellyfin display language; English, Spanish, French and Ge
 
 Over the player, the room bar, its drop-downs, the lobby panel, the up-next strip and the notifications are semi-transparent, so the video shows through them, blurred. The administrator sets their opacity and text size under **Web Client** in the plugin settings (55 % and 14 px by default). If your system asks apps to reduce transparency, they stay opaque.
 
-![Close-up of the room bar with the chat open: sync dot, latency, room name, participants, chat and leave]({{ '/assets/images/watch-party-panel-closeup.png' | relative_url }})
+![Close-up of the room bar with its chat composer open]({{ '/assets/images/watch-party-panel-closeup.png' | relative_url }})
 
 ### Lobby View (Not in a room)
 - **Room list** - Active watch parties with names and participant counts; rooms without media are marked "No media"
@@ -171,12 +184,16 @@ A status changes after it has held for about a second. People on an older versio
 
 ## Watching a series
 
-While the room plays an episode, the host's player fills the room's queue with the next episodes of the series, in Jellyfin's order across seasons, five ahead, and tops it up each time the room moves to the next one. Episodes missing from the library are skipped, and one the host removes doesn't come back, even after the host reloads the page or someone else becomes the host. A room playing a movie has no queue and works as before.
+While the room plays an episode, the host's player fills the room's queue with the next episodes of the series, in Jellyfin's order across seasons, up to five episodes ahead, and tops it up each time the room moves to the next one. The room queue can contain up to 20 items, including the current episode. Episodes missing from the library are skipped, and one the host removes doesn't come back, even after the host reloads the page or someone else becomes the host. A room playing a movie has no queue and works as before.
 
 - **Queue** (list icon in the bar) opens the list: watched episodes dimmed with a check, the one playing highlighted as **Watching**, and the upcoming ones numbered.
 - The host can go to the **Previous** or **Next** episode, and play, move up, move down or remove an upcoming one. Guests see the list only.
-- **Up next:** when the host's video reaches the credits (an *Outro* segment, as Intro Skipper marks them), or 15 seconds before the end of an episode without them, everyone sees the next title and a 10-second countdown: below the bar, or on its own over the video while the panel is closed. The host can **Cancel** it or go to the **Next** episode at once. Pausing the room or going back before the credits cancels it; it starts again if the room plays on in the credits, unless the host cancelled it on that episode.
+- **Up next:** when the host's video reaches the credits (an *Outro* segment, as Intro Skipper marks them), or 15 seconds before the end of an episode without them, everyone sees the next title and a 10-second countdown: below the bar, or on its own over the video while the panel is closed. The host can **Cancel** it or go to the **Next** episode at once. Pausing the room or seeking back before the credits cancels it; it starts again if the room plays on in the credits, unless the host cancelled it on that episode.
 - When the room moves to another episode, everyone loads it and starts from the beginning together, as when joining a room.
+
+![OpenWatchParty episode queue with the current and next episodes]({{ '/assets/images/watch-party-queue.png' | relative_url }})
+
+![Live up-next countdown with Cancel and Next controls above the episode queue]({{ '/assets/images/watch-party-up-next.png' | relative_url }})
 
 The queue needs a session server and clients with this feature. People on an older version still follow the room to the next episode, without seeing the queue.
 
@@ -225,6 +242,11 @@ The button moves your video up to 0.5 s toward the host, never past them. Use it
 
 The button does nothing while you are in sync, while the room is paused or loading, or while a command from the host is being applied (the drop-down then says **Following the host...**). It also stays within the part of the video already loaded, so it never makes you wait for more video.
 
+The administrator enables the control under **Dashboard → Plugins →
+OpenWatchParty → Settings → Web Client**. This setting is off by default.
+
+![OpenWatchParty Web Client settings with guest sync adjustment enabled and room appearance values]({{ '/assets/images/plugin-configuration.png' | relative_url }})
+
 ## Notifications
 
 OpenWatchParty displays toast notifications to keep you informed about room activity.
@@ -261,7 +283,7 @@ When the chat is closed, incoming messages appear as toasts in the bottom-right 
 - **Let it sync** - Wait a few seconds after joining before judging sync
 
 ### Network Considerations
-- **Port 3000** - Session server default port must be accessible
+- **Session URL** - Each browser must reach the configured WebSocket URL. For guests outside your network, publish it as `wss://` through a reverse proxy; never expose raw port 3000 to the internet
 - **WebSocket support** - Some firewalls block WebSocket connections
 - **HTTPS** - Use WSS (secure WebSocket) in production
 
@@ -275,7 +297,7 @@ When the chat is closed, incoming messages appear as toasts in the bottom-right 
 ### "Cannot connect to server"
 - Check that the session server is running
 - Verify the WebSocket URL is correct
-- Check firewall rules for port 3000
+- For remote guests, check that the reverse proxy routes `/ws` to the session server
 
 ### "Out of sync with others"
 - This is normal for a few seconds after joining

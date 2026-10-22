@@ -12,12 +12,18 @@ nav_order: 1
 
 OpenWatchParty is a Jellyfin plugin that enables synchronized media playback across multiple clients. Watch movies and shows together with friends, no matter where they are.
 
+Version 0.7 includes room chat, shared playback controls, episode queues with an up-next countdown, expiring invite links, and host recovery and transfer. See the [feature guide]({{ '/product/features/' | relative_url }}) for details.
+
+<p align="center">
+  <img src="assets/images/watch-party-panel.png" alt="OpenWatchParty room panel in Jellyfin" width="720">
+</p>
+
 ## Quick Start
 
 ### For Users
 
 Deploy the session server and install the plugin.
-Follow the [illustrated first watch-party tutorial](product/first-watch-party/) for installation, screenshots and a two-person walkthrough. The [Installation Guide](operations/installation/) covers manual alternatives.
+Follow the [illustrated first watch-party tutorial]({{ '/product/first-watch-party/' | relative_url }}) for installation, screenshots and a two-person walkthrough. The [Installation Guide]({{ '/operations/installation/' | relative_url }}) covers manual alternatives.
 
 ### For Developers
 
@@ -26,13 +32,13 @@ Set up a development environment:
 ```bash
 git clone https://github.com/mhbxyz/OpenWatchParty.git
 cd OpenWatchParty
-just setup   # Configure git hooks (required once)
+just setup   # Install client dependencies and configure Git hooks
 just up      # Build and start Jellyfin + session server
 just dev     # Start with log following
 just watch   # Auto-restart on file changes
 ```
 
-See [Development Setup](development/setup/) for the full workflow and [First Watch Party](product/first-watch-party/#host-create-a-room) for the illustrated host/guest steps.
+The dev stack binds to loopback and defaults to unauthenticated local development when `JWT_SECRET` is empty. Production Compose requires JWT authentication. See [Development Setup]({{ '/development/setup/' | relative_url }}) for the full workflow and [First Watch Party]({{ '/product/first-watch-party/' | relative_url }}#host-create-a-room) for the illustrated host/guest steps.
 
 ---
 
@@ -40,22 +46,22 @@ See [Development Setup](development/setup/) for the full workflow and [First Wat
 
 | Getting Started | Operations | Technical |
 |-----------------|------------|-----------|
-| [First Watch Party](product/first-watch-party/) | [Installation](operations/installation/) | [Architecture](technical/architecture/) |
-| [Overview](product/overview/) | [Guided Setup](operations/owpctl/) | [Protocol](technical/protocol/) |
-| [Features](product/features/) | [Configuration](operations/configuration/) | [Server](technical/server/) |
-| [User Guide](product/user-guide/) | [Deployment](operations/deployment/) | [Client](technical/client/) |
-| [FAQ](product/faq/) | [Compatibility](operations/compatibility/) | [Plugin](technical/plugin/) |
-| | [Security](operations/security/) | [Sync Algorithms](technical/sync/) |
-| | [Troubleshooting](operations/troubleshooting/) | [REST API](technical/api/) |
-| | [Monitoring](operations/monitoring/) | |
+| [First Watch Party]({{ '/product/first-watch-party/' | relative_url }}) | [Installation]({{ '/operations/installation/' | relative_url }}) | [Architecture]({{ '/technical/architecture/' | relative_url }}) |
+| [Overview]({{ '/product/overview/' | relative_url }}) | [Guided Setup]({{ '/operations/owpctl/' | relative_url }}) | [Protocol]({{ '/technical/protocol/' | relative_url }}) |
+| [Features]({{ '/product/features/' | relative_url }}) | [Configuration]({{ '/operations/configuration/' | relative_url }}) | [Server]({{ '/technical/server/' | relative_url }}) |
+| [User Guide]({{ '/product/user-guide/' | relative_url }}) | [Deployment]({{ '/operations/deployment/' | relative_url }}) | [Client]({{ '/technical/client/' | relative_url }}) |
+| [FAQ]({{ '/product/faq/' | relative_url }}) | [Compatibility]({{ '/operations/compatibility/' | relative_url }}) | [Plugin]({{ '/technical/plugin/' | relative_url }}) |
+| | [Security]({{ '/operations/security/' | relative_url }}) | [Sync Algorithms]({{ '/technical/sync/' | relative_url }}) |
+| | [Troubleshooting]({{ '/operations/troubleshooting/' | relative_url }}) | [REST API]({{ '/technical/api/' | relative_url }}) |
+| | [Monitoring]({{ '/operations/monitoring/' | relative_url }}) | |
 
 ## Development
 
-- [Development Setup](development/setup/) - Get started contributing
-- [Contributing Guide](development/contributing/) - Code style and PR process
-- [Testing](development/testing/) - Running tests
-- [CI/CD](development/ci/) - Automated workflows
-- [Release Process](development/release/) - How releases are made
+- [Development Setup]({{ '/development/setup/' | relative_url }}) - Get started contributing
+- [Contributing Guide]({{ '/development/contributing/' | relative_url }}) - Code style and PR process
+- [Testing]({{ '/development/testing/' | relative_url }}) - Running tests
+- [CI/CD]({{ '/development/ci/' | relative_url }}) - Automated workflows
+- [Release Process]({{ '/development/release/' | relative_url }}) - How releases are made
 
 ## Architecture Overview
 

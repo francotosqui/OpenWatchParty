@@ -49,20 +49,15 @@ OpenWatchParty consists of three main components that work together to provide s
 
 ### 1. Jellyfin Plugin (C#)
 
-The plugin integrates with Jellyfin's plugin system.
-
-**Responsibilities:**
-- Serve client JavaScript bundle via `/OpenWatchParty/ClientScript`
-- Provide configuration UI for JWT settings
-- Generate JWT tokens for authenticated users
-- Handle HTTP caching with ETag support
+The plugin integrates with Jellyfin's plugin system. It serves a JavaScript loader at `/OpenWatchParty/ClientScript` and allow-listed modules under `/OpenWatchParty/Client/{path}`, provides the administrator configuration page and diagnostics, and issues session tokens. The loader fetches 39 client modules in dependency waves; the module files are not concatenated into the loader response.
 
 **Files:**
-- `Plugin.cs` - Plugin entry point, configuration loading
-- `OpenWatchPartyController.cs` - REST API endpoints
-- `PluginConfiguration.cs` - Configuration model
-- `Web/configPage.html` - Admin configuration page
-- `Web/plugin.js` - Bundled client JavaScript
+- `Plugin.cs` - Plugin entry point and configuration page registration
+- `Controllers/` - Client assets, token, diagnostics and signing-key endpoints
+- `Configuration/PluginConfiguration.cs` - Administrator settings
+- `OpenWatchPartyDiagnosticsService.cs` - Redacted status and session health checks
+- `Web/configPage.html` - Administrator configuration page
+- `src/clients/jellyfin-web/plugin.js` - Client loader
 
 ### 2. Session Server (Rust)
 
@@ -73,8 +68,10 @@ A lightweight WebSocket server that manages rooms and relays messages.
 - Manage room lifecycle (create, join, leave, close)
 - Relay playback events between clients
 - Validate host permissions
-- Filter state updates (anti-jitter, rate limiting)
-- Schedule synchronized actions
+- Filter state updates (anti-jitter and per-connection message limits)
+- Schedule synchronized actions and pending plays
+- Negotiate optional host transfer, participant status, shared guest controls and media queue capabilities
+- Maintain a count-bounded room queue and server-side up-next countdown
 
 **Modules:**
 - `main.rs` - Server setup, Warp configuration
@@ -82,14 +79,14 @@ A lightweight WebSocket server that manages rooms and relays messages.
 - `routes.rs` - Warp route filters
 - `tasks.rs` - Background tasks (zombie cleanup, shutdown)
 - `messaging.rs` - Message sending utilities
-- `auth.rs` - JWT validation (optional)
-- `utils.rs` - Utilities (timestamp)
-- `ws/` - WebSocket handling (connection, dispatch, constants, validation, pending_play, handlers/)
-- `room/` - Room lifecycle (leave, close)
+- `auth.rs` - JWT validation and invite-ticket validation
+- `utils.rs` - Timestamp and shared utilities
+- `ws/` - WebSocket connection, dispatch, validation, pending play and handlers
+- `room/` - Membership, room closure and media queue state
 
 ### 3. Web Client (JavaScript)
 
-Modular JavaScript injected into Jellyfin's web interface.
+The Jellyfin Web client consists of the `plugin.js` loader and 39 allow-listed JavaScript modules, injected by the plugin.
 
 **Responsibilities:**
 - Inject UI elements (button, panel, home section)
@@ -97,7 +94,9 @@ Modular JavaScript injected into Jellyfin's web interface.
 - Intercept video playback events
 - Apply synchronized playback commands
 - Correct drift with playback rate adjustment
-- Synchronize clocks with server
+- Synchronize clocks with the server
+- Negotiate optional protocol capabilities and report participant status
+- Support a host-controlled media queue and a local guest sync adjustment
 
 **Modules:**
 - `plugin.js` - Loader, script initialization
@@ -118,6 +117,9 @@ Browser                          Server                      Host Browser
    │                                │                              │
    ├── WebSocket connect ──────────►│                              │
    │◄─── client_hello ──────────────┤                              │
+   ├── auth (JWT by default) ──────►│                              │
+   ├── ping (clock sample) ────────►│                              │
+   │◄─── auth_success ──────────────┤                              │
    │◄─── room_list ─────────────────┤                              │
    │                                │                              │
    ├── join_room ──────────────────►│                              │
@@ -191,17 +193,17 @@ transfer is promoted; the room closes if none is eligible. Hosts without grace
 eligibility follow the transfer-or-close path immediately.
 
 An explicit `leave_room` does not start this grace period. An explicit
-`close_room` closes the room for everyone. See [Room lifecycle](server.md#module-room).
+`close_room` closes the room for everyone. See [Room lifecycle]({{ '/technical/server/' | relative_url }}#module-room).
 
 ## Technology Stack
 
 | Component | Technology |
 |-----------|------------|
-| Plugin | C# (.NET SDK 10.0.401), ASP.NET Core |
+| Plugin | C# (`net10.0`), Jellyfin 12 packages, target ABI `12.0.0.0`, ASP.NET Core |
 | Session Server | Rust, Warp, Tokio |
 | Web Client | JavaScript (IIFE pattern) |
 | Communication | WebSocket, JSON |
-| Authentication | JWT (optional) |
+| Authentication | JWT required by default; insecure no-auth mode requires explicit server configuration |
 | Containerization | Docker, Docker Compose |
 
 ## State Management
@@ -238,6 +240,8 @@ Room {
   state_server_ts: u64
   last_state_at: Option<Instant>
   command_cooldown_until: Option<Instant>
+  statuses: HashMap<ClientId, ParticipantStatus>
+  queue: MediaQueue  // includes up-next countdown and last_added cursor
 }
 ```
 
@@ -264,38 +268,30 @@ OWP.state = {
 
 ## Security Model
 
-- **Authentication**: Optional JWT tokens validated by session server
-- **Authorization**: Only hosts can seek or publish state updates. Guests can
-  play/pause the room when shared playback control is negotiated for the room.
+- **Authentication**: JWT authentication is required unless the server is explicitly configured for insecure development mode.
+- **Authorization**: Only hosts can seek, publish `state_update`, close the room or mutate its queue. Guest play/pause is available only when both the guest and current host negotiated `shared_playback_control`.
 - **Transport**: WebSocket (ws://) or secure WebSocket (wss://)
-- **Rate limiting**: the plugin issues at most 30 tokens per user in a fixed
-  one-minute window (`MaxTokensPerMinute`); the session server accepts at most
-  30 messages per connection in a fixed window that restarts once more than
-  one second has passed (`RATE_LIMIT_MESSAGES`, `RATE_LIMIT_WINDOW_MS`)
-- **Message size**: 64KB maximum
+- **Rate limiting**: JWT issuance is limited to 30 requests per user per fixed
+  one-minute window; the insecure no-token response bypasses that limiter. The
+  session server accepts at most 30 messages per connection in a one-second
+  window (`RATE_LIMIT_MESSAGES`, `RATE_LIMIT_WINDOW_MS`).
+- **Message size**: WebSocket messages are limited to 64 KiB.
 
-See [Security Guide](../operations/security.md) for detailed security configuration.
+See [Security Guide]({{ '/operations/security/' | relative_url }}) for detailed security configuration.
 
 ## Operational Limits
 
 ### Resource Constraints
 
-| Resource | Limit | Configurable |
-|----------|-------|--------------|
-| Clients per room | 20 | Server constant `MAX_CLIENTS_PER_ROOM` |
-| Messages per second | 30 | Server constant `RATE_LIMIT_MESSAGES` |
-| Message size | 64 KB | Server constant |
-| Token requests | 30/min per user | Plugin constant |
+| Resource | Bound | Notes |
+|----------|-------|-------|
+| Participants per room | 20 | `MAX_CLIENTS_PER_ROOM` |
+| Queued media items per room | 20 | `MAX_QUEUE_ITEMS`; count bound only, not a byte or process-memory budget |
+| WebSocket message | 64 KiB | `MAX_MESSAGE_SIZE` |
+| Client messages | 30 per one-second window | Per connection; `RATE_LIMIT_MESSAGES` and `RATE_LIMIT_WINDOW_MS` |
+| JWT requests | 30 per user per fixed minute | Plugin token issuance only; insecure no-token responses do not consume this limit |
 
-### Performance Characteristics
-
-| Metric | Typical Value | Notes |
-|--------|---------------|-------|
-| Sync accuracy | ±50ms | Under normal network conditions |
-| Clock sync precision | ±20ms | After EMA smoothing stabilizes |
-| Drift correction range | 0.90x - 1.15x | Playback rate adjustment |
-| State update interval | 1000ms | From host to server |
-| Sync loop interval | 500ms | Client-side drift check |
+The queue item cap bounds item count only; it is not a bound on serialized queue bytes or total process RSS. Message-size and participant limits are separate controls.
 
 ## Edge Cases and Behavior
 
@@ -340,49 +336,44 @@ No eligible participant: close room and notify members
 - Zombie cleanup checks every 30s for connections inactive for more than 60s;
   these are detection intervals, not the host recovery window.
 - An eligible host's 10s grace begins when the server handles its disconnect.
-- Explicit leave transfers immediately; Close room closes for everyone.
+- Explicit leave immediately transfers the host role to an eligible participant, or closes the room if none is eligible; Close room closes for everyone.
 
-### Clock Skew Tolerance
+### Clock Offset and Playback Drift
 
-The system tolerates significant clock differences between clients:
+Client wall clocks can differ substantially. `client_hello` and pre-auth JSON
+ping/pong estimate each client's offset from server time; absolute wall-clock
+skew alone does not determine playback drift. The client keeps the lowest-RTT
+sample among its latest eight and applies EMA smoothing (α=0.4). It pings every
+2 seconds until five valid samples, then every 30 seconds; an offset change
+above 50 ms restarts the fast cadence.
 
-| Skew Level | Behavior |
-|------------|----------|
-| < 100ms | Ideal - no noticeable drift |
-| 100ms - 500ms | Good - corrected by playback rate adjustment |
-| 500ms - 2000ms | Acceptable - noticeable catch-up but functional |
-| > 2000ms | Poor - may trigger hard seek, visible jumps |
+Playback correction uses the room's expected position, not a clock-skew band:
 
-**Clock sync mechanism**:
-- Application ping/pong every 2s initially, then every 30s after five valid
-  clock samples; an offset change greater than 50ms returns to the fast cadence
-- Minimum-RTT selection from the last eight samples, followed by EMA smoothing
-- EMA smoothing (α=0.4) prevents sudden jumps
-- Initial sync uses first measurement directly
-- Offset stored in `serverOffsetMs` state
+| Playback drift | Behavior |
+|----------------|----------|
+| Below 0.04 s | Reset playback rate to 1.0 |
+| 0.04 s to below 2 s | Adjust playback rate, clamped to 0.90–1.15 |
+| 2 s or more | Seek to expected position after the initial-sync cooldown; during that cooldown, only drift above 10 s forces the seek |
+| Buffering or video not ready | Defer playback correction |
 
 ### Buffering and HLS Edge Cases
 
-HLS streaming introduces unique challenges:
-
-| Scenario | Behavior |
-|----------|----------|
-| Segment loading | `isBuffering=true`, sync paused |
-| Seek during buffer | Queued until ready |
-| False pause (HLS artifact) | Filtered by buffering check |
-| Backward position jump | Ignored if < 2s (HLS noise) |
-
-**Protection mechanisms**:
-- `isSyncing` lock (2s) prevents feedback loops
-- `readyState >= 3` required before sending updates
-- Server-side cooldown (2s) after commands
+The client gates host state reports while buffering or while video readiness is
+below `readyState` 3. The server filters unchanged-state position updates when
+they are backward by 0.5–2 seconds or forward by less than 0.5 seconds, and
+applies a 500 ms minimum state-update interval. After a playback command, a
+monotonic 2 second cooldown filters unchanged-state updates; play-state changes
+are accepted unless they conflict with the hold for an accepted guest command.
+These intervals are separate from the client's 8 second join sync cooldown and
+10 second initial-sync drift threshold.
 
 ### Room Capacity and Scaling
 
 **Design limits**:
-- 20 clients per room (comfortable for watch parties)
-- All state in-memory (rooms are ephemeral by design)
-- Single server instance (sufficient for typical use)
+- 20 clients per room
+- 20 queued media items per room
+- All state is in memory; rooms are ephemeral and a server restart removes them
+- This design is a single server process; no distributed room state is described here
 
 **At capacity**:
 ```
@@ -395,20 +386,6 @@ Server checks room.clients.len() >= 20
 Returns error: "Room is full"
 Client shows error message
 ```
-
-**Performance at scale**:
-
-| Rooms | Clients/Room | Total Clients | Expected Behavior |
-|-------|--------------|---------------|-------------------|
-| 10 | 5 | 50 | Excellent |
-| 50 | 10 | 500 | Good |
-| 100 | 15 | 1500 | Acceptable (monitor memory) |
-| 200+ | 20 | 4000+ | May need resource limits |
-
-**Bottlenecks**:
-1. Memory: ~2KB per client, ~5KB per room
-2. CPU: Minimal (message relay, no heavy computation)
-3. Network: Proportional to message rate × clients
 
 ### Reconnection Behavior
 
@@ -431,4 +408,4 @@ When a client disconnects and reconnects:
 - Explicit room leave cancels automatic room rejoin; client cleanup disables
   transport reconnection and cancels pending work
 - Blocked authentication uses a separate retry policy; see
-  [Client connection lifecycle](client.md#connection-and-room-lifecycle)
+  [Client connection lifecycle]({{ '/technical/client/' | relative_url }}#connection-and-room-lifecycle)

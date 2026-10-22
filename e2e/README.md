@@ -16,11 +16,12 @@ export ALLOW_INSECURE_NO_AUTH=false
 just e2e
 ```
 
-When the stack is already running with the current code, iterate without
-rebuilding:
+When the stack is already running with the current code, install the E2E
+package dependencies once and iterate without rebuilding:
 
 ```bash
 cd e2e
+npm ci
 npm test
 ```
 
@@ -74,6 +75,9 @@ real socket close; reconnect is disabled only when testing expiry and re-enabled
 through the client's public connect action afterward. These scenarios do not
 simulate packet loss, every possible departure ordering, or browser timer
 throttling.
+
+These scenarios exercise the checked-out development source. They are not
+results from a deployed or previously published 0.7.0 server.
 
 `waitForSettled` requires listeners bound to the active video as well as the end
 of initial-sync/suppression, so control tests cannot click before events are bound.

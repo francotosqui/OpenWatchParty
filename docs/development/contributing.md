@@ -18,7 +18,7 @@ Thank you for your interest in contributing to OpenWatchParty!
    ```
 3. **Set up development environment**:
    ```bash
-   just setup   # Configure git hooks (required once)
+   just setup   # Install client dependencies and configure Git hooks
    just up
    ```
 4. **Create a branch**:
@@ -38,11 +38,8 @@ Follow the [Rust Style Guide](https://doc.rust-lang.org/1.0.0/style/README.html)
 - Document public functions
 
 ```bash
-# Format code
-cargo fmt
-
-# Run linter
-cargo clippy
+just fmt
+just lint server
 ```
 
 ### C#
@@ -210,81 +207,44 @@ Before implementing:
 - Use clear, simple language
 - Include examples where helpful
 - Update table of contents
+- For links between published documentation pages, use the `relative_url` filter with the page's pretty URL, preserving any heading fragment. Bare `.md` links can resolve in the source checkout but return 404 on the generated site. Keep source-relative links in repository-only README files.
+- Build the site and check rendered links and image paths, not just Markdown source targets. Capture illustrations from the actual supported UI, record the component versions, and exclude credentials.
 
 ## Testing
 
 ### Manual Testing Checklist
 
-Before submitting:
+Before submitting, cover the behavior changed by the contribution:
 - [ ] Create room works
 - [ ] Join room works
 - [ ] Play/pause sync works
 - [ ] Seek sync works
 - [ ] Leave room works
-- [ ] Reconnection works
+- [ ] Reconnection and host recovery/transfer work when affected
 - [ ] Works in Chrome
 - [ ] Works in Firefox
 
 ### Automated Tests
 
 ```bash
-# Rust tests
-cd src/server
-cargo test
-
-# C# tests
-cd src/plugins/jellyfin
-dotnet test OpenWatchParty.Tests/OpenWatchParty.Tests.csproj
+just test server
+just test plugin
+just test client
+just test owpctl
 ```
 
 ## Continuous Integration
 
-All pull requests are validated by GitHub Actions CI. Your PR must pass all checks before merging.
-
-### CI Jobs
-
-| Job | Description | Runs On |
-|-----|-------------|---------|
-| **Rust Tests** | `cargo fmt --check`, `cargo clippy`, `cargo test` | Every push/PR |
-| **.NET Tests** | `dotnet build`, `dotnet test` | Every push/PR |
-| **JavaScript Lint** | `node --check` syntax validation | Every push/PR |
-| **Build Server** | Docker image build | After Rust tests pass |
-
-### Security Scans
-
-| Scan | Description | Frequency |
-|------|-------------|-----------|
-| **Cargo Audit** | Rust dependency vulnerabilities | Every push/PR + weekly |
-| **Trivy** | Docker image CVE scan | Every push/PR + weekly |
-| **CodeQL** | JavaScript static analysis | Every push/PR + weekly |
-
-### Fixing CI Failures
-
-**Rust formatting:**
-```bash
-cd src/server && cargo fmt
-```
-
-**Clippy warnings:**
-```bash
-cd src/server && cargo clippy -- -D warnings
-# Fix the warnings or justify with #[allow(...)]
-```
-
-**Build failures:**
-```bash
-# Check locally before pushing
-just build
-```
-
-### Running CI Checks Locally
+GitHub Actions checks every pull request targeting `main` or `dev`. Run the same project-level checks locally:
 
 ```bash
 just fmt      # Format Rust code
 just lint     # Run linters
 just test     # Run tests
-just build    # Build all components
+just build all # Build plugin and server image
 ```
+
+See [CI/CD]({{ '/development/ci/' | relative_url }}) for workflow coverage, triggers, and security scans.
 
 ## Code of Conduct
 
