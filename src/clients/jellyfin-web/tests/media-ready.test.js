@@ -323,6 +323,45 @@ describe('media-correlated ready state', () => {
     assert.equal(sent.length, 0);
   });
 
+  it('a host that rejoins with its role declares the loaded room media ready', () => {
+    currentMediaId = 'room-media';
+    Object.assign(OWP.state, { rejoinPending: true, desiredRoomId: 'room-a', rejectedRejoinRoomIds: [] });
+    const msg = roomState('room-a', 'room-media');
+    msg.payload.host_id = 'guest';
+
+    OWP._wsHandlers.handleRoomState(msg, currentVideo);
+
+    assert.equal(OWP.state.isHost, true);
+    assert.deepEqual(sent.filter(message => message.type === 'ready'),
+      [{ type: 'ready', payload: { room: 'room-a', media_id: 'room-media' }, room: 'room-a' }]);
+    assert.deepEqual(ensuredMedia, []);
+  });
+
+  it('a guest that rejoins declares ready once, through the guest path', async () => {
+    currentMediaId = 'room-media';
+    Object.assign(OWP.state, { rejoinPending: true, desiredRoomId: 'room-a', rejectedRejoinRoomIds: [] });
+    const msg = roomState('room-a', 'room-media');
+    msg.payload.host_id = 'host';
+
+    OWP._wsHandlers.handleRoomState(msg, currentVideo);
+    await new Promise(resolve => setTimeout(resolve, 30));
+
+    assert.equal(OWP.state.isHost, false);
+    assert.equal(sent.filter(message => message.type === 'ready').length, 1);
+  });
+
+  it('a host does not declare ready on a room state it did not rejoin', () => {
+    currentMediaId = 'room-media';
+    Object.assign(OWP.state, { rejoinPending: false, desiredRoomId: '', rejectedRejoinRoomIds: [] });
+    const msg = roomState('room-a', 'room-media');
+    msg.payload.host_id = 'guest';
+
+    OWP._wsHandlers.handleRoomState(msg, currentVideo);
+
+    assert.equal(OWP.state.isHost, true);
+    assert.equal(sent.some(message => message.type === 'ready'), false);
+  });
+
   it('forces restart after timeout when item id changed without video transition', async () => {
     const previousVideo = currentVideo;
     OWP._wsHandlers.handleRoomState(roomState('room-a', 'new-media'), previousVideo);
