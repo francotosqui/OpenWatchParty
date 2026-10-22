@@ -28,7 +28,8 @@ reject_literal() {
     fi
 }
 
-require_literal "$installation" "ghcr.io/mhbxyz/owp-session-server:v${version}"
+require_literal "$installation" "ghcr.io/mhbxyz/owp-session-server:${version}@sha256:"
+reject_literal "$installation" "ghcr.io/mhbxyz/owp-session-server:v${version}"
 require_literal "$installation" "$release_url"
 require_literal "$installation" "unzip $archive"
 require_literal "$installation" 'OpenWatchPartyPlugin.dll'
