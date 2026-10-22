@@ -33,7 +33,8 @@ use tokio::sync::RwLock;
 use warp::Filter;
 
 const MAX_INPUT: usize = 65_537;
-const BARRIER: &str = "OWP_FUZZ_BARRIER";
+// An unsigned timestamp survives the bounded application-pong response.
+const BARRIER: &str = "18446744073709551615";
 
 async fn check_state(state: &types::SharedState) {
     let locked = state.read().await;
@@ -110,7 +111,7 @@ fn frame(opcode: u8, final_frame: bool, body: &[u8]) -> Vec<u8> {
 }
 
 async fn barrier(socket: &mut TcpStream) -> bool {
-    let ping = format!(r#"{{"type":"ping","ts":0,"payload":"{BARRIER}"}}"#);
+    let ping = format!(r#"{{"type":"ping","ts":0,"payload":{{"client_ts":{BARRIER}}}}}"#);
     if socket
         .write_all(&frame(1, true, ping.as_bytes()))
         .await
@@ -218,7 +219,7 @@ async fn exercise_async(data: &[u8]) {
         .write_all(&frame(
             1,
             true,
-            format!(r#"{{"type":"ping","ts":0,"payload":"{BARRIER}"}}"#).as_bytes(),
+            format!(r#"{{"type":"ping","ts":0,"payload":{{"client_ts":{BARRIER}}}}}"#).as_bytes(),
         ))
         .await;
     let _ = socket.shutdown().await;

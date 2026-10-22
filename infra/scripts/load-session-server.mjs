@@ -66,7 +66,7 @@ export async function run(config) {
     if (measuring) sent++;
   }
   async function connect(index) {
-    const client = { socket: new WebSocket(config.url), room: null, waits: [] };
+    const client = { index, socket: new WebSocket(config.url), room: null, waits: [] };
     sockets.push(client);
     function wait(type) {
       return new Promise((resolve, reject) => {
@@ -85,7 +85,7 @@ export async function run(config) {
       }
       const i = client.waits.findIndex(waiter => waiter.type === message.type);
       if (i >= 0) client.waits.splice(i, 1)[0].resolve(message);
-      const key = message.type === 'chat_message' ? message.payload?.text : message.type === 'pong' ? message.payload?.probe : null;
+      const key = message.type === 'chat_message' ? message.payload?.text : message.type === 'pong' ? `ping-${index}-${message.payload?.client_ts}` : null;
       const probe = pending.get(key);
       if (probe && !probe.clients.has(index)) {
         probe.clients.add(index);
@@ -153,9 +153,12 @@ export async function run(config) {
         // Exercise scheduled play/pause in addition to host state updates.
         if (tick % 10 === 0) send(members[0], 'player_event', { action: tick % 20 === 0 ? 'play' : 'pause', position: tick });
         for (const client of members) {
-          const probe = `ping-${sequence++}`;
+          const client_ts = Date.now();
+          // The server echoes only client_ts. Include the peer in the local
+          // key because different connections can share the same timestamp.
+          const probe = `ping-${client.index}-${client_ts}`;
           pending.set(probe, { start: performance.now(), expected: 1, clients: new Set() });
-          send(client, 'ping', { probe });
+          send(client, 'ping', { client_ts });
           if (tick % 5 === 0) {
             const text = `load-${sequence++}`;
             pending.set(text, { start: performance.now(), expected: members.length, clients: new Set() });

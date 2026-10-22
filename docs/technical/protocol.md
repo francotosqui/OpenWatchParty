@@ -291,7 +291,12 @@ Latency measurement and clock synchronization.
 }
 ```
 
-**Response:** `pong`
+**Response:** `pong`. Pings are available before authentication. Only a
+`client_ts` representable as an unsigned 64-bit integer is echoed; extra payload
+fields and the request's `room` and `client` fields are not reflected. A missing
+or invalid `client_ts` produces a bounded pong without a `payload` field. The web
+client discards that pong as a schema error and logs a warning; normal clock-sync
+pings always include a valid timestamp.
 
 ### `chat_message`
 
@@ -817,7 +822,7 @@ The endpoint is rate limited per authenticated user. Responses:
 | 401 | `{ "error": "Authentication required" }` | Missing or invalid session JWT |
 | 403 | `{ "error": "Only the room host can create invite links" }` | The caller is not the room host |
 | 404 | `{ "error": "Room not found" }` | The room does not exist (or has closed) |
-| 429 | `{ "error": "Rate limit exceeded" }` | Too many ticket requests |
+| 429 | `{ "error": "Rate limit exceeded" }` | Too many ticket requests from this user, or 1024 other users are already within their 60-second windows |
 | 503 | `{ "error": "..." }` | Invite links require a shared JWT secret |
 
 The ticket is an HS256 JWT signed with the session server's shared secret:

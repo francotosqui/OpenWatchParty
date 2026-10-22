@@ -12,14 +12,22 @@ pub(in crate::ws) async fn handle_ping(
     parsed: &IncomingMessage,
     state: &SharedState,
 ) {
+    // Only the numeric timestamp is needed for clock synchronization. Never
+    // reflect arbitrary fields into a response that a slow peer can queue.
+    let payload = parsed
+        .payload
+        .as_ref()
+        .and_then(|payload| payload.get("client_ts"))
+        .and_then(serde_json::Value::as_u64)
+        .map(|client_ts| serde_json::json!({ "client_ts": client_ts }));
     send_to_client(
         client_id,
         state,
         &WsMessage {
             msg_type: ServerMessageType::Pong,
-            room: parsed.room.clone(),
-            client: parsed.client.clone(),
-            payload: parsed.payload.clone(),
+            room: None,
+            client: None,
+            payload,
             ts: now_ms(),
             server_ts: Some(now_ms()),
         },
@@ -280,7 +288,7 @@ mod tests {
             msg_type: crate::types::ClientMessageType::Ping,
             room: Some("room-1".to_string()),
             client: Some("c1".to_string()),
-            payload: Some(serde_json::json!({ "seq": 42 })),
+            payload: Some(serde_json::json!({ "client_ts": 12345 })),
             ts: 12345,
             server_ts: None,
         };
@@ -288,9 +296,9 @@ mod tests {
 
         let msg = test_helpers::recv_msg(&mut rx).unwrap();
         assert_eq!(msg.msg_type, ServerMessageType::Pong);
-        assert_eq!(msg.room, Some("room-1".to_string()));
-        let seq = msg.payload.unwrap().get("seq").unwrap().as_i64().unwrap();
-        assert_eq!(seq, 42);
+        assert_eq!(msg.room, None);
+        assert_eq!(msg.client, None);
+        assert_eq!(msg.payload, Some(serde_json::json!({ "client_ts": 12345 })));
     }
 
     #[tokio::test]

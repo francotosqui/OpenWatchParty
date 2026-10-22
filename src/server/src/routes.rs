@@ -16,7 +16,8 @@ const DEFAULT_MAX_CONNECTIONS_PER_IP: usize = 32;
 const DEFAULT_AUTH_TIMEOUT_SECONDS: u64 = 10;
 const DEFAULT_INVITE_REQUESTS_PER_MINUTE: u32 = 10;
 const INVITE_RATE_WINDOW: Duration = Duration::from_secs(60);
-// Bounded bookkeeping: entries are pruned once this many inviters are tracked.
+// Bounded bookkeeping: once this many inviters are tracked, expired entries are
+// pruned, and a new inviter is refused while every entry is still in its window.
 const MAX_TRACKED_INVITERS: usize = 1024;
 const MAX_INVITE_REQUEST_BYTES: u64 = 1024;
 
@@ -103,14 +104,18 @@ impl ConnectionLimiter {
 
     fn try_acquire(&self, ip: IpAddr) -> Option<ConnectionPermit> {
         let global_permit = self.global.clone().try_acquire_owned().ok()?;
-        let ip_semaphore = self
+        // The per-IP permit is taken under the map lock, so `drop` can't remove
+        // an entry while a connection is getting a permit from it.
+        let mut per_ip = self
             .per_ip
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let ip_semaphore = per_ip
             .entry(ip)
             .or_insert_with(|| Arc::new(Semaphore::new(self.per_ip_limit)))
             .clone();
         let ip_permit = ip_semaphore.clone().try_acquire_owned().ok()?;
+        drop(per_ip);
 
         Some(ConnectionPermit {
             global_permit: Some(global_permit),
@@ -139,8 +144,11 @@ impl Drop for ConnectionPermit {
             .per_ip
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // Permits are only taken under this lock, so an entry with all its
+        // permits back gets no new one before it is removed. Other references
+        // to the semaphore don't matter; an entry that was already replaced
+        // stays.
         if self.ip_semaphore.available_permits() == self.limiter.per_ip_limit
-            && Arc::strong_count(&self.ip_semaphore) == 2
             && per_ip
                 .get(&self.ip)
                 .is_some_and(|current| Arc::ptr_eq(current, &self.ip_semaphore))
@@ -225,20 +233,28 @@ impl InviteRateLimiter {
     }
 
     fn allow(&self, key: &str) -> bool {
-        let now = Instant::now();
+        self.allow_at(key, Instant::now())
+    }
+
+    fn allow_at(&self, key: &str, now: Instant) -> bool {
         let mut clients = self
             .clients
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if clients.len() >= MAX_TRACKED_INVITERS && !clients.contains_key(key) {
             let window = self.window;
-            clients.retain(|_, entry| now.duration_since(entry.started) < window);
+            clients.retain(|_, entry| now.saturating_duration_since(entry.started) < window);
+            if clients.len() >= MAX_TRACKED_INVITERS {
+                return false;
+            }
         }
         let entry = clients.entry(key.to_string()).or_insert(InviteWindow {
             started: now,
             count: 0,
         });
-        if now.duration_since(entry.started) >= self.window {
+        // A request that waited for the lock can carry an instant from before
+        // the entry's current window began.
+        if now.saturating_duration_since(entry.started) >= self.window {
             entry.started = now;
             entry.count = 0;
         }
@@ -733,6 +749,77 @@ mod tests {
         drop(second);
     }
 
+    fn tracked_ips(limiter: &ConnectionLimiter) -> usize {
+        limiter.per_ip.lock().unwrap().len()
+    }
+
+    #[test]
+    fn the_last_connection_of_an_ip_removes_its_entry_while_its_semaphore_is_referenced() {
+        let limiter = ConnectionLimiter::new(4, 2);
+        let ip = IpAddr::from([192, 0, 2, 1]);
+        let permit = limiter.try_acquire(ip).unwrap();
+        // A rejected acquisition used to hold a reference like this one after
+        // releasing the map lock, which kept the entry after the last close.
+        let lingering = limiter.per_ip.lock().unwrap()[&ip].clone();
+
+        drop(permit);
+        assert_eq!(tracked_ips(&limiter), 0);
+        drop(lingering);
+    }
+
+    #[test]
+    fn an_ip_keeps_its_entry_and_its_limit_while_a_connection_is_open() {
+        let limiter = ConnectionLimiter::new(8, 2);
+        let ip = IpAddr::from([192, 0, 2, 1]);
+        let first = limiter.try_acquire(ip).unwrap();
+        let second = limiter.try_acquire(ip).unwrap();
+
+        drop(first);
+        let third = limiter.try_acquire(ip).unwrap();
+        assert!(limiter.try_acquire(ip).is_none());
+        drop(second);
+        drop(third);
+        assert_eq!(tracked_ips(&limiter), 0);
+    }
+
+    #[test]
+    fn concurrent_connections_from_one_ip_keep_its_limit_and_leave_no_entry() {
+        use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+        const THREADS: usize = 8;
+        const LIMIT: usize = 2;
+        let limiter = ConnectionLimiter::new(THREADS, LIMIT);
+        let ip = IpAddr::from([192, 0, 2, 1]);
+        let open = AtomicUsize::new(0);
+        let peak = AtomicUsize::new(0);
+        let start = std::sync::Barrier::new(THREADS);
+        std::thread::scope(|scope| {
+            for _ in 0..THREADS {
+                scope.spawn(|| {
+                    start.wait();
+                    for _ in 0..20_000 {
+                        let Some(permit) = limiter.try_acquire(ip) else {
+                            continue;
+                        };
+                        peak.fetch_max(open.fetch_add(1, SeqCst) + 1, SeqCst);
+                        // While a connection is open, its IP's entry is the
+                        // semaphore its permit came from: never removed and
+                        // replaced by a fresh one with a full limit.
+                        assert!(limiter
+                            .per_ip
+                            .lock()
+                            .unwrap()
+                            .get(&ip)
+                            .is_some_and(|current| Arc::ptr_eq(current, &permit.ip_semaphore)));
+                        open.fetch_sub(1, SeqCst);
+                        drop(permit);
+                    }
+                });
+            }
+        });
+        assert!(peak.load(SeqCst) <= LIMIT);
+        assert_eq!(tracked_ips(&limiter), 0);
+    }
+
     #[test]
     fn forwarded_for_requires_a_trusted_proxy() {
         let trusted = vec!["10.0.0.0/8".parse().unwrap()];
@@ -864,6 +951,140 @@ mod tests {
             .unwrap();
         tokio::task::yield_now().await;
         assert!(state.read().await.clients.is_empty());
+    }
+
+    #[tokio::test]
+    async fn application_pongs_are_bounded_before_and_after_authentication() {
+        for authenticated in [false, true] {
+            let state = crate::test_helpers::create_state();
+            let config = test_jwt_config(true);
+            let tasks = crate::tasks::AppTasks::new();
+            let route = build_ws_route_with_tasks(
+                state.clone(),
+                config.clone(),
+                Arc::new(vec!["https://example.com".to_string()]),
+                test_ingress_config(Duration::from_secs(5)),
+                tasks.clone(),
+            );
+            let mut client = warp::test::ws()
+                .path("/ws")
+                .header("origin", "https://example.com")
+                .handshake(route)
+                .await
+                .unwrap();
+            client.recv().await.unwrap(); // client_hello
+            if authenticated {
+                authenticate(
+                    &mut client,
+                    &token_with_expiration(&config, crate::utils::now_ms() / 1000 + 60),
+                )
+                .await;
+            }
+            for field in ["payload", "room", "client", "client_ts"] {
+                let mut ping = serde_json::json!({
+                    "type": "ping", "payload": { "client_ts": 1678900000000_u64 }, "ts": 0
+                });
+                let padding = serde_json::Value::String("x".repeat(60 * 1024));
+                match field {
+                    "payload" => ping["payload"]["extra"] = padding,
+                    "client_ts" => ping["payload"]["client_ts"] = padding,
+                    _ => ping[field] = padding,
+                }
+                let encoded = serde_json::to_string(&ping).unwrap();
+                assert!(encoded.len() < crate::ws::constants::MAX_MESSAGE_SIZE);
+                client.send_text(encoded).await;
+                let response = client.recv().await.unwrap();
+                assert!(
+                    response.as_bytes().len() <= 256,
+                    "pong reflected {field}: {} bytes (authenticated={authenticated})",
+                    response.as_bytes().len()
+                );
+                let pong: serde_json::Value =
+                    serde_json::from_str(response.to_str().unwrap()).unwrap();
+                assert_eq!(pong["type"], "pong");
+                assert!(pong.get("room").is_none());
+                assert!(pong.get("client").is_none());
+                assert!(pong["ts"].as_u64().is_some());
+                assert!(pong["server_ts"].as_u64().is_some());
+                if field == "client_ts" {
+                    assert!(pong.get("payload").is_none());
+                } else {
+                    assert_eq!(
+                        pong.get("payload"),
+                        Some(&serde_json::json!({ "client_ts": 1678900000000_u64 }))
+                    );
+                }
+                assert_eq!(
+                    state
+                        .read()
+                        .await
+                        .clients
+                        .values()
+                        .next()
+                        .unwrap()
+                        .authenticated,
+                    authenticated
+                );
+            }
+            for client_ts in [0, u64::MAX] {
+                client
+                    .send_text(
+                        serde_json::json!({ "type": "ping", "payload": { "client_ts": client_ts }, "ts": 0 })
+                            .to_string(),
+                    )
+                    .await;
+                let response = client.recv().await.unwrap();
+                assert!(response.as_bytes().len() <= 256);
+                let pong: serde_json::Value =
+                    serde_json::from_str(response.to_str().unwrap()).unwrap();
+                assert_eq!(pong["type"], "pong");
+                assert_eq!(
+                    pong.get("payload"),
+                    Some(&serde_json::json!({ "client_ts": client_ts }))
+                );
+                assert!(pong.get("room").is_none());
+                assert!(pong.get("client").is_none());
+            }
+            // The first integer above u64::MAX must not be echoed as a float.
+            // These pongs omit payload; the web client discards them.
+            client
+                .send_text(r#"{"type":"ping","payload":{"client_ts":18446744073709551616},"ts":0}"#)
+                .await;
+            let response = client.recv().await.unwrap();
+            assert!(response.as_bytes().len() <= 256);
+            let pong: serde_json::Value = serde_json::from_str(response.to_str().unwrap()).unwrap();
+            assert_eq!(pong["type"], "pong");
+            assert!(pong.get("payload").is_none());
+            // Malformed or absent timestamps must not introduce another
+            // reflection path; timestamp-less pings still get bounded pongs.
+            for payload in [
+                serde_json::Value::Null,
+                serde_json::json!({}),
+                serde_json::json!({ "client_ts": -1 }),
+                serde_json::json!({ "client_ts": 1.5 }),
+                serde_json::json!({ "client_ts": "1678900000000" }),
+                serde_json::json!({ "client_ts": { "nested": "value" } }),
+                serde_json::json!({ "client_ts": [1, 2, 3] }),
+                serde_json::json!({ "client_ts": true }),
+            ] {
+                client
+                    .send_text(
+                        serde_json::json!({ "type": "ping", "payload": payload, "ts": 0 })
+                            .to_string(),
+                    )
+                    .await;
+                let response = client.recv().await.unwrap();
+                assert!(response.as_bytes().len() <= 256);
+                let pong: serde_json::Value =
+                    serde_json::from_str(response.to_str().unwrap()).unwrap();
+                assert_eq!(pong["type"], "pong");
+                assert!(pong.get("payload").is_none());
+                assert!(pong.get("room").is_none());
+                assert!(pong.get("client").is_none());
+            }
+            tasks.cancel();
+            tasks.wait().await;
+        }
     }
 
     #[tokio::test]
@@ -1211,6 +1432,55 @@ mod tests {
                 .reply(&route)
                 .await;
         assert_eq!(other_client.status(), 200);
+    }
+
+    fn full_invite_limiter(now: Instant) -> InviteRateLimiter {
+        let limiter = InviteRateLimiter::new(10, Duration::from_secs(60));
+        for index in 0..MAX_TRACKED_INVITERS {
+            assert!(limiter.allow_at(&format!("user-{index}"), now));
+        }
+        limiter
+    }
+
+    fn tracked_inviters(limiter: &InviteRateLimiter) -> usize {
+        limiter.clients.lock().unwrap().len()
+    }
+
+    #[test]
+    fn a_full_invite_limiter_refuses_new_inviters_and_keeps_the_tracked_ones() {
+        let start = Instant::now();
+        let limiter = full_invite_limiter(start);
+        let later = start + Duration::from_secs(30);
+
+        assert!(!limiter.allow_at("newcomer", later));
+        assert_eq!(tracked_inviters(&limiter), MAX_TRACKED_INVITERS);
+        assert!(limiter.allow_at("user-0", later));
+        assert!(limiter.allow_at(&format!("user-{}", MAX_TRACKED_INVITERS - 1), later));
+        assert_eq!(tracked_inviters(&limiter), MAX_TRACKED_INVITERS);
+
+        // Their windows end a minute after they started, as `allow` counts them.
+        assert!(limiter.allow_at("newcomer", start + Duration::from_secs(60)));
+        assert_eq!(tracked_inviters(&limiter), 1);
+    }
+
+    #[test]
+    fn a_full_invite_limiter_makes_room_from_expired_inviters() {
+        let start = Instant::now();
+        let limiter = full_invite_limiter(start);
+        let half_window = Duration::from_secs(30);
+        // Half of them ask again later, so their windows start over.
+        for index in 0..MAX_TRACKED_INVITERS / 2 {
+            assert!(limiter.allow_at(&format!("user-{index}"), start + Duration::from_secs(60)));
+        }
+
+        let expired = start + Duration::from_secs(60) + half_window;
+        assert!(limiter.allow_at("newcomer", expired));
+        assert_eq!(tracked_inviters(&limiter), MAX_TRACKED_INVITERS / 2 + 1);
+        assert!(limiter.allow_at("another", expired));
+
+        // A request stamped before the window it lands in counts inside it.
+        assert!(limiter.allow_at("user-0", start + half_window));
+        assert_eq!(limiter.clients.lock().unwrap()["user-0"].count, 2);
     }
 
     #[tokio::test]

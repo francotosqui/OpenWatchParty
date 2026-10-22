@@ -12,6 +12,7 @@ This page summarizes the compatibility encoded by the repository's canonical ver
 
 | OpenWatchParty | Jellyfin packages | Jellyfin target ABI | Jellyfin image | File Transformation | Status |
 |----------------|-------------------|---------------------|-----------------|---------------------|--------|
+| `0.7.0` | `12.0.0` | `12.0.0.0` | `12.1` | `3.0.1.0` | Supported |
 | `0.6.0` | `12.0.0` | `12.0.0.0` | `12.1` | `3.0.1.0` | Supported |
 | `0.5.0` | `12.0.0` | `12.0.0.0` | `12.1` | `3.0.1.0` | Supported |
 | `0.4.0` | `12.0.0` | `12.0.0.0` | `12.1` | `3.0.1.0` | Supported |

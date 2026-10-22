@@ -315,6 +315,56 @@ mod tests {
         assert!(message.payload.as_ref().unwrap()["message"].is_string());
     }
 
+    #[tokio::test(start_paused = true)]
+    async fn queued_unauthenticated_pongs_have_a_small_byte_footprint() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("", "", false);
+        state
+            .write()
+            .await
+            .clients
+            .insert("peer".to_string(), client);
+        let config = Arc::new(JwtConfig {
+            secret: String::new(),
+            audience: "test".to_string(),
+            issuer: "test".to_string(),
+            enabled: true,
+        });
+        let tasks = crate::tasks::AppTasks::new();
+        let ping = serde_json::json!({
+            "type": "ping", "payload": { "client_ts": 1678900000000_u64,
+                "padding": "x".repeat(60 * 1024) }, "ts": 0
+        })
+        .to_string();
+        assert!(ping.len() < MAX_MESSAGE_SIZE);
+        // No receiver drains the queue. Pace below 30/s, within the default
+        // ten-second authentication window, without a real network or RSS test.
+        for _ in 0..100 {
+            tokio::time::advance(Duration::from_millis(35)).await;
+            assert!(
+                !client_msg(
+                    "peer",
+                    warp::ws::Message::text(ping.clone()),
+                    &state,
+                    &config,
+                    &tasks,
+                )
+                .await
+            );
+        }
+        let mut count = 0;
+        let mut bytes = 0;
+        while let Ok(message) = rx.try_recv() {
+            let message = message.unwrap();
+            let pong: serde_json::Value = serde_json::from_str(message.to_str().unwrap()).unwrap();
+            assert_eq!(pong["type"], "pong");
+            bytes += message.as_bytes().len();
+            count += 1;
+        }
+        assert_eq!(count, 100);
+        assert!(bytes <= 25_600, "queued pongs retained {bytes} bytes");
+    }
+
     #[test]
     fn error_message_has_stable_serialized_payload() {
         let message = error_message(
