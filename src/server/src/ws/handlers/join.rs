@@ -791,6 +791,7 @@ mod tests {
             let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
             {
                 let mut locked = state.write().await;
+                let guest_user = locked.clients["guest"].user_id.clone();
                 locked
                     .clients
                     .get_mut("guest")
@@ -800,6 +801,12 @@ mod tests {
                 for i in 0..kept {
                     room.chat_history.push_back(crate::types::ChatEntry {
                         client: "host".to_string(),
+                        // The second one is the guest's own, from an earlier connection.
+                        user_id: if i == 1 {
+                            guest_user.clone()
+                        } else {
+                            "u1".to_string()
+                        },
                         username: "Franco".to_string(),
                         text: format!("hi {i}"),
                         server_ts: 1_700_000_000_000 + i,
@@ -821,8 +828,8 @@ mod tests {
                 assert_eq!(
                     history.payload.as_ref().unwrap()["messages"],
                     serde_json::json!([
-                        { "client": "host", "username": "Franco", "text": "hi 0", "server_ts": 1_700_000_000_000_u64 },
-                        { "client": "host", "username": "Franco", "text": "hi 1", "server_ts": 1_700_000_000_001_u64 }
+                        { "client": "host", "username": "Franco", "text": "hi 0", "server_ts": 1_700_000_000_000_u64, "own": false },
+                        { "client": "host", "username": "Franco", "text": "hi 1", "server_ts": 1_700_000_000_001_u64, "own": true }
                     ])
                 );
                 // After the room state: the joiner knows the room first.

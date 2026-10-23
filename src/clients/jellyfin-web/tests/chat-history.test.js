@@ -13,7 +13,7 @@ require('../ws/handlers/room.js');
 
 const h = OWP._wsHandlers;
 const validate = message => OWP.wsValidation.validateMessage(message);
-const entry = (client, username, text, serverTs = 1_700_000_000_000) => ({ client, username, text, server_ts: serverTs });
+const entry = (client, username, text, serverTs = 1_700_000_000_000, own = false) => ({ client, username, text, server_ts: serverTs, own });
 const history = (messages, room = 'room-1') => ({
   type: 'chat_history',
   room,
@@ -36,6 +36,7 @@ describe('chat history', () => {
     assert.equal(validate(history([entry('c1', '', 'hola')])).valid, true);
     for (const messages of [
       [{ ...entry('c1', 'Franco', 'hola'), extra: 1 }],
+      [{ ...entry('c1', 'Franco', 'hola'), own: 'yes' }],
       [entry('c1', 'Franco', '')],
       [entry('c1', 'Franco', 'x'.repeat(501))],
       [entry('', 'Franco', 'hola')],
@@ -52,16 +53,20 @@ describe('chat history', () => {
   });
 
   it('shows the room\'s earlier messages, in order, none of them unread', () => {
+    OWP.chat.unreadCount = 3;
     h.handleChatHistory(history([
       entry('c1', 'Franco', 'empezamos?', 1),
-      entry('c2', 'Ana', 'dale', 2),
-      entry('client-9', 'Anita', 'ya estoy', 3)
+      entry('c2', 'Ana', 'dale', 2, true),
+      entry('client-9', 'Ana', 'ya estoy', 3),
+      entry('c3', 'Ana', 'otra Ana', 4)
     ]));
     assert.deepEqual(OWP.chat.messages.map(message => [message.username, message.text, message.timestamp, message.isOwn]), [
       ['Franco', 'empezamos?', 1, false],
-      // This member's own, from an earlier connection (by name) or this one.
+      // This member's own: marked by the server (an earlier connection), or this connection's.
       ['Ana', 'dale', 2, true],
-      ['Anita', 'ya estoy', 3, true]
+      ['Ana', 'ya estoy', 3, true],
+      // The same name is not enough.
+      ['Ana', 'otra Ana', 4, false]
     ]);
     assert.equal(OWP.chat.unreadCount, 0);
   });
@@ -97,7 +102,6 @@ describe('chat history', () => {
   });
 
   it('names an unnamed sender like a live message does', () => {
-    OWP.state.userName = '';
     h.handleChatHistory(history([entry('c1', '', 'hola')]));
     assert.equal(OWP.chat.messages[0].username, 'Anonymous');
     assert.equal(OWP.chat.messages[0].isOwn, false);

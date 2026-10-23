@@ -73,9 +73,12 @@ pub struct Room {
 }
 
 /// A chat message kept in the room's history.
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChatEntry {
     pub client: String,
+    /// The sender's user (JWT subject), never sent: it tells a joiner which
+    /// messages are its own from an earlier connection.
+    pub user_id: String,
     pub username: String,
     pub text: String,
     pub server_ts: u64,

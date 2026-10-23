@@ -68,17 +68,18 @@
 
   // The room's last messages, which a server with chat_history sends once on
   // joining. They replace what the chat shows (a rejoin after a lost
-  // connection gets them again), and none counts as unread. This member's own
-  // ones go by its name: its client id changes with each connection.
+  // connection gets them again), and none counts as unread. The server marks
+  // this member's own ones (its client id changes with each connection).
   const loadHistory = (entries) => {
-    const ownName = OWP.state.userName;
     chat.messages = entries.slice(-MAX_MESSAGES).map(entry => ({
       clientId: entry.client,
       username: entry.username || 'Anonymous',
       text: entry.text,
       timestamp: entry.server_ts,
-      isOwn: entry.client === OWP.state.clientId || (Boolean(ownName) && entry.username === ownName)
+      isOwn: entry.own || entry.client === OWP.state.clientId
     }));
+    chat.unreadCount = 0;
+    chat.updateBadge();
     renderAllMessages();
   };
 

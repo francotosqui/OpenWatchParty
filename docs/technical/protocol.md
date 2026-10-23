@@ -748,7 +748,7 @@ The room's last chat messages (up to 50, oldest first), sent once to a member th
   "room": "uuid-room-id",
   "payload": {
     "messages": [
-      { "client": "uuid-client-id", "username": "Franco", "text": "Starting in a minute", "server_ts": 1678899990000 }
+      { "client": "uuid-client-id", "username": "Franco", "text": "Starting in a minute", "server_ts": 1678899990000, "own": false }
     ]
   },
   "ts": 1678900000000,
@@ -762,6 +762,7 @@ The room's last chat messages (up to 50, oldest first), sent once to a member th
 | `username` | string | The sender's name, as in `chat_message` |
 | `text` | string | The message |
 | `server_ts` | number | When the server relayed it |
+| `own` | boolean | Whether the joiner's user sent it, from this or an earlier connection (the server compares Jellyfin user ids without sending them) |
 
 ### `error`
 

@@ -19,9 +19,10 @@ fn validate_chat(text: &str) -> Result<(), &'static str> {
 type BroadcastData = (Vec<ClientSender>, WsMessage);
 
 /// Keeps the message for members who join later, the oldest going first.
-fn remember(room: &mut Room, message: &WsMessage, username: &str, text: &str) {
+fn remember(room: &mut Room, message: &WsMessage, user_id: &str, username: &str, text: &str) {
     room.chat_history.push_back(ChatEntry {
         client: message.client.clone().unwrap_or_default(),
+        user_id: user_id.to_string(),
         username: username.to_string(),
         text: text.to_string(),
         server_ts: message.server_ts.unwrap_or_else(now_ms),
@@ -47,11 +48,25 @@ pub(in crate::ws) fn send_chat_history(
     if room.chat_history.is_empty() {
         return;
     }
+    // `own`: sent by this member's user, from this or an earlier connection.
+    let messages: Vec<_> = room
+        .chat_history
+        .iter()
+        .map(|entry| {
+            serde_json::json!({
+                "client": entry.client,
+                "username": entry.username,
+                "text": entry.text,
+                "server_ts": entry.server_ts,
+                "own": !entry.user_id.is_empty() && entry.user_id == client.user_id,
+            })
+        })
+        .collect();
     let message = WsMessage {
         msg_type: ServerMessageType::ChatHistory,
         room: Some(room.room_id.clone()),
         client: None,
-        payload: Some(serde_json::json!({ "messages": room.chat_history })),
+        payload: Some(serde_json::json!({ "messages": messages })),
         ts: now_ms(),
         server_ts: Some(now_ms()),
     };
@@ -143,6 +158,11 @@ pub(in crate::ws) async fn handle_chat_message(
                     .get(client_id)
                     .map(|c| c.user_name.clone())
                     .unwrap_or_else(|| "Anonymous".to_string());
+                let user_id = locked
+                    .clients
+                    .get(client_id)
+                    .map(|c| c.user_id.clone())
+                    .unwrap_or_default();
                 let delivery = collect_chat_senders(
                     room_id,
                     client_id,
@@ -154,7 +174,7 @@ pub(in crate::ws) async fn handle_chat_message(
                 .expect("room membership checked");
                 crate::messaging::send_to_senders(&delivery.0, &delivery.1, "chat message");
                 let room = locked.rooms.get_mut(room_id).expect("room checked");
-                remember(room, &delivery.1, &username, chat_text);
+                remember(room, &delivery.1, &user_id, &username, chat_text);
                 Ok(())
             } else {
                 Err((
@@ -235,6 +255,7 @@ mod tests {
         let last = history.back().unwrap();
         assert_eq!(last.text, format!("message {}", CHAT_HISTORY_LIMIT + 1));
         assert_eq!(last.username, "Franco");
+        assert_eq!(last.user_id, "u1");
         assert_eq!(last.client, "host");
         assert!(last.server_ts > 0);
     }

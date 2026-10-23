@@ -176,7 +176,8 @@
     const { messages } = message.payload;
     if (!Array.isArray(messages) || messages.length > MAX_CHAT_HISTORY) return 'messages is invalid';
     for (const entry of messages) {
-      if (!object(entry) || !onlyKeys(entry, ['client', 'username', 'text', 'server_ts'])) return 'chat history entry is invalid';
+      if (!object(entry) || !onlyKeys(entry, ['client', 'username', 'text', 'server_ts', 'own'])) return 'chat history entry is invalid';
+      if (typeof entry.own !== 'boolean') return 'chat history entry is invalid';
       if (!string(entry.client, MAX_ID_LENGTH) || !string(entry.username, MAX_NAME_LENGTH, true)) return 'chat history entry is invalid';
       if (!string(entry.text, MAX_CHAT_LENGTH) || !timestamp(entry.server_ts)) return 'chat history entry is invalid';
     }
