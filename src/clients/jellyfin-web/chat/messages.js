@@ -66,6 +66,22 @@
     renderMessage(message);
   };
 
+  // The room's last messages, which a server with chat_history sends once on
+  // joining. They replace what the chat shows (a rejoin after a lost
+  // connection gets them again), and none counts as unread. This member's own
+  // ones go by its name: its client id changes with each connection.
+  const loadHistory = (entries) => {
+    const ownName = OWP.state.userName;
+    chat.messages = entries.slice(-MAX_MESSAGES).map(entry => ({
+      clientId: entry.client,
+      username: entry.username || 'Anonymous',
+      text: entry.text,
+      timestamp: entry.server_ts,
+      isOwn: entry.client === OWP.state.clientId || (Boolean(ownName) && entry.username === ownName)
+    }));
+    renderAllMessages();
+  };
+
   const clear = () => {
     chat.messages = [];
     chat.unreadCount = 0;
@@ -74,5 +90,5 @@
     if (container) container.replaceChildren();
   };
 
-  Object.assign(chat, { renderMessage, renderAllMessages, receive, clear });
+  Object.assign(chat, { renderMessage, renderAllMessages, receive, loadHistory, clear });
 })();
