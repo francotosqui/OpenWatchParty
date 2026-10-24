@@ -12,7 +12,9 @@
   const insertEmoji = (char, stem, input) => {
     const before = input.value.slice(0, input.selectionStart);
     const after  = input.value.slice(input.selectionStart);
-    const replaced = before.slice(0, before.lastIndexOf(':' + stem)) + char;
+    const target = ':' + stem;
+    const index = before.toLowerCase().lastIndexOf(target.toLowerCase());
+    const replaced = (index !== -1 ? before.slice(0, index) : before) + char;
     input.value = replaced + after;
     const pos = replaced.length;
     input.setSelectionRange(pos, pos);
@@ -114,7 +116,7 @@
         const code = fullMatch[1].toLowerCase();
         const found = OWP.emoji.EMOJI.find(e => e.s === code);
         if (found) {
-          insertEmoji(found.c, code + ':', input);
+          insertEmoji(found.c, fullMatch[1] + ':', input);
           hideSuggestions();
           return;
         }
@@ -237,11 +239,13 @@
     }
   };
 
-  document.addEventListener('click', (e) => {
-    if (!pickerEl || !document.body.contains(pickerEl)) return;
-    const emojiBtn = document.getElementById('owp-emoji-btn');
-    if (!pickerEl.contains(e.target) && e.target !== emojiBtn) closePicker();
-  });
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('click', (e) => {
+      if (!pickerEl || !document.body?.contains?.(pickerEl)) return;
+      const emojiBtn = document.getElementById('owp-emoji-btn');
+      if (!pickerEl.contains(e.target) && e.target !== emojiBtn) closePicker();
+    });
+  }
 
-  Object.assign(OWP.emoji, { setupAutocomplete, togglePicker, handleKeydown, closePicker, hideSuggestions });
+  Object.assign(OWP.emoji, { setupAutocomplete, togglePicker, handleKeydown, closePicker, hideSuggestions, insertEmoji });
 })();
