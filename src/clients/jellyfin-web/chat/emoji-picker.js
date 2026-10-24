@@ -158,7 +158,7 @@
         const pos = pickerInput.selectionStart;
         const value = pickerInput.value;
         pickerInput.value = value.slice(0, pos) + c + value.slice(pos);
-        const newPos = pos + [...c].length;
+        const newPos = pos + c.length;
         pickerInput.setSelectionRange(newPos, newPos);
         pickerInput.focus();
         closePicker();
