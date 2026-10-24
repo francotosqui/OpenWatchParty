@@ -326,6 +326,69 @@
     }
     #owp-chat-send:hover { background: #185fa5; color: #e6f1fb; }
     .owp-chat-badge { display: none; padding: 0 ${px(5)}; border-radius: ${px(8)}; background: #791f1f; color: #f09595; font-size: ${px(11)}; line-height: 1.45; }
+    /* Emoji button */
+    #owp-emoji-btn {
+      flex-shrink: 0; height: ${px(24)}; padding: 0 ${px(6)};
+      border: none; border-radius: ${px(6)}; background: transparent;
+      color: #ecebe6; cursor: pointer; font-size: ${px(15)}; line-height: 1;
+    }
+    #owp-emoji-btn:hover { background: rgba(255,255,255,0.08); }
+    #owp-emoji-btn[aria-expanded="true"] { background: #0c447c; }
+    /* Autocomplete dropdown */
+    #owp-emoji-autocomplete {
+      position: fixed; z-index: 21000;
+      background: rgba(38, 38, 36, 0.98);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+      padding: 4px 0; min-width: 170px; box-sizing: border-box; overflow: hidden;
+    }
+    .owp-emoji-suggestion {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 12px; cursor: pointer; transition: background 0.1s;
+    }
+    .owp-emoji-suggestion:hover,
+    .owp-emoji-suggestion.active {
+      background: #0c447c;
+      color: #ffffff;
+    }
+    .owp-emoji-suggestion-char { font-size: 18px; line-height: 1; }
+    .owp-emoji-suggestion-code { font-size: 12px; color: #9a9993; }
+    .owp-emoji-suggestion:hover .owp-emoji-suggestion-code,
+    .owp-emoji-suggestion.active .owp-emoji-suggestion-code {
+      color: #85b7eb;
+    }
+    /* Emoji picker panel */
+    #owp-emoji-panel {
+      position: fixed; z-index: 21000;
+      background: rgba(38, 38, 36, 0.98);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 10px; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+      width: 250px; box-sizing: border-box;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .owp-emoji-cats {
+      display: flex; gap: 2px; padding: 4px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1); flex-shrink: 0;
+    }
+    .owp-emoji-cat-btn {
+      flex: 1; border: none; background: transparent; cursor: pointer;
+      padding: 4px 2px; border-radius: 4px; font-size: 15px; line-height: 1;
+    }
+    .owp-emoji-cat-btn:hover { background: rgba(255, 255, 255, 0.1); }
+    .owp-emoji-cat-btn.active { background: #0c447c; }
+    .owp-emoji-grid {
+      display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px;
+      padding: 4px; overflow-y: auto; overflow-x: hidden; max-height: 180px; box-sizing: border-box;
+    }
+    .owp-emoji-item {
+      height: 32px;
+      display: flex; align-items: center; justify-content: center;
+      border: none; background: transparent; cursor: pointer;
+      border-radius: 4px; font-size: 18px; line-height: 1;
+    }
+    .owp-emoji-item:hover { background: rgba(255, 255, 255, 0.15); }
     /* Toast styles */
     /* Bottom right, so chat toasts do not cover the room bar at the top */
     .owp-toast-container {
