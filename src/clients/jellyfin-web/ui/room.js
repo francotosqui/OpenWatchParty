@@ -151,6 +151,7 @@
   // Escape closes the open drop-down and puts focus back on its button.
   const closeRoomSectionFromKeyboard = (event) => {
     if (event.key !== 'Escape') return false;
+    if (OWP.emoji?.handleKeydown?.(event)) return true;
     const open = ROOM_SECTIONS.find(section => section.name === state.roomBarSection);
     if (!open) return false;
     event.preventDefault();
@@ -302,8 +303,8 @@
     chatInput.addEventListener('keydown', (e) => {
       // The input stops key events from bubbling (so the player ignores
       // typing), so the drop-down's Escape handler is called from here.
-      if (closeRoomSectionFromKeyboard(e)) return;
       if (OWP.emoji?.handleKeydown?.(e)) return;
+      if (closeRoomSectionFromKeyboard(e)) return;
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         if (OWP.chat && OWP.chat.send(chatInput.value)) {

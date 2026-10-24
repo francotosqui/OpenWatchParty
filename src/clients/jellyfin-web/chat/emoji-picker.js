@@ -79,6 +79,21 @@
   };
 
   const handleKeydown = (e) => {
+    if (e.key === 'Escape') {
+      if (suggestionBox) {
+        e.preventDefault();
+        hideSuggestions();
+        return true;
+      }
+      if (pickerEl && document.body?.contains?.(pickerEl)) {
+        e.preventDefault();
+        closePicker();
+        if (pickerInput) pickerInput.focus();
+        return true;
+      }
+      return false;
+    }
+
     if (!suggestionBox) return false;
     const items = Array.from(suggestionBox.querySelectorAll('.owp-emoji-suggestion'));
     if (!items.length) return false;
@@ -98,11 +113,6 @@
     if ((e.key === 'Enter' || e.key === 'Tab') && activeIndex >= 0 && items[activeIndex]) {
       e.preventDefault();
       items[activeIndex].dispatchEvent(new MouseEvent('mousedown'));
-      return true;
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      hideSuggestions();
       return true;
     }
     return false;
@@ -244,6 +254,13 @@
       if (!pickerEl || !document.body?.contains?.(pickerEl)) return;
       const emojiBtn = document.getElementById('owp-emoji-btn');
       if (!pickerEl.contains(e.target) && e.target !== emojiBtn) closePicker();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && pickerEl && document.body?.contains?.(pickerEl)) {
+        e.preventDefault();
+        closePicker();
+        if (pickerInput) pickerInput.focus();
+      }
     });
   }
 
