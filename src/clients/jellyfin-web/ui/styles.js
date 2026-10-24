@@ -336,6 +336,7 @@
     #owp-emoji-btn[aria-expanded="true"] { background: #0c447c; }
     /* Autocomplete dropdown */
     #owp-emoji-autocomplete {
+      --owp-scale: ${APPEARANCE.textSize.default / APPEARANCE.baseTextSize};
       position: fixed; z-index: 21000;
       background: rgba(38, 38, 36, 0.98);
       backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
@@ -360,6 +361,7 @@
     }
     /* Emoji picker panel */
     #owp-emoji-panel {
+      --owp-scale: ${APPEARANCE.textSize.default / APPEARANCE.baseTextSize};
       position: fixed; z-index: 21000;
       background: rgba(38, 38, 36, 0.98);
       backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
@@ -480,7 +482,7 @@
       style.id = APPEARANCE_STYLE_ID;
       document.head.appendChild(style);
     }
-    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system, :root .owp-queue-next {`
+    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system, :root .owp-queue-next, :root #owp-emoji-panel, :root #owp-emoji-autocomplete {`
       + ` --owp-scale: ${textSize / APPEARANCE.baseTextSize}; --owp-surface-alpha: ${opacity / 100}; }`;
   };
 
