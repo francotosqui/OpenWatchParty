@@ -45,9 +45,13 @@
     const items = results.map(({ s, c }) => {
       const row = document.createElement('div');
       row.className = 'owp-emoji-suggestion';
-      row.innerHTML =
-        `<span class="owp-emoji-suggestion-char">${c}</span>` +
-        `<span class="owp-emoji-suggestion-code">:${s}:</span>`;
+      const charSpan = document.createElement('span');
+      charSpan.className = 'owp-emoji-suggestion-char';
+      charSpan.textContent = c;
+      const codeSpan = document.createElement('span');
+      codeSpan.className = 'owp-emoji-suggestion-code';
+      codeSpan.textContent = `:${s}:`;
+      row.append(charSpan, codeSpan);
       row.addEventListener('mousedown', (e) => {
         e.preventDefault();
         insertEmoji(c, stem, input);
