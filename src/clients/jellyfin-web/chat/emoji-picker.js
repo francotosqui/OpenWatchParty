@@ -87,8 +87,9 @@
       }
       if (pickerEl && document.body?.contains?.(pickerEl)) {
         e.preventDefault();
-        closePicker();
-        if (pickerInput) pickerInput.focus();
+        const fromInput = document.activeElement === pickerInput;
+        closePicker(!fromInput);
+        if (fromInput && pickerInput) pickerInput.focus();
         return true;
       }
       return false;
@@ -187,6 +188,15 @@
     });
   };
 
+  const isPickerOpen = () => Boolean(pickerEl && document.body?.contains?.(pickerEl));
+  const focusPicker = () => {
+    if (!isPickerOpen()) return;
+    const target = pickerEl.querySelector('.owp-emoji-cat-btn.active')
+      || pickerEl.querySelector('.owp-emoji-cat-btn')
+      || pickerEl.querySelector('.owp-emoji-item');
+    target?.focus();
+  };
+
   const buildPicker = () => {
     const panel = document.createElement('div');
     panel.id = 'owp-emoji-panel';
@@ -208,6 +218,80 @@
     grid.className = 'owp-emoji-grid';
 
     panel.append(tabs, grid);
+
+    const stopPropagation = (e) => e.stopPropagation();
+    panel.addEventListener('keyup', stopPropagation);
+    panel.addEventListener('keypress', stopPropagation);
+
+    panel.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closePicker(true);
+        return;
+      }
+
+      const focusable = Array.from(panel.querySelectorAll('button'));
+      if (e.key === 'Tab' && focusable.length) {
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const emojiBtn = document.getElementById('owp-emoji-btn');
+
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          (emojiBtn || last).focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+        return;
+      }
+
+      const active = document.activeElement;
+      if (active?.classList?.contains('owp-emoji-item')) {
+        const items = Array.from(panel.querySelectorAll('.owp-emoji-item'));
+        const idx = items.indexOf(active);
+        if (idx !== -1) {
+          let nextIdx = -1;
+          if (e.key === 'ArrowRight') nextIdx = Math.min(idx + 1, items.length - 1);
+          else if (e.key === 'ArrowLeft') nextIdx = Math.max(idx - 1, 0);
+          else if (e.key === 'ArrowDown') nextIdx = Math.min(idx + 6, items.length - 1);
+          else if (e.key === 'ArrowUp') {
+            if (idx >= 6) nextIdx = idx - 6;
+            else {
+              e.preventDefault();
+              focusPicker();
+              return;
+            }
+          } else if (e.key === 'Home') nextIdx = 0;
+          else if (e.key === 'End') nextIdx = items.length - 1;
+
+          if (nextIdx !== -1) {
+            e.preventDefault();
+            items[nextIdx].focus();
+            return;
+          }
+        }
+      }
+
+      if (active?.classList?.contains('owp-emoji-cat-btn')) {
+        const cats = Array.from(panel.querySelectorAll('.owp-emoji-cat-btn'));
+        const idx = cats.indexOf(active);
+        if (idx !== -1) {
+          if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+            e.preventDefault();
+            const step = e.key === 'ArrowRight' ? 1 : cats.length - 1;
+            const next = cats[(idx + step) % cats.length];
+            next.focus();
+            showTab(next.dataset.cat);
+          } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            panel.querySelector('.owp-emoji-item')?.focus();
+          }
+        }
+      }
+    });
+
     return panel;
   };
 
@@ -223,11 +307,12 @@
     pickerEl.style.bottom = 'auto';
   };
 
-  const closePicker = () => {
+  const closePicker = (returnFocus = false) => {
     if (!pickerEl) return;
     pickerEl.remove();
     const btn = document.getElementById('owp-emoji-btn');
     if (btn) btn.setAttribute('aria-expanded', 'false');
+    if (returnFocus && btn) btn.focus();
   };
 
   const openPicker = (emojiBtn, input) => {
@@ -237,13 +322,14 @@
     positionPicker(emojiBtn);
     showTab(activeTab);
     emojiBtn.setAttribute('aria-expanded', 'true');
+    focusPicker();
   };
 
   const togglePicker = (input) => {
     const emojiBtn = document.getElementById('owp-emoji-btn');
     if (!emojiBtn) return;
     if (document.body.contains(pickerEl)) {
-      closePicker();
+      closePicker(true);
     } else {
       openPicker(emojiBtn, input);
     }
@@ -251,18 +337,22 @@
 
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     document.addEventListener('click', (e) => {
-      if (!pickerEl || !document.body?.contains?.(pickerEl)) return;
+      if (!isPickerOpen()) return;
       const emojiBtn = document.getElementById('owp-emoji-btn');
       if (!pickerEl.contains(e.target) && e.target !== emojiBtn) closePicker();
     });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && pickerEl && document.body?.contains?.(pickerEl)) {
+      if (e.key === 'Tab' && !e.shiftKey && document.activeElement?.id === 'owp-emoji-btn' && isPickerOpen()) {
         e.preventDefault();
-        closePicker();
-        if (pickerInput) pickerInput.focus();
+        focusPicker();
+        return;
+      }
+      if (e.key === 'Escape' && isPickerOpen()) {
+        e.preventDefault();
+        closePicker(true);
       }
     });
   }
 
-  Object.assign(OWP.emoji, { setupAutocomplete, togglePicker, handleKeydown, closePicker, hideSuggestions, insertEmoji });
+  Object.assign(OWP.emoji, { setupAutocomplete, togglePicker, handleKeydown, closePicker, hideSuggestions, insertEmoji, isPickerOpen, focusPicker });
 })();
