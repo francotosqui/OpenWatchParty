@@ -4,10 +4,10 @@ import { unified } from '@astrojs/markdown-remark';
 import { fontHead, sidebar } from './src/config/navigation.mjs';
 import remarkSiteLinks from './src/lib/remark-site-links.mjs';
 
-const base = process.env.SITE_BASE ?? '/OpenWatchParty';
+const base = process.env.SITE_BASE ?? '/';
 
 export default defineConfig({
-  site: process.env.SITE_URL ?? 'https://mhbxyz.github.io',
+  site: process.env.SITE_URL ?? 'https://openwatchparty.com',
   base,
   output: 'static',
   trailingSlash: 'always',

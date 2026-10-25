@@ -33,7 +33,7 @@ reject_literal "$installation" "ghcr.io/mhbxyz/owp-session-server:v${version}"
 require_literal "$installation" "$release_url"
 require_literal "$installation" "unzip $archive"
 require_literal "$installation" 'OpenWatchPartyPlugin.dll'
-require_literal "$installation" 'https://mhbxyz.github.io/OpenWatchParty/jellyfin-plugin-repo/manifest.json'
+require_literal "$installation" 'https://openwatchparty.com/jellyfin-plugin-repo/manifest.json'
 require_literal "$installation" '-f infra/docker/server.Dockerfile'
 require_literal "$installation" '-t owp-session-server ./src/server'
 require_literal "$deployment" "$release_url"

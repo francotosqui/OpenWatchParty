@@ -3,7 +3,7 @@ import { resolve, join } from 'node:path';
 import { load } from 'cheerio';
 
 const output = resolve('dist');
-const base = (process.env.SITE_BASE ?? '/OpenWatchParty').replace(/\/$/, '');
+const base = (process.env.SITE_BASE ?? '/').replace(/\/$/, '');
 const failures = new Set();
 const pages = new Map();
 

@@ -43,7 +43,8 @@ jobs:
       - name: Build Astro site and verify links
         run: npm run build
         env:
-          SITE_BASE: ${{ steps.pages.outputs.base_path }}
+          SITE_BASE: /
+          SITE_URL: https://openwatchparty.com
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

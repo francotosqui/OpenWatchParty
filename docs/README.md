@@ -12,7 +12,7 @@ npm ci
 npm run dev
 ```
 
-Open the address printed by Astro with the `/OpenWatchParty/` base path, normally `http://127.0.0.1:4321/OpenWatchParty/`.
+Open the address printed by Astro, normally `http://127.0.0.1:4321/`.
 
 ```sh
 npm run check     # Astro and TypeScript diagnostics
@@ -20,7 +20,7 @@ npm run build     # Diagnostics, static build, search index and link verificatio
 npm run preview   # Serve the production build locally
 ```
 
-`SITE_BASE` selects the deployment path; its default is `/OpenWatchParty`. Set it to `/` for a root-domain deployment. `SITE_URL` controls the canonical site origin and defaults to `https://mhbxyz.github.io`. The deployment workflow passes GitHub Pages' configured base path.
+`SITE_BASE` selects the deployment path and defaults to `/`. `SITE_URL` controls the canonical site origin and defaults to `https://openwatchparty.com`. The deployment workflow sets both explicitly for the custom domain.
 
 ## Source organization
 
@@ -57,4 +57,4 @@ This replaces the paired recordings under `public/assets/video/`. Screenshot pro
 
 `.github/workflows/docs.yml` installs locked npm dependencies, runs the complete site build and uploads `docs/dist/` to GitHub Pages. The same build runs on pull requests in the main CI workflow. Site dependencies have their own npm audit and Dependabot updates.
 
-The public plugin repository remains available at `/OpenWatchParty/jellyfin-plugin-repo/manifest.json`; the release workflow updates its source at `public/jellyfin-plugin-repo/manifest.json`.
+The public plugin repository is available at `/jellyfin-plugin-repo/manifest.json`; the release workflow updates its source at `public/jellyfin-plugin-repo/manifest.json`.

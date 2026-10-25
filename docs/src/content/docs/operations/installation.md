@@ -49,7 +49,7 @@ This uses the current user's configuration and Docker access. For a system-wide 
 2. Add:
 
 ```text
-https://mhbxyz.github.io/OpenWatchParty/jellyfin-plugin-repo/manifest.json
+https://openwatchparty.com/jellyfin-plugin-repo/manifest.json
 ```
 
 3. Open **Catalog**, install **OpenWatchParty**, and restart Jellyfin.
@@ -178,7 +178,7 @@ Install directly from Jellyfin's plugin interface:
 1. Go to **Dashboard** > **Plugins** > **Repositories**
 2. Click **Add** and enter:
    ```
-   https://mhbxyz.github.io/OpenWatchParty/jellyfin-plugin-repo/manifest.json
+   https://openwatchparty.com/jellyfin-plugin-repo/manifest.json
    ```
 3. Go to **Catalog** tab
 4. Find **OpenWatchParty** and click **Install**
