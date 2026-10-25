@@ -123,6 +123,7 @@
 
   h.handleRoomState = (msg, video) => {
     if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) return;
+    const rejoined = state.rejoinPending && msg.room === state.desiredRoomId;
     if (!state.rejoinPending && state.rejectedRejoinRoomIds.includes(msg.room)) return;
     state.hostControlAcks = [];
     // The room moved from its item to another queue item: everyone, the host
@@ -159,6 +160,11 @@
     }
     state.pendingMediaId = '';
     state.pendingMediaUntil = 0;
+    // The server takes a member coming back as not ready. A host that kept its
+    // role still has the room media loaded: it says so, or each play waits.
+    if (rejoined && state.isHost && msg.payload?.media_id && OWP.playback?.watchReady) {
+      OWP.playback.watchReady({ roomId: msg.room, mediaId: msg.payload.media_id });
+    }
     scheduleRoomSync(msg, video, acceptedAsGuest);
   };
 
