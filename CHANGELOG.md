@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.8.0] - 2026-10-25
+
+This release targets Jellyfin 12.0 and 12.1 with target ABI
+`12.0.0.0`. The WebSocket protocol remains version 1. Rust builds retain the
+1.88 minimum supported toolchain. Plugin automatic updates remain disabled by
+default pending the project's official publication and upgrade-path checks.
+
+### Added
+
+- A chat emoji picker and `:shortcode:` autocomplete, with keyboard
+  navigation, focus trapping, ARIA combobox semantics and descriptive
+  accessible names.
+- Synchronized session starts: a play can wait for every participant's media
+  to be ready, count down before starting and explain the wait in the chat,
+  with the server starting the play once the room is ready.
+- The queue panel stays in sight while an up-next countdown runs, hides with
+  the player controls and closes on an outside press.
+
+### Changed
+
+- Migrated the documentation and promotional site to Astro and Starlight at
+  [openwatchparty.com](https://openwatchparty.com), with an animated product
+  homepage, refreshed guides and click-to-enlarge screenshots.
+
+### Fixed
+
+- Playback synchronization: align a pause to its position, send the last seek
+  of a quick burst, tell the host's own confirmation apart from a new
+  command, project the room position from its state timestamp, reopen the
+  room media only when it does not show up, and ignore a `room_state` that
+  arrives after leaving the room.
+- Session resilience: keep the session when a token renewal fails for a
+  moment, treat an unmapped 4xx token response as a refusal, defer a room
+  join until the connection authenticates, and report a rejoining host's
+  media as ready.
+- Chat: close the emoji picker and autocomplete on escape without closing the
+  chat, replace shortcodes case-insensitively, position the cursor with
+  UTF-16 code unit lengths, scale with dynamic text sizes, and register the
+  autocomplete outside-click listener once.
+
+Thanks to @francotosqui for the synchronized start feature and the playback
+and token-renewal fixes, and to @iammanish17 for the emoji picker, the
+shortcode autocomplete and their accessibility work.
+
 ## [0.7.0] - 2026-10-22
 
 This release targets Jellyfin 12.0 and 12.1 with target ABI

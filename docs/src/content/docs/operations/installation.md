@@ -25,7 +25,7 @@ This uses the current user's configuration and Docker access. For a system-wide 
 
 ### Version Selection
 
-- **OpenWatchParty `0.7.0`** targets Jellyfin ABI `12.0.0.0`
+- **OpenWatchParty `0.8.0`** targets Jellyfin ABI `12.0.0.0`
 - **Jellyfin 10.11 line**: use the compatible `0.3.4` plugin release; do not install the Jellyfin 12 plugin on that line
 - **Validated environment**: Jellyfin packages `12.0.0` and image `12.1`
 - **Session protocol**: version `1`; it is independent of the plugin ABI
@@ -70,7 +70,7 @@ docker run -d \
   -p 127.0.0.1:3000:3000 \
   -e ALLOWED_ORIGINS="https://jellyfin.example.com" \
   -e JWT_SECRET="$JWT_SECRET" \
-  ghcr.io/mhbxyz/owp-session-server:0.7.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
+  ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
 ```
 
 Keep the generated value temporarily. It must be entered in the plugin configuration in the next step.
@@ -130,10 +130,10 @@ docker run -d \
   -p 127.0.0.1:3000:3000 \
   -e ALLOWED_ORIGINS="https://jellyfin.example.com" \
   -e JWT_SECRET="$JWT_SECRET" \
-  ghcr.io/mhbxyz/owp-session-server:0.7.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
+  ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
 ```
 
-Avoid floating `latest` or preview tags in production. When using a repository checkout, inspect the rendered Compose image: the immutable `v0.7.0` source tag still pins the `0.6.0` image, so update it to the published `0.7.0` image and digest before deploying. The current main Compose file contains the pin above.
+Avoid floating `latest` or preview tags in production. When using a repository checkout, inspect the rendered Compose image: an immutable release source tag can still pin the previous release's image, because the digest is only known after the release image is built. Verify the pinned digest against the published release build before deploying, as described in [the release process](/development/release/).
 
 #### Option B: Build from Source (Docker)
 
@@ -194,7 +194,7 @@ This method provides automatic update notifications when new versions are releas
    Download the canonical plugin archive from the [releases page](https://github.com/mhbxyz/OpenWatchParty/releases):
 
    ```bash
-   curl -fLO https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.7.0/OpenWatchParty-v0.7.0.zip
+   curl -fLO https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.8.0/OpenWatchParty-v0.8.0.zip
    ```
 
    The archive contains the canonical `OpenWatchPartyPlugin.dll` assembly, its dependencies, and `meta.json`.
@@ -205,11 +205,11 @@ This method provides automatic update notifications when new versions are releas
 
    ```bash
    # Linux (Docker)
-   unzip OpenWatchParty-v0.7.0.zip -d /tmp/owp
+   unzip OpenWatchParty-v0.8.0.zip -d /tmp/owp
    docker cp /tmp/owp/. jellyfin:/config/plugins/OpenWatchParty/
 
    # Linux (native)
-   sudo unzip OpenWatchParty-v0.7.0.zip -d /var/lib/jellyfin/plugins/OpenWatchParty/
+   sudo unzip OpenWatchParty-v0.8.0.zip -d /var/lib/jellyfin/plugins/OpenWatchParty/
 
    # Windows
    # Extract to: C:\ProgramData\Jellyfin\Server\plugins\OpenWatchParty\
@@ -275,7 +275,7 @@ curl http://localhost:3000/health
 | `ALLOW_INSECURE_NO_AUTH` | `false` | Explicit development-only override; never enable in production |
 | `LOG_LEVEL` | `info` | Logging level |
 
-The 0.7.0 release includes SHA-256 checksums, Sigstore signature bundles, build attestations and SBOMs for downloadable plugin and CLI artifacts. For the session-server container, use a version and digest pin rather than a floating tag. See [Plugin Updates](/operations/plugin-updates/) for upgrade checks.
+Releases include SHA-256 checksums, Sigstore signature bundles, build attestations and SBOMs for downloadable plugin and CLI artifacts. For the session-server container, use a version and digest pin rather than a floating tag. See [Plugin Updates](/operations/plugin-updates/) for upgrade checks.
 
 ### Example
 
@@ -287,7 +287,7 @@ docker run -d \
   -e ALLOWED_ORIGINS="https://jellyfin.example.com" \
   -e JWT_SECRET="$JWT_SECRET" \
   -e LOG_LEVEL="debug" \
-  ghcr.io/mhbxyz/owp-session-server:0.7.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
+  ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
 ```
 
 ## Firewall Configuration

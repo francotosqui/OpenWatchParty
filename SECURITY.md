@@ -4,6 +4,7 @@
 
 | Version | Supported |
 | --- | --- |
+| 0.8.x (Jellyfin 12) | Yes |
 | 0.7.x (Jellyfin 12) | Yes |
 | 0.4.x (Jellyfin 12) | Yes |
 | 0.3.4 (Jellyfin 10.11) | Yes |
