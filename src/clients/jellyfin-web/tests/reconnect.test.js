@@ -443,6 +443,44 @@ describe('room reconnection lifecycle', () => {
     assert.equal(OWP.state.roomId, '');
   });
 
+  it('sends a join made while reconnecting once the connection authenticates', async () => {
+    await OWP.actions.connect();
+    const first = sockets[0];
+    first.open();
+    first.receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
+    first.serverClose();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    const second = sockets[1];
+
+    OWP.actions.joinRoom('room-a');
+    assert.deepEqual(first.sent.filter(message => message.type === 'join_room'), []);
+    second.open();
+    assert.deepEqual(second.sent.filter(message => message.type === 'join_room'), []);
+    second.receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
+
+    const joins = second.sent.filter(message => message.type === 'join_room');
+    assert.equal(joins.length, 1);
+    assert.equal(joins[0].room, 'room-a');
+    second.receive(roomState('room-a'));
+    assert.equal(OWP.state.inRoom, true);
+    assert.equal(OWP.state.roomId, 'room-a');
+  });
+
+  it('keeps an invite join made without a connection for the next authentication', async () => {
+    await OWP.actions.connect();
+    const first = sockets[0];
+    first.open();
+    first.receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
+    first.serverClose();
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    OWP.actions.joinRoom('room-a', false, 'ticket-a');
+
+    assert.equal(OWP.state.pendingInviteTicket, 'ticket-a');
+    assert.deepEqual(first.sent.filter(message => message.type === 'join_room'), []);
+    assert.deepEqual(sockets[1].sent.filter(message => message.type === 'join_room'), []);
+  });
+
   it('cancels a scheduled reconnect during intentional disconnect', async () => {
     await OWP.actions.connect();
     const socket = sockets[0];
