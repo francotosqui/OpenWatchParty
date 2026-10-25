@@ -169,6 +169,7 @@
       btn.className = 'owp-emoji-item';
       btn.type = 'button';
       btn.title = `:${s}:`;
+      btn.setAttribute('aria-label', `:${s}:`);
       btn.textContent = c;
       btn.addEventListener('click', () => {
         if (!pickerInput) return;
@@ -184,7 +185,9 @@
     });
 
     pickerEl.querySelectorAll('.owp-emoji-cat-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.cat === key);
+      const active = btn.dataset.cat === key;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
     });
   };
 
@@ -200,13 +203,19 @@
   const buildPicker = () => {
     const panel = document.createElement('div');
     panel.id = 'owp-emoji-panel';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'false');
+    panel.setAttribute('aria-label', OWP.i18n.t('emoji'));
 
     const tabs = document.createElement('div');
     tabs.className = 'owp-emoji-cats';
+    tabs.setAttribute('role', 'tablist');
     CATEGORIES.forEach(({ key, icon }) => {
       const btn = document.createElement('button');
       btn.className = 'owp-emoji-cat-btn';
       btn.type = 'button';
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('aria-selected', key === activeTab ? 'true' : 'false');
       btn.title = key;
       btn.textContent = icon;
       btn.dataset.cat = key;

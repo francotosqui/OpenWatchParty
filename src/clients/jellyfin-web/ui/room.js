@@ -277,7 +277,11 @@
     const emojiBtn = createElement('button');
     emojiBtn.id = 'owp-emoji-btn';
     emojiBtn.type = 'button';
+    emojiBtn.title = t('emoji');
+    emojiBtn.setAttribute('aria-label', t('emoji'));
     emojiBtn.setAttribute('aria-expanded', 'false');
+    emojiBtn.setAttribute('aria-haspopup', 'dialog');
+    emojiBtn.setAttribute('aria-controls', 'owp-emoji-panel');
     emojiBtn.textContent = '😊';
     emojiBtn.onclick = () => OWP.emoji?.togglePicker(input);
     inputContainer.append(input, emojiBtn, send);
