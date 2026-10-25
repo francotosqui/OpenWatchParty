@@ -191,13 +191,12 @@ apply_sed 'docs/src/content/docs/operations/installation.md' 'installation produ
     'OpenWatchParty `[0-9]+\.[0-9]+\.[0-9]+`' \
     's/OpenWatchParty `[0-9]+\.[0-9]+\.[0-9]+`/OpenWatchParty `'"$new_version"'`/'
 
-apply_sed 'docs/src/content/docs/operations/installation.md' 'installation version-prefixed image tag' \
-    'owp-session-server:v[0-9]+\.[0-9]+\.[0-9]+' \
-    's/(owp-session-server:)v[0-9]+\.[0-9]+\.[0-9]+/\1v'"$new_version"'/'
-
-apply_sed 'docs/src/content/docs/operations/installation.md' 'installation pinned image tag' \
-    'owp-session-server:[0-9]+\.[0-9]+\.[0-9]+' \
-    's/(owp-session-server:)[0-9]+\.[0-9]+\.[0-9]+/\1'"$new_version"'/'
+# The digest stays untouched here: the release digest only exists after the
+# publish workflow builds the image, and the pin is refreshed afterwards as
+# described in the release process documentation.
+apply_sed 'docs/src/content/docs/operations/installation.md' 'installation digest-pinned image version' \
+    'owp-session-server:[0-9]+\.[0-9]+\.[0-9]+@sha256:' \
+    's/(owp-session-server:)[0-9]+\.[0-9]+\.[0-9]+(@sha256:)/\1'"$new_version"'\2/'
 
 apply_sed 'docs/src/content/docs/operations/installation.md' 'installation release download tag' \
     'releases/download/v[0-9]+\.[0-9]+\.[0-9]+' \
@@ -214,6 +213,10 @@ apply_sed 'docs/src/content/docs/operations/deployment.md' 'deployment release d
 apply_sed 'docs/src/content/docs/operations/deployment.md' 'deployment plugin archive name' \
     'OpenWatchParty-v[0-9]+\.[0-9]+\.[0-9]+' \
     's/(OpenWatchParty-v)[0-9]+\.[0-9]+\.[0-9]+/\1'"$new_version"'/'
+
+apply_sed 'docs/src/content/docs/operations/deployment.md' 'deployment digest-pinned image version' \
+    'owp-session-server:[0-9]+\.[0-9]+\.[0-9]+@sha256:' \
+    's/(owp-session-server:)[0-9]+\.[0-9]+\.[0-9]+(@sha256:)/\1'"$new_version"'\2/'
 
 apply_sed 'docs/src/content/docs/development/ci.md' 'ci version-prefixed image tag' \
     'owp-session-server:v[0-9]+\.[0-9]+\.[0-9]+' \

@@ -48,7 +48,7 @@ services:
       - internal
 
   session-server:
-    image: ghcr.io/mhbxyz/owp-session-server:0.7.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
+    image: ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
     container_name: owp-session
     environment:
       - ALLOWED_ORIGINS=https://jellyfin.example.com
@@ -448,8 +448,8 @@ Before pulling, update the session-server image to the intended fixed release an
 
 ```bash
 # Download the canonical plugin package
-archive=/tmp/OpenWatchParty-v0.7.0.zip
-release=https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.7.0/OpenWatchParty-v0.7.0.zip
+archive=/tmp/OpenWatchParty-v0.8.0.zip
+release=https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.8.0/OpenWatchParty-v0.8.0.zip
 curl -fL "$release" -o "$archive"
 curl -fL "$release.sha256" -o "$archive.sha256"
 (cd /tmp && sha256sum -c "$(basename "$archive").sha256")

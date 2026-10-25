@@ -67,9 +67,10 @@ assert_literal 'src/owpctl/Cargo.toml' "version = \"$new_version\""
 assert_literal 'README.md' "OpenWatchParty-$new_version-"
 assert_literal 'README.md' "alt=\"OpenWatchParty $new_version\""
 assert_literal 'docs/src/content/docs/operations/installation.md' "OpenWatchParty \`$new_version\`"
-assert_literal 'docs/src/content/docs/operations/installation.md' "ghcr.io/mhbxyz/owp-session-server:v$new_version"
+assert_literal 'docs/src/content/docs/operations/installation.md' "ghcr.io/mhbxyz/owp-session-server:$new_version@sha256:"
 assert_literal 'docs/src/content/docs/operations/installation.md' "OpenWatchParty-v$new_version.zip"
 assert_literal 'docs/src/content/docs/operations/deployment.md' "OpenWatchParty-v$new_version.zip"
+assert_literal 'docs/src/content/docs/operations/deployment.md' "ghcr.io/mhbxyz/owp-session-server:$new_version@sha256:"
 assert_literal 'docs/src/content/docs/development/ci.md' "owp-session-server:v$new_version"
 
 grep -A1 '^name = "session-server"' "$copy/src/server/Cargo.lock" \
