@@ -78,6 +78,7 @@ Defines global shared state and configuration constants.
 | `DEFAULT_WS_URL` | string | `ws(s)://host:3000/ws` | WebSocket server URL |
 | `SUPPRESS_MS` | number | `2000` | Event suppression duration (ms) |
 | `SEEK_THRESHOLD` | number | `1.0` | Difference threshold for seek (seconds) |
+| `PAUSED_SEEK_THRESHOLD` | number | `0.04` | Difference threshold for aligning a pause (seconds) |
 | `STATE_UPDATE_MS` | number | `1000` | State update send interval (ms) |
 | `SYNC_LEAD_MS` | number | `300` | Sync advance to compensate latency (ms) |
 | `DRIFT_DEADZONE_SEC` | number | `0.04` | Dead zone for no correction (seconds) |

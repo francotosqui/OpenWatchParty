@@ -5,7 +5,7 @@
   const utils = OWP.utils;
   const ui = OWP.ui;
   const t = OWP.i18n.t;
-  const { SEEK_THRESHOLD, VIDEO_ACTION_RETRY_MS, VIDEO_ACTION_MAX_WAIT_MS } = OWP.constants;
+  const { SEEK_THRESHOLD, PAUSED_SEEK_THRESHOLD, VIDEO_ACTION_RETRY_MS, VIDEO_ACTION_MAX_WAIT_MS } = OWP.constants;
 
   // Where a command puts the video: its position, projected while playing.
   const commandTarget = (position, projectPlaying, eventServerTs) => {
@@ -14,19 +14,19 @@
       : 0;
     return position + elapsed;
   };
-  const movesVideo = (video, target) => Math.abs(target - video.currentTime) > SEEK_THRESHOLD;
+  const movesVideo = (video, target, threshold = SEEK_THRESHOLD) => Math.abs(target - video.currentTime) > threshold;
 
   // Moves the video to the target when it is far enough, and keeps the target
   // as the room position.
-  const seekToTarget = (video, target, seekVideo = true) => {
-    if (seekVideo && movesVideo(video, target)) video.currentTime = target;
+  const seekToTarget = (video, target, seekVideo = true, threshold = SEEK_THRESHOLD) => {
+    if (seekVideo && movesVideo(video, target, threshold)) video.currentTime = target;
     state.lastSyncPosition = target;
     state.lastSyncServerTs = utils.getServerNow();
   };
 
-  const applyPosition = (video, position, projectPlaying = false, eventServerTs = null, seekVideo = true) => {
+  const applyPosition = (video, position, projectPlaying = false, eventServerTs = null, seekVideo = true, threshold = SEEK_THRESHOLD) => {
     if (typeof position !== 'number' || !Number.isFinite(position)) return;
-    seekToTarget(video, commandTarget(position, projectPlaying, eventServerTs), seekVideo);
+    seekToTarget(video, commandTarget(position, projectPlaying, eventServerTs), seekVideo, threshold);
   };
 
   const resolveVideo = (fallbackVideo) => {
@@ -66,7 +66,7 @@
         break;
       case 'pause':
         state.roomWaiting = false;
-        applyPosition(video, position, false, null, applyToVideo);
+        applyPosition(video, position, false, null, applyToVideo, PAUSED_SEEK_THRESHOLD);
         state.lastSyncPlayState = 'paused';
         state.syncCooldownUntil = 0;
         state.syncStatus = 'synced';
@@ -112,6 +112,7 @@
     }
     const changed = playing === video.paused;
     const position = msg.payload.position;
+    const threshold = playing ? SEEK_THRESHOLD : PAUSED_SEEK_THRESHOLD;
     // One target for both the decision and the seek: a playing projection
     // moves on between two reads.
     const target = typeof position === 'number' && Number.isFinite(position)
@@ -120,8 +121,8 @@
     state.hostAppliedPlayState = playing ? 'playing' : 'paused';
     // Only a command that moves the video holds back the events it causes:
     // one that changes nothing would just drop the host's next action.
-    if (changed || (target !== null && movesVideo(video, target))) utils.startSyncing();
-    if (target !== null) seekToTarget(video, target);
+    if (changed || (target !== null && movesVideo(video, target, threshold))) utils.startSyncing();
+    if (target !== null) seekToTarget(video, target, true, threshold);
     state.wantsToPlay = playing;
     if (changed && playing) OWP.playback.safePlay(video, 'guest play command');
     else if (changed) video.pause();
