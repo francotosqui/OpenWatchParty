@@ -129,6 +129,10 @@
     });
     // Read only when it is on screen: a redraw while the panel is hidden must
     // not mark messages that nobody saw.
+    if (open !== 'chat') {
+      OWP.emoji?.closePicker?.();
+      OWP.emoji?.hideSuggestions?.();
+    }
     if (open === 'sync') updateSyncSection();
     if (open === 'chat' && OWP.chat && OWP.chat.isChatVisible()) {
       OWP.chat.markRead();
@@ -147,6 +151,7 @@
   // Escape closes the open drop-down and puts focus back on its button.
   const closeRoomSectionFromKeyboard = (event) => {
     if (event.key !== 'Escape') return false;
+    if (OWP.emoji?.handleKeydown?.(event)) return true;
     const open = ROOM_SECTIONS.find(section => section.name === state.roomBarSection);
     if (!open) return false;
     event.preventDefault();
@@ -365,7 +370,17 @@
     send.title = t('sendMessage');
     send.setAttribute('aria-label', t('sendMessage'));
     send.appendChild(createIcon('send'));
-    inputContainer.append(input, send);
+    const emojiBtn = createElement('button');
+    emojiBtn.id = 'owp-emoji-btn';
+    emojiBtn.type = 'button';
+    emojiBtn.title = t('emojiPicker');
+    emojiBtn.setAttribute('aria-label', t('emojiPicker'));
+    emojiBtn.setAttribute('aria-expanded', 'false');
+    emojiBtn.setAttribute('aria-haspopup', 'dialog');
+    emojiBtn.setAttribute('aria-controls', 'owp-emoji-panel');
+    emojiBtn.textContent = '😊';
+    emojiBtn.onclick = () => OWP.emoji?.togglePicker(input);
+    inputContainer.append(input, emojiBtn, send);
     chatSection.append(messages, inputContainer);
 
     const confirm = createElement('div', 'owp-leave-confirm');
@@ -388,6 +403,7 @@
     chatInput.addEventListener('keydown', (e) => {
       // The input stops key events from bubbling (so the player ignores
       // typing), so the drop-down's Escape handler is called from here.
+      if (OWP.emoji?.handleKeydown?.(e)) return;
       if (closeRoomSectionFromKeyboard(e)) return;
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -406,6 +422,7 @@
       if (OWP.chat.isChatVisible()) OWP.chat.markRead();
       else OWP.chat.updateBadge();
     }
+    if (OWP.emoji?.setupAutocomplete) OWP.emoji.setupAutocomplete(chatInput);
   };
 
   Object.assign(views, { renderRoom, setupChatInput, toggleRoomSection, applyRoomSection });

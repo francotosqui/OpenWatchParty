@@ -224,6 +224,7 @@ The chat feature allows you to communicate with other watch party participants i
 - **Unread badge** - A red badge on the chat icon counts messages that arrived while the chat was closed
 - **SERVER lines** - OpenWatchParty's own notes about [starting together](#starting-together), with a tag and in italics; only "Started without…" counts as unread
 - **Message limit** - Messages are limited to 500 characters
+- **Emoji picker** - Choose from categorized emojis or type shortcodes like `:smile:` with autocomplete suggestions
 
 ### Notes
 - Chat history is not saved; late joiners won't see previous messages
