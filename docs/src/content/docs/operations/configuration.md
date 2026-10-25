@@ -65,7 +65,7 @@ In `hs256` mode, configure the same strong secret in the plugin and session serv
 ```yaml
 services:
   session-server:
-    image: ghcr.io/mhbxyz/owp-session-server:0.7.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
+    image: ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:e0634bf2fafd59bcb612c0ec93cb7e54190eb5b00c8c37ee0680b9e92ee29f68
     ports:
       - "127.0.0.1:3000:3000"
     environment:
@@ -195,7 +195,7 @@ After upgrading, an empty plugin secret requires a prepared and paired asymmetri
 # docker-compose.yml
 services:
   session-server:
-    image: ghcr.io/mhbxyz/owp-session-server:0.7.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
+    image: ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:e0634bf2fafd59bcb612c0ec93cb7e54190eb5b00c8c37ee0680b9e92ee29f68
     ports:
       - "127.0.0.1:3000:3000"  # Only localhost
     environment:
@@ -218,7 +218,7 @@ One session-server can accept connections from multiple Jellyfin origins:
 ```yaml
 services:
   session-server:
-    image: ghcr.io/mhbxyz/owp-session-server:0.7.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
+    image: ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:e0634bf2fafd59bcb612c0ec93cb7e54190eb5b00c8c37ee0680b9e92ee29f68
     environment:
       - ALLOWED_ORIGINS=https://jellyfin1.example.com,https://jellyfin2.example.com
 ```

@@ -48,7 +48,7 @@ services:
       - internal
 
   session-server:
-    image: ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
+    image: ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:e0634bf2fafd59bcb612c0ec93cb7e54190eb5b00c8c37ee0680b9e92ee29f68
     container_name: owp-session
     environment:
       - ALLOWED_ORIGINS=https://jellyfin.example.com

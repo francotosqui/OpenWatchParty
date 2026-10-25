@@ -70,7 +70,7 @@ docker run -d \
   -p 127.0.0.1:3000:3000 \
   -e ALLOWED_ORIGINS="https://jellyfin.example.com" \
   -e JWT_SECRET="$JWT_SECRET" \
-  ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
+  ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:e0634bf2fafd59bcb612c0ec93cb7e54190eb5b00c8c37ee0680b9e92ee29f68
 ```
 
 Keep the generated value temporarily. It must be entered in the plugin configuration in the next step.
@@ -130,7 +130,7 @@ docker run -d \
   -p 127.0.0.1:3000:3000 \
   -e ALLOWED_ORIGINS="https://jellyfin.example.com" \
   -e JWT_SECRET="$JWT_SECRET" \
-  ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
+  ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:e0634bf2fafd59bcb612c0ec93cb7e54190eb5b00c8c37ee0680b9e92ee29f68
 ```
 
 Avoid floating `latest` or preview tags in production. When using a repository checkout, inspect the rendered Compose image: an immutable release source tag can still pin the previous release's image, because the digest is only known after the release image is built. Verify the pinned digest against the published release build before deploying, as described in [the release process](/development/release/).
@@ -287,7 +287,7 @@ docker run -d \
   -e ALLOWED_ORIGINS="https://jellyfin.example.com" \
   -e JWT_SECRET="$JWT_SECRET" \
   -e LOG_LEVEL="debug" \
-  ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:8e925305e4fc750ad08c1bf50318ea4fa45996c6130a63486cbaf4a9d4b41c20
+  ghcr.io/mhbxyz/owp-session-server:0.8.0@sha256:e0634bf2fafd59bcb612c0ec93cb7e54190eb5b00c8c37ee0680b9e92ee29f68
 ```
 
 ## Firewall Configuration
