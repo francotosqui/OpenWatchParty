@@ -23,30 +23,55 @@
 
   let suggestionBox = null;
   let activeIndex = -1;
+  let autocompleteInput = null;
 
   const hideSuggestions = () => {
     if (suggestionBox) {
       suggestionBox.remove();
       suggestionBox = null;
     }
+    if (autocompleteInput) {
+      autocompleteInput.setAttribute('aria-expanded', 'false');
+      autocompleteInput.removeAttribute('aria-activedescendant');
+    }
     activeIndex = -1;
   };
 
   const highlightSuggestion = (items) => {
-    items.forEach((el, i) => el.classList.toggle('active', i === activeIndex));
+    items.forEach((el, i) => {
+      const active = i === activeIndex;
+      el.classList.toggle('active', active);
+      el.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    if (autocompleteInput) {
+      if (activeIndex >= 0 && items[activeIndex]) {
+        autocompleteInput.setAttribute('aria-activedescendant', items[activeIndex].id);
+      } else {
+        autocompleteInput.removeAttribute('aria-activedescendant');
+      }
+    }
   };
 
   const showSuggestions = (results, stem, input) => {
     hideSuggestions();
     if (!results.length) return;
 
+    autocompleteInput = input;
+    input.setAttribute('aria-expanded', 'true');
+    input.setAttribute('aria-controls', 'owp-emoji-autocomplete');
+
     suggestionBox = document.createElement('div');
     suggestionBox.id = 'owp-emoji-autocomplete';
+    suggestionBox.setAttribute('role', 'listbox');
+    suggestionBox.setAttribute('aria-label', OWP.i18n.t('emoji'));
     activeIndex = 0;
 
-    const items = results.map(({ s, c }) => {
+    const items = results.map(({ s, c }, index) => {
       const row = document.createElement('div');
       row.className = 'owp-emoji-suggestion';
+      row.id = 'owp-emoji-opt-' + index;
+      row.setAttribute('role', 'option');
+      row.setAttribute('aria-label', `:${s}:`);
       const charSpan = document.createElement('span');
       charSpan.className = 'owp-emoji-suggestion-char';
       charSpan.textContent = c;
@@ -120,6 +145,12 @@
   };
 
   const setupAutocomplete = (input) => {
+    autocompleteInput = input;
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-expanded', 'false');
+    input.setAttribute('aria-haspopup', 'listbox');
+
     input.addEventListener('input', () => {
       const textBefore = input.value.slice(0, input.selectionStart);
       const fullMatch = textBefore.match(/:([a-z0-9_]+):$/i);
