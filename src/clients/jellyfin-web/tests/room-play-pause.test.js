@@ -477,6 +477,45 @@ describe('play and pause shared by the room', () => {
       assert.deepEqual(playerEvents().map(m => m.payload.action), ['seek']);
     });
 
+    it('sends the last seek after a burst instead of dropping it', t => {
+      t.mock.timers.enable({ apis: ['setTimeout'] });
+      video.currentTime = 40;
+      video.dispatch('seeked');
+      localNow += 150;
+      video.currentTime = 70;
+      video.dispatch('seeked');
+      assert.deepEqual(playerEvents().map(m => m.payload.position), [40]);
+      localNow += 100;
+      t.mock.timers.tick(100);
+      assert.deepEqual(playerEvents().map(m => m.payload.position), [40, 70]);
+    });
+
+    it('cancels a trailing seek when a newer pause takes precedence', t => {
+      t.mock.timers.enable({ apis: ['setTimeout'] });
+      video.currentTime = 40;
+      video.dispatch('seeked');
+      localNow += 150;
+      video.currentTime = 70;
+      video.dispatch('seeked');
+      video.pause();
+      localNow += 100;
+      t.mock.timers.tick(100);
+      assert.deepEqual(playerEvents().map(m => m.payload.action), ['seek', 'pause']);
+    });
+
+    it('does not send a trailing seek after leaving or changing media', t => {
+      t.mock.timers.enable({ apis: ['setTimeout'] });
+      video.currentTime = 40;
+      video.dispatch('seeked');
+      localNow += 150;
+      video.currentTime = 70;
+      video.dispatch('seeked');
+      OWP.state.roomMediaId = 'replacement';
+      localNow += 100;
+      t.mock.timers.tick(100);
+      assert.deepEqual(playerEvents().map(m => m.payload.position), [40]);
+    });
+
     it('pauses for a guest, at the guest position, without sending it back', () => {
       video.currentTime = 14;
       h.handlePlayerEvent(playerEvent('pause', 12, { client: 'guest' }), video);
