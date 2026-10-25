@@ -178,12 +178,12 @@
   };
 
   const CATEGORIES = [
-    { key: 'faces',    icon: '😊' },
-    { key: 'hands',    icon: '👍' },
-    { key: 'symbols',  icon: '❤️'  },
-    { key: 'nature',   icon: '🌿' },
-    { key: 'food',     icon: '🍕' },
-    { key: 'activity', icon: '🎬' },
+    { key: 'faces',    i18n: 'emojiCat_faces',    icon: '😊' },
+    { key: 'hands',    i18n: 'emojiCat_hands',    icon: '👍' },
+    { key: 'symbols',  i18n: 'emojiCat_symbols',  icon: '❤️'  },
+    { key: 'nature',   i18n: 'emojiCat_nature',   icon: '🌿' },
+    { key: 'food',     i18n: 'emojiCat_food',     icon: '🍕' },
+    { key: 'activity', i18n: 'emojiCat_activity', icon: '🎬' },
   ];
 
   let pickerEl = null;
@@ -236,18 +236,20 @@
     panel.id = 'owp-emoji-panel';
     panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-modal', 'false');
-    panel.setAttribute('aria-label', OWP.i18n.t('emoji'));
+    panel.setAttribute('aria-label', OWP.i18n.t('emojiPicker'));
 
     const tabs = document.createElement('div');
     tabs.className = 'owp-emoji-cats';
     tabs.setAttribute('role', 'tablist');
-    CATEGORIES.forEach(({ key, icon }) => {
+    CATEGORIES.forEach(({ key, i18n, icon }) => {
       const btn = document.createElement('button');
       btn.className = 'owp-emoji-cat-btn';
       btn.type = 'button';
       btn.setAttribute('role', 'tab');
       btn.setAttribute('aria-selected', key === activeTab ? 'true' : 'false');
-      btn.title = key;
+      const label = OWP.i18n.t(i18n);
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
       btn.textContent = icon;
       btn.dataset.cat = key;
       btn.addEventListener('click', () => showTab(key));

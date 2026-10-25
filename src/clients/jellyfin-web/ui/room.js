@@ -277,8 +277,8 @@
     const emojiBtn = createElement('button');
     emojiBtn.id = 'owp-emoji-btn';
     emojiBtn.type = 'button';
-    emojiBtn.title = t('emoji');
-    emojiBtn.setAttribute('aria-label', t('emoji'));
+    emojiBtn.title = t('emojiPicker');
+    emojiBtn.setAttribute('aria-label', t('emojiPicker'));
     emojiBtn.setAttribute('aria-expanded', 'false');
     emojiBtn.setAttribute('aria-haspopup', 'dialog');
     emojiBtn.setAttribute('aria-controls', 'owp-emoji-panel');
