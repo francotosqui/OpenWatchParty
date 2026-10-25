@@ -10,7 +10,7 @@
   // Jellyfin out of reach for a moment, not a refusal: a renewal that fails
   // like this is retried, and the session goes on with the token it has.
   const TRANSIENT_REFRESH_ERRORS = new Set([
-    'network_error', 'timeout', 'aborted', 'server_error', 'server_unavailable', 'rate_limited', 'http_error', 'invalid_json'
+    'network_error', 'timeout', 'aborted', 'server_error', 'server_unavailable', 'rate_limited', 'invalid_json'
   ]);
 
   const getJellyfinUsername = () => {
@@ -318,14 +318,15 @@
       if (!response.ok) {
         const errors = {
           401: ['unauthorized', t('authRejected')],
+          408: ['timeout', t('authTimeout')],
           429: ['rate_limited', t('authRateLimited')],
           500: ['server_error', t('authServerError')],
           503: ['server_unavailable', t('authNotConfigured')]
         };
-        const [code, message] = errors[response.status] || [
-          'http_error',
-          t('authHttp', { status: response.status })
-        ];
+        const fallback = response.status >= 500
+          ? ['server_error', t('authServerError')]
+          : ['http_error', t('authHttp', { status: response.status })];
+        const [code, message] = errors[response.status] || fallback;
         console.warn('[OpenWatchParty] Failed to fetch auth token:', response.status);
         return authError(code, message, isCurrentRequest);
       }
