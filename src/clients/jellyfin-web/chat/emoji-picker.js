@@ -138,7 +138,8 @@
     }
     if ((e.key === 'Enter' || e.key === 'Tab') && activeIndex >= 0 && items[activeIndex]) {
       e.preventDefault();
-      items[activeIndex].dispatchEvent(new MouseEvent('mousedown'));
+      const event = typeof MouseEvent !== 'undefined' ? new MouseEvent('mousedown') : { type: 'mousedown', preventDefault() {} };
+      items[activeIndex].dispatchEvent(event);
       return true;
     }
     return false;
