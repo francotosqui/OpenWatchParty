@@ -71,6 +71,7 @@ assert_literal 'docs/src/content/docs/operations/installation.md' "ghcr.io/mhbxy
 assert_literal 'docs/src/content/docs/operations/installation.md' "OpenWatchParty-v$new_version.zip"
 assert_literal 'docs/src/content/docs/operations/deployment.md' "OpenWatchParty-v$new_version.zip"
 assert_literal 'docs/src/content/docs/operations/deployment.md' "ghcr.io/mhbxyz/owp-session-server:$new_version@sha256:"
+assert_literal 'docs/src/content/docs/operations/configuration.md' "ghcr.io/mhbxyz/owp-session-server:$new_version@sha256:"
 assert_literal 'docs/src/content/docs/development/ci.md' "owp-session-server:v$new_version"
 
 grep -A1 '^name = "session-server"' "$copy/src/server/Cargo.lock" \

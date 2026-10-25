@@ -218,6 +218,10 @@ apply_sed 'docs/src/content/docs/operations/deployment.md' 'deployment digest-pi
     'owp-session-server:[0-9]+\.[0-9]+\.[0-9]+@sha256:' \
     's/(owp-session-server:)[0-9]+\.[0-9]+\.[0-9]+(@sha256:)/\1'"$new_version"'\2/'
 
+apply_sed 'docs/src/content/docs/operations/configuration.md' 'configuration digest-pinned image version' \
+    'owp-session-server:[0-9]+\.[0-9]+\.[0-9]+@sha256:' \
+    's/(owp-session-server:)[0-9]+\.[0-9]+\.[0-9]+(@sha256:)/\1'"$new_version"'\2/'
+
 apply_sed 'docs/src/content/docs/development/ci.md' 'ci version-prefixed image tag' \
     'owp-session-server:v[0-9]+\.[0-9]+\.[0-9]+' \
     's/(owp-session-server:)v[0-9]+\.[0-9]+\.[0-9]+/\1v'"$new_version"'/'
