@@ -3,28 +3,36 @@ const helpers = require('./helpers');
 
 test('a failed episode lookup fills the queue on a lifecycle retry without a room event', async ({ page }) => {
   await helpers.login(page, helpers.HOST_USER);
-  const episodeId = await page.evaluate(async () => {
-    const api = window.ApiClient;
-    const result = await api.getItems(api.getCurrentUserId(), {
-      includeItemTypes: 'Episode', recursive: true, sortBy: 'SortName', sortOrder: 'Ascending'
-    });
-    const episode = result.Items.find(item => item.SeriesName?.startsWith('OWP') && item.IndexNumber === 1);
-    if (!episode) throw new Error('The dev library needs an OWP test series');
-    return episode.Id;
-  });
-  await helpers.startPlayback(page, episodeId);
+  // CI has movies only. Give two real playable items episode metadata at the
+  // library API boundary; no extra media or provisioned test series is needed.
+  const firstId = await helpers.findMovieId(page, 'Wing It!');
+  const secondId = await helpers.findMovieId(page, 'Sprite Fright');
+  await helpers.startPlayback(page, firstId);
   await helpers.waitForSettled(page);
-  await page.evaluate(() => {
+  await page.evaluate(async ([first, second]) => {
+    const api = window.ApiClient;
+    const user = api.getCurrentUserId();
+    const media = await Promise.all([api.getItem(user, first), api.getItem(user, second)]);
+    const seriesId = 'abcdefabcdefabcdefabcdefabcdef12';
+    const episodes = media.map((item, index) => ({
+      ...item, Type: 'Episode', SeriesId: seriesId, ParentIndexNumber: 1, IndexNumber: index + 1
+    }));
     window.__queueLookups = [];
-    window.__originalGetJSON = window.ApiClient.getJSON;
-    window.ApiClient.getJSON = function(url, ...args) {
-      if (String(url).includes('/Shows/') && String(url).includes('/Episodes')) {
+    window.__originalGetItem = api.getItem;
+    window.__originalGetJSON = api.getJSON;
+    api.getItem = function(userId, id, ...args) {
+      if (id === first && window.OpenWatchParty.state.inRoom) return Promise.resolve(episodes[0]);
+      return window.__originalGetItem.call(this, userId, id, ...args);
+    };
+    api.getJSON = function(url, ...args) {
+      if (String(url).includes(`/Shows/${seriesId}/Episodes`)) {
         window.__queueLookups.push(Date.now());
         if (window.__queueLookups.length === 1) return Promise.reject(new Error('simulated temporary outage'));
+        return Promise.resolve({ Items: episodes });
       }
       return window.__originalGetJSON.call(this, url, ...args);
     };
-  });
+  }, [firstId, secondId]);
   try {
     await helpers.createRoom(page);
     await expect.poll(() => page.evaluate(() => window.__queueLookups.length)).toBe(1);
@@ -36,7 +44,10 @@ test('a failed episode lookup fills the queue on a lifecycle retry without a roo
     await page.waitForTimeout(6000);
     expect(await page.evaluate(() => window.__queueLookups.length)).toBe(2);
   } finally {
-    await page.evaluate(() => { window.ApiClient.getJSON = window.__originalGetJSON; });
+    await page.evaluate(() => {
+      window.ApiClient.getItem = window.__originalGetItem;
+      window.ApiClient.getJSON = window.__originalGetJSON;
+    });
     await helpers.leaveIfInRoom(page);
   }
 });
