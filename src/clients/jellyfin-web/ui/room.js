@@ -129,6 +129,10 @@
     });
     // Read only when it is on screen: a redraw while the panel is hidden must
     // not mark messages that nobody saw.
+    if (open !== 'chat') {
+      OWP.emoji?.closePicker?.();
+      OWP.emoji?.hideSuggestions?.();
+    }
     if (open === 'sync') updateSyncSection();
     if (open === 'chat' && OWP.chat && OWP.chat.isChatVisible()) {
       OWP.chat.markRead();
@@ -147,6 +151,7 @@
   // Escape closes the open drop-down and puts focus back on its button.
   const closeRoomSectionFromKeyboard = (event) => {
     if (event.key !== 'Escape') return false;
+    if (OWP.emoji?.handleKeydown?.(event)) return true;
     const open = ROOM_SECTIONS.find(section => section.name === state.roomBarSection);
     if (!open) return false;
     event.preventDefault();
@@ -189,7 +194,103 @@
     }
     updateLeaveConfirm();
     if (ui.updateQueue) ui.updateQueue();
+    updateStartLabel();
     applyRoomSection();
+  };
+
+
+  // While the room waits for its members or counts down, the room bar says so
+  // in place of the room's name; with the panel closed, the same shows on its
+  // own where the bar would be. A member who may start a play selects it to
+  // start without waiting.
+  const START_FLOAT_ID = 'owp-start-float';
+
+  const waitingNames = () => {
+    const names = Object.values(state.startWaiting).map(member => member.name || t('anonymous'));
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return t('startTwoNames', { first: names[0], second: names[1] });
+    return t('startManyNames', { count: names.length });
+  };
+
+  const fillStartLabel = (label) => {
+    const waiting = state.startPhase === 'waiting';
+    const content = [createIcon(waiting ? 'hourglass' : 'play')];
+    if (waiting) {
+      content.push(document.createTextNode(t('startWaiting', { names: waitingNames() })));
+    } else {
+      const seconds = Math.max(1, Math.ceil((state.startTarget - OWP.utils.getServerNow()) / 1000));
+      content.push(document.createTextNode(`${t('startCountdown')} `), createElement('span', 'owp-start-num', String(seconds)));
+    }
+    label.replaceChildren(...content);
+    const action = waiting && OWP.start?.canStart?.();
+    label.classList.toggle('owp-start-action', Boolean(action));
+    label.setAttribute('aria-disabled', String(!action));
+    const reasons = waiting
+      ? Object.values(state.startWaiting).map(member => `${member.name}: ${t(`startIs_${member.reason}`)}`)
+      : [];
+    if (action) reasons.push(t('startNowHint'));
+    label.title = reasons.join('\n');
+  };
+
+  const createStartLabel = (className) => {
+    const label = createElement('button', className);
+    label.type = 'button';
+    label.onclick = () => OWP.start?.startNow?.();
+    return label;
+  };
+
+  // Centred between the latency and the next button: the latency keeps a fixed
+  // width, so its short text leaves room after it, and as much goes after the
+  // label. The label is at least as wide as the name, so the bar keeps its size.
+  const centerStartLabel = (label, name) => {
+    label.style.minWidth = name.dataset.width ? `${name.dataset.width}px` : '';
+    label.style.paddingRight = '0px';
+    const latency = label.parentNode?.querySelector('.owp-latency');
+    const next = name.nextElementSibling === label ? label.nextElementSibling : name.nextElementSibling;
+    if (!latency || !next || typeof document.createRange !== 'function' || typeof next.getBoundingClientRect !== 'function') return;
+    const textBox = (element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return range.getBoundingClientRect();
+    };
+    const left = textBox(label).left - textBox(latency).right;
+    const right = next.getBoundingClientRect().left - textBox(label).right;
+    if (left > right) label.style.paddingRight = `${Math.round(left - right)}px`;
+  };
+
+  const updateStartLabel = () => {
+    const panel = document.getElementById(OWP.constants.PANEL_ID);
+    const bar = panel?.querySelector('.owp-room-bar');
+    const name = bar?.querySelector('.owp-room-name');
+    const active = state.inRoom && state.startPhase !== 'idle';
+    const barShown = Boolean(name) && !panel.classList.contains('hide');
+    let label = bar?.querySelector('.owp-start-label');
+    if (active && barShown) {
+      if (!label) {
+        if (!name.hidden && typeof name.getBoundingClientRect === 'function') {
+          name.dataset.width = String(Math.round(name.getBoundingClientRect().width));
+        }
+        label = createStartLabel('owp-start-label');
+        name.parentNode.insertBefore(label, name.nextSibling);
+      }
+      name.hidden = true;
+      fillStartLabel(label);
+      centerStartLabel(label, name);
+    } else if (label) {
+      label.remove();
+      name.hidden = false;
+    }
+    let float = document.getElementById(START_FLOAT_ID);
+    if (active && !barShown) {
+      if (!float) {
+        float = createStartLabel('owp-start-label owp-start-float');
+        float.id = START_FLOAT_ID;
+        document.body.appendChild(float);
+      }
+      fillStartLabel(float);
+    } else if (float) {
+      float.remove();
+    }
   };
 
 
@@ -269,7 +370,17 @@
     send.title = t('sendMessage');
     send.setAttribute('aria-label', t('sendMessage'));
     send.appendChild(createIcon('send'));
-    inputContainer.append(input, send);
+    const emojiBtn = createElement('button');
+    emojiBtn.id = 'owp-emoji-btn';
+    emojiBtn.type = 'button';
+    emojiBtn.title = t('emojiPicker');
+    emojiBtn.setAttribute('aria-label', t('emojiPicker'));
+    emojiBtn.setAttribute('aria-expanded', 'false');
+    emojiBtn.setAttribute('aria-haspopup', 'dialog');
+    emojiBtn.setAttribute('aria-controls', 'owp-emoji-panel');
+    emojiBtn.textContent = '😊';
+    emojiBtn.onclick = () => OWP.emoji?.togglePicker(input);
+    inputContainer.append(input, emojiBtn, send);
     chatSection.append(messages, inputContainer);
 
     const confirm = createElement('div', 'owp-leave-confirm');
@@ -292,6 +403,7 @@
     chatInput.addEventListener('keydown', (e) => {
       // The input stops key events from bubbling (so the player ignores
       // typing), so the drop-down's Escape handler is called from here.
+      if (OWP.emoji?.handleKeydown?.(e)) return;
       if (closeRoomSectionFromKeyboard(e)) return;
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -310,8 +422,9 @@
       if (OWP.chat.isChatVisible()) OWP.chat.markRead();
       else OWP.chat.updateBadge();
     }
+    if (OWP.emoji?.setupAutocomplete) OWP.emoji.setupAutocomplete(chatInput);
   };
 
   Object.assign(views, { renderRoom, setupChatInput, toggleRoomSection, applyRoomSection });
-  Object.assign(ui, { updateRoomRoleControls, updateSyncSection });
+  Object.assign(ui, { updateRoomRoleControls, updateSyncSection, updateStartLabel });
 })();

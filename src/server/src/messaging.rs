@@ -230,6 +230,8 @@ mod tests {
                 status_broadcast: Default::default(),
                 guest_command_until: None,
                 queue: Default::default(),
+                not_ready: HashMap::new(),
+                countdown_pending: false,
                 chat_history: Default::default(),
             },
         );
@@ -257,6 +259,8 @@ mod tests {
                 status_broadcast: Default::default(),
                 guest_command_until: None,
                 queue: Default::default(),
+                not_ready: HashMap::new(),
+                countdown_pending: false,
                 chat_history: Default::default(),
             },
         );

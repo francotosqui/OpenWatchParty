@@ -12,7 +12,8 @@
     const container = document.getElementById('owp-chat-messages');
     if (!container) return;
     const msgEl = document.createElement('div');
-    msgEl.className = 'owp-chat-message' + (message.isOwn ? ' owp-chat-own' : '');
+    msgEl.className = 'owp-chat-message' + (message.isOwn ? ' owp-chat-own' : '')
+      + (message.system ? ' owp-chat-system' : '') + (message.isError ? ' owp-chat-error' : '');
     // One line per message in the room bar: the time is in the tooltip.
     msgEl.title = formatTime(message.timestamp);
     const meta = document.createElement('div');
@@ -66,6 +67,20 @@
     renderMessage(message);
   };
 
+  // A line from OWP itself, as SERVER: who the room waits for and why, say.
+  // Only an error counts as unread (and shows a toast) while the chat is closed.
+  const system = (text, isError = false) => {
+    const message = { system: true, isError, username: 'SERVER', text, timestamp: Date.now(), isOwn: false };
+    chat.messages.push(message);
+    if (chat.messages.length > MAX_MESSAGES) chat.messages.shift();
+    if (isError && !chat.isChatVisible()) {
+      chat.unreadCount++;
+      chat.updateBadge();
+      if (OWP.ui && OWP.ui.showChatToast) OWP.ui.showChatToast(message.username, message.text);
+    }
+    renderMessage(message);
+  };
+
   // The room's last messages, which a server with chat_history sends once on
   // joining. They replace what the chat shows (a rejoin after a lost
   // connection gets them again), and none counts as unread. The server marks
@@ -91,5 +106,5 @@
     if (container) container.replaceChildren();
   };
 
-  Object.assign(chat, { renderMessage, renderAllMessages, receive, loadHistory, clear });
+  Object.assign(chat, { renderMessage, renderAllMessages, receive, system, loadHistory, clear });
 })();

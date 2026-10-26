@@ -409,7 +409,7 @@ describe('authentication configuration', () => {
     }
   });
 
-  it('closes an open socket when token refresh fails', async () => {
+  it('closes an open socket when token refresh is refused', async () => {
     const originalSetTimeout = OWP.timers.setTimeout;
     const originalClear = OWP.timers.clear;
     const WebSocket = globalThis.WebSocket;
@@ -431,7 +431,7 @@ describe('authentication configuration', () => {
           json: async () => ({ auth_enabled: true, token: 'initial-token', expires_in: 1, session_server_url: '' })
         };
       }
-      return { ok: false, status: 500 };
+      return { ok: false, status: 401 };
     };
     OWP.state.ws = {
       readyState: 1,
@@ -446,6 +446,165 @@ describe('authentication configuration', () => {
       assert.equal(OWP.state.ws, null);
       assert.equal(OWP.state.authBlocked, true);
       assert.equal(OWP.state.autoReconnect, false);
+    } finally {
+      OWP.state.ws = null;
+      OWP.timers.setTimeout = originalSetTimeout;
+      OWP.timers.clear = originalClear;
+      globalThis.WebSocket = WebSocket;
+    }
+  });
+
+  it('keeps the session and retries when token refresh fails for a moment', async () => {
+    const originalSetTimeout = OWP.timers.setTimeout;
+    const originalClear = OWP.timers.clear;
+    const WebSocket = globalThis.WebSocket;
+    const timers = [];
+    const sent = [];
+    let request = 0;
+    let closed = false;
+    globalThis.WebSocket = { OPEN: 1, CLOSED: 3 };
+    OWP.timers.setTimeout = (callback, delay, scope) => {
+      if (scope === 'auth' && delay !== 10000) timers.push({ callback, delay });
+      return {};
+    };
+    OWP.timers.clear = () => true;
+    globalThis.fetch = async () => {
+      request++;
+      if (request === 2) throw new TypeError('Failed to fetch');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          auth_enabled: true,
+          token: request === 1 ? 'initial-token' : 'refreshed-token',
+          expires_in: 3600,
+          hide_native_syncplay_button: true,
+          session_server_url: ''
+        })
+      };
+    };
+    const socket = { readyState: 1, send: data => sent.push(JSON.parse(data)), close: () => { closed = true; } };
+    OWP.state.ws = socket;
+
+    try {
+      await OWP.actions.fetchAuthToken();
+      await timers.shift().callback();
+
+      assert.equal(closed, false);
+      assert.equal(OWP.state.ws, socket);
+      assert.equal(OWP.state.autoReconnect, true);
+      assert.equal(OWP.state.authBlocked, false);
+      assert.equal(OWP.state.authToken, 'initial-token');
+      assert.equal(OWP.state.hideNativeSyncPlayButton, true);
+      assert.deepEqual(timers.map(timer => timer.delay), [30000]);
+      assert.equal(sent.length, 0);
+
+      await timers.shift().callback();
+      assert.equal(sent.at(-1).type, 'auth');
+      assert.equal(sent.at(-1).payload.token, 'refreshed-token');
+      assert.equal(OWP.state.authToken, 'refreshed-token');
+    } finally {
+      OWP.state.ws = null;
+      OWP.timers.setTimeout = originalSetTimeout;
+      OWP.timers.clear = originalClear;
+      globalThis.WebSocket = WebSocket;
+    }
+  });
+
+  it('closes an open socket when token refresh is refused with a 403', async () => {
+    const originalSetTimeout = OWP.timers.setTimeout;
+    const originalClear = OWP.timers.clear;
+    const WebSocket = globalThis.WebSocket;
+    let refresh;
+    let request = 0;
+    let closed = false;
+    globalThis.WebSocket = { OPEN: 1, CLOSED: 3 };
+    OWP.timers.setTimeout = (callback, delay, scope) => {
+      if (scope === 'auth' && delay < 10000) refresh = callback;
+      return {};
+    };
+    OWP.timers.clear = () => true;
+    globalThis.fetch = async () => {
+      request++;
+      if (request === 1) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ auth_enabled: true, token: 'initial-token', expires_in: 1, session_server_url: '' })
+        };
+      }
+      return { ok: false, status: 403 };
+    };
+    OWP.state.ws = {
+      readyState: 1,
+      close: () => { closed = true; }
+    };
+
+    try {
+      await OWP.actions.fetchAuthToken();
+      await refresh();
+
+      assert.equal(closed, true);
+      assert.equal(OWP.state.ws, null);
+      assert.equal(OWP.state.authBlocked, true);
+      assert.equal(OWP.state.autoReconnect, false);
+    } finally {
+      OWP.state.ws = null;
+      OWP.timers.setTimeout = originalSetTimeout;
+      OWP.timers.clear = originalClear;
+      globalThis.WebSocket = WebSocket;
+    }
+  });
+
+  it('keeps the session and retries when token refresh gets a 502 from a gateway', async () => {
+    const originalSetTimeout = OWP.timers.setTimeout;
+    const originalClear = OWP.timers.clear;
+    const WebSocket = globalThis.WebSocket;
+    const timers = [];
+    const sent = [];
+    let request = 0;
+    let closed = false;
+    globalThis.WebSocket = { OPEN: 1, CLOSED: 3 };
+    OWP.timers.setTimeout = (callback, delay, scope) => {
+      if (scope === 'auth' && delay !== 10000) timers.push({ callback, delay });
+      return {};
+    };
+    OWP.timers.clear = () => true;
+    globalThis.fetch = async () => {
+      request++;
+      if (request === 2) return { ok: false, status: 502 };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          auth_enabled: true,
+          token: request === 1 ? 'initial-token' : 'refreshed-token',
+          expires_in: 3600,
+          hide_native_syncplay_button: true,
+          session_server_url: ''
+        })
+      };
+    };
+    const socket = { readyState: 1, send: data => sent.push(JSON.parse(data)), close: () => { closed = true; } };
+    OWP.state.ws = socket;
+
+    try {
+      await OWP.actions.fetchAuthToken();
+      await timers.shift().callback();
+
+      assert.equal(closed, false);
+      assert.equal(OWP.state.ws, socket);
+      assert.equal(OWP.state.autoReconnect, true);
+      assert.equal(OWP.state.authBlocked, false);
+      assert.equal(OWP.state.authToken, 'initial-token');
+      assert.equal(OWP.state.hideNativeSyncPlayButton, true);
+      assert.deepEqual(timers.map(timer => timer.delay), [30000]);
+      assert.equal(sent.length, 0);
+
+      await timers.shift().callback();
+      assert.equal(sent.at(-1).type, 'auth');
+      assert.equal(sent.at(-1).payload.token, 'refreshed-token');
+      assert.equal(OWP.state.authToken, 'refreshed-token');
     } finally {
       OWP.state.ws = null;
       OWP.timers.setTimeout = originalSetTimeout;
@@ -525,7 +684,7 @@ describe('authentication configuration', () => {
 
       const auth = sent.find(message => message.type === 'auth');
       assert.equal(auth.payload.protocol_version, OWP.constants.PROTOCOL_VERSION);
-      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'chat_history']);
+      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'chat_history']);
       assert.equal(auth.payload.token, 'refreshed-token');
     } finally {
       OWP.state.ws = null;

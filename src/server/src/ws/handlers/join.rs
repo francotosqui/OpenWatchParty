@@ -54,6 +54,7 @@ fn add_client_to_room(
         room.clients.push(client_id.to_string());
     }
     room.ready_clients.remove(client_id);
+    room.not_ready.remove(client_id);
     if let Some(client) = locked_clients.get_mut(client_id) {
         client.room_id = Some(room.room_id.clone());
         if let Some(ref name) = payload_name {
@@ -311,6 +312,9 @@ pub(in crate::ws) async fn handle_join_room(
             if joined {
                 super::chat::send_chat_history(room, &state.clients, client_id);
             }
+            // History replaces the chat, so send it before new SERVER lines.
+            // A play that waits now waits for the new member too.
+            super::super::pending_play::send_waiting(room, &state.clients);
         }
         joined
     };
@@ -759,6 +763,7 @@ mod tests {
                         .map(|id| crate::room::QueueItem {
                             id: id.repeat(32),
                             title: "Pilot".to_string(),
+                            series: None,
                         })
                         .to_vec(),
                     None,
@@ -844,6 +849,51 @@ mod tests {
                 assert!(state_at < history_at);
             }
         }
+    }
+
+    #[tokio::test]
+    async fn join_sends_chat_history_before_the_pending_start_state() {
+        let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
+        {
+            let mut locked = state.write().await;
+            let guest = locked.clients.get_mut("guest").unwrap();
+            guest.supports_chat_history = true;
+            guest.supports_start_when_ready = true;
+            let room = locked.rooms.get_mut("room").unwrap();
+            room.chat_history.push_back(crate::types::ChatEntry {
+                client: "host".into(),
+                user_id: "user-host".into(),
+                username: "Host".into(),
+                text: "hello".into(),
+                server_ts: crate::utils::now_ms(),
+            });
+            room.pending_play = Some(crate::types::PendingPlay {
+                initiator_id: "host".into(),
+                position: 0.0,
+                generation: 1,
+                position_ts: crate::utils::now_ms(),
+                deadline_server_ts: crate::utils::now_ms() + 20_000,
+                shows_start: true,
+            });
+        }
+
+        handle_join_room("guest", &join_message("room"), &state, &jwt_config).await;
+
+        let messages: Vec<_> =
+            std::iter::from_fn(|| test_helpers::recv_msg(&mut guest_rx)).collect();
+        let history_at = messages
+            .iter()
+            .position(|msg| msg.msg_type == ServerMessageType::ChatHistory)
+            .expect("the joiner gets history");
+        let start_at = messages
+            .iter()
+            .position(|msg| msg.msg_type == ServerMessageType::StartState)
+            .expect("the joiner gets the pending start");
+        assert!(history_at < start_at, "history must not erase SERVER lines");
+        assert_eq!(
+            messages[start_at].payload.as_ref().unwrap()["state"],
+            "waiting"
+        );
     }
 
     #[tokio::test]

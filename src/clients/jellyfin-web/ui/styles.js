@@ -7,6 +7,7 @@
     SYNCPLAY_HIDE_STYLE_ID,
     APPEARANCE_STYLE_ID,
     MODERN_HEADER_BTN_ID,
+    PANEL_CONTROLS_HIDDEN_CLASS,
     PANEL_HEADER_CLASS,
     PANEL_BUBBLE_CLASS,
     ROOM_MODE_CLASS,
@@ -46,12 +47,12 @@
     }
     #owp-guest-lock-label .owp-guest-lock-icon { font-size: 1.15em; }
     /* Appearance settings: text scale and surface opacity (applyAppearance) */
-    #${PANEL_ID}, .owp-toast-container, .owp-toast-system, .owp-queue-next {
+    #${PANEL_ID}, .owp-toast-container, .owp-toast-system, .owp-queue-next, .owp-start-float {
       --owp-scale: ${APPEARANCE.textSize.default / APPEARANCE.baseTextSize};
       --owp-surface-alpha: ${APPEARANCE.opacity.default / 100};
     }
     @media (prefers-reduced-transparency: reduce) {
-      #${PANEL_ID}, .owp-toast-container, .owp-toast-system, .owp-queue-next { --owp-surface-alpha: 1 !important; }
+      #${PANEL_ID}, .owp-toast-container, .owp-toast-system, .owp-queue-next, .owp-start-float { --owp-surface-alpha: 1 !important; }
     }
     /* Same look as the room bar: dark grey, soft border, Jellyfin's font */
     #${PANEL_ID} {
@@ -63,6 +64,12 @@
       display: flex; flex-direction: column; box-sizing: border-box;
     }
     #${PANEL_ID}.hide { display: none; }
+    /* Over the player it fades out and back with Jellyfin's controls */
+    #${PANEL_ID} { transition: opacity 0.3s ease-out; }
+    #${PANEL_ID}.${PANEL_CONTROLS_HIDDEN_CLASS} { opacity: 0; pointer-events: none; }
+    @media (prefers-reduced-motion: reduce) {
+      #${PANEL_ID} { transition: none; }
+    }
     /* Opened from the header: placed below it (top is set when it opens) */
     #${PANEL_ID}.${PANEL_HEADER_CLASS} { bottom: auto; }
     @media (max-width: 600px) {
@@ -187,6 +194,22 @@
     .owp-queue-next-time { font-weight: 700; font-variant-numeric: tabular-nums; color: #85b7eb; flex-shrink: 0; }
     .owp-queue-next-actions { width: 100%; display: flex; justify-content: flex-end; gap: ${px(6)}; }
     .owp-queue-next-bar { position: absolute; left: 0; bottom: 0; height: ${px(2)}; background: #85b7eb; }
+    /* A play waiting for the members, or counting down: in place of the room's name */
+    .owp-start-label {
+      flex: 1; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: ${px(4)};
+      padding: 0; border: none; background: none; color: #ecebe6; font: inherit; font-weight: 500;
+      white-space: nowrap; overflow: hidden; cursor: default;
+    }
+    .owp-start-label.owp-start-action { cursor: pointer; }
+    .owp-start-label .owp-icon { width: ${px(14)}; height: ${px(14)}; }
+    .owp-start-num { font-weight: 700; font-variant-numeric: tabular-nums; color: #85b7eb; }
+    /* On its own where the room bar would be, while the panel is closed */
+    .owp-start-label.owp-start-float {
+      flex: none; position: fixed; top: 72px; right: 20px; z-index: 20000;
+      padding: ${px(8)} ${px(12)}; border-radius: ${px(20)}; font-family: inherit; font-size: ${px(12)};
+      background: rgba(38, 38, 36, var(--owp-surface-alpha)); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 ${px(4)} ${px(16)} rgba(0,0,0,0.35);
+    }
     /* The sync adjustment drop-down: where the guest is, and the nudge */
     .owp-nudge-row { display: flex; align-items: center; gap: ${px(8)}; }
     .owp-nudge-state { flex: 1; min-width: 0; display: flex; align-items: center; gap: ${px(6)}; font-weight: 500; }
@@ -312,6 +335,13 @@
       clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
     }
     .owp-chat-text { color: #ecebe6; word-wrap: break-word; }
+    /* OWP's own lines (SERVER): a small tag and italic text; errors in red */
+    .owp-chat-message.owp-chat-system .owp-chat-username {
+      font-size: ${px(9)}; font-weight: 700; letter-spacing: 0.06em; color: #c2c0b6;
+      background: rgba(255,255,255,0.1); border-radius: ${px(4)}; padding: 0 ${px(4)}; vertical-align: 0.1em;
+    }
+    .owp-chat-message.owp-chat-system .owp-chat-text { color: #c2c0b6; font-style: italic; }
+    .owp-chat-message.owp-chat-error .owp-chat-text { color: #f09595; }
     #owp-chat-input-container { display: flex; gap: ${px(6)}; }
     #owp-chat-messages:not(:empty) + #owp-chat-input-container { margin-top: ${px(6)}; padding-top: ${px(6)}; border-top: 1px solid rgba(255,255,255,0.1); }
     #owp-chat-input {
@@ -326,6 +356,71 @@
     }
     #owp-chat-send:hover { background: #185fa5; color: #e6f1fb; }
     .owp-chat-badge { display: none; padding: 0 ${px(5)}; border-radius: ${px(8)}; background: #791f1f; color: #f09595; font-size: ${px(11)}; line-height: 1.45; }
+    /* Emoji button */
+    #owp-emoji-btn {
+      flex-shrink: 0; height: ${px(24)}; padding: 0 ${px(6)};
+      border: none; border-radius: ${px(6)}; background: transparent;
+      color: #ecebe6; cursor: pointer; font-size: ${px(15)}; line-height: 1;
+    }
+    #owp-emoji-btn:hover { background: rgba(255,255,255,0.08); }
+    #owp-emoji-btn[aria-expanded="true"] { background: #0c447c; }
+    /* Autocomplete dropdown */
+    #owp-emoji-autocomplete {
+      --owp-scale: ${APPEARANCE.textSize.default / APPEARANCE.baseTextSize};
+      position: fixed; z-index: 21000;
+      background: rgba(38, 38, 36, 0.98);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: ${px(8)}; box-shadow: 0 ${px(4)} ${px(14)} rgba(0, 0, 0, 0.5);
+      padding: ${px(4)} 0; min-width: ${px(170)}; box-sizing: border-box; overflow: hidden;
+    }
+    .owp-emoji-suggestion {
+      display: flex; align-items: center; gap: ${px(8)};
+      padding: ${px(6)} ${px(12)}; cursor: pointer; transition: background 0.1s;
+    }
+    .owp-emoji-suggestion:hover,
+    .owp-emoji-suggestion.active {
+      background: #0c447c;
+      color: #ffffff;
+    }
+    .owp-emoji-suggestion-char { font-size: ${px(18)}; line-height: 1; }
+    .owp-emoji-suggestion-code { font-size: ${px(12)}; color: #9a9993; }
+    .owp-emoji-suggestion:hover .owp-emoji-suggestion-code,
+    .owp-emoji-suggestion.active .owp-emoji-suggestion-code {
+      color: #85b7eb;
+    }
+    /* Emoji picker panel */
+    #owp-emoji-panel {
+      --owp-scale: ${APPEARANCE.textSize.default / APPEARANCE.baseTextSize};
+      position: fixed; z-index: 21000;
+      background: rgba(38, 38, 36, 0.98);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: ${px(10)}; box-shadow: 0 ${px(4)} ${px(18)} rgba(0, 0, 0, 0.5);
+      width: ${px(250)}; box-sizing: border-box;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .owp-emoji-cats {
+      display: flex; gap: ${px(2)}; padding: ${px(4)};
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1); flex-shrink: 0;
+    }
+    .owp-emoji-cat-btn {
+      flex: 1; border: none; background: transparent; cursor: pointer;
+      padding: ${px(4)} ${px(2)}; border-radius: ${px(4)}; font-size: ${px(15)}; line-height: 1;
+    }
+    .owp-emoji-cat-btn:hover { background: rgba(255, 255, 255, 0.1); }
+    .owp-emoji-cat-btn.active { background: #0c447c; }
+    .owp-emoji-grid {
+      display: grid; grid-template-columns: repeat(6, 1fr); gap: ${px(2)};
+      padding: ${px(4)}; overflow-y: auto; overflow-x: hidden; max-height: ${px(180)}; box-sizing: border-box;
+    }
+    .owp-emoji-item {
+      height: ${px(32)};
+      display: flex; align-items: center; justify-content: center;
+      border: none; background: transparent; cursor: pointer;
+      border-radius: ${px(4)}; font-size: ${px(18)}; line-height: 1;
+    }
+    .owp-emoji-item:hover { background: rgba(255, 255, 255, 0.15); }
     /* Toast styles */
     /* Bottom right, so chat toasts do not cover the room bar at the top */
     .owp-toast-container {
@@ -417,7 +512,7 @@
       style.id = APPEARANCE_STYLE_ID;
       document.head.appendChild(style);
     }
-    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system, :root .owp-queue-next {`
+    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system, :root .owp-queue-next, :root .owp-start-float, :root #owp-emoji-panel, :root #owp-emoji-autocomplete {`
       + ` --owp-scale: ${textSize / APPEARANCE.baseTextSize}; --owp-surface-alpha: ${opacity / 100}; }`;
   };
 

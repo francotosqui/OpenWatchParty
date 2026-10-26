@@ -26,6 +26,7 @@ pub struct Client {
     pub supports_host_transfer: bool,
     pub supports_shared_playback_control: bool,
     pub supports_media_queue: bool,
+    pub supports_start_when_ready: bool,
     pub supports_chat_history: bool,
     pub message_count: u32,
     pub last_reset: Instant,
@@ -70,6 +71,33 @@ pub struct Room {
     /// The room's last chat messages, oldest first, for members who join later.
     #[serde(skip)]
     pub chat_history: VecDeque<ChatEntry>,
+    /// Why members with `start_when_ready` say they can't play yet, by client
+    /// id (see `readiness`). A member is ready once it is in `ready_clients`
+    /// and not here.
+    #[serde(skip)]
+    pub not_ready: HashMap<String, NotReadyReason>,
+    /// Whether the next start of the room's item counts down (the room was
+    /// created paused, or moved to another item that doesn't go on a series).
+    #[serde(skip)]
+    pub countdown_pending: bool,
+}
+
+/// Why a member can't play yet: `readiness` from its client, or `loading`
+/// while it hasn't reported the room media ready.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NotReadyReason {
+    Loading,
+    Transcoding,
+    Buffering,
+    AutoplayBlocked,
+}
+
+impl NotReadyReason {
+    /// Reasons a `ready` for the room media ends: it has loaded.
+    pub fn ends_with_ready(self) -> bool {
+        matches!(self, Self::Loading | Self::Transcoding)
+    }
 }
 
 /// A chat message kept in the room's history.
@@ -136,6 +164,13 @@ pub struct PendingPlay {
     #[serde(skip)]
     pub generation: u64,
     pub position_ts: u64,
+    /// Until when it waits for the members (server time), then starts anyway.
+    #[serde(skip)]
+    pub deadline_server_ts: u64,
+    /// Whether the member who asked for it shows the start (`start_when_ready`),
+    /// as when it asked: only then may it count down.
+    #[serde(skip)]
+    pub shows_start: bool,
 }
 
 pub(crate) fn next_pending_play_generation() -> u64 {
@@ -174,6 +209,8 @@ pub enum ClientMessageType {
     QueueMove,
     QueueAdvance,
     QueueCountdown,
+    Readiness,
+    StartNow,
     #[serde(other)]
     Unknown,
 }
@@ -200,6 +237,8 @@ impl ClientMessageType {
             Self::QueueMove => "queue_move",
             Self::QueueAdvance => "queue_advance",
             Self::QueueCountdown => "queue_countdown",
+            Self::Readiness => "readiness",
+            Self::StartNow => "start_now",
             Self::Unknown => "unknown",
         }
     }
@@ -226,6 +265,7 @@ pub enum ServerMessageType {
     RoomClosed,
     ChatMessage,
     QueueState,
+    StartState,
     ChatHistory,
 }
 
@@ -249,6 +289,7 @@ impl ServerMessageType {
             Self::ParticipantList => "participant_list",
             Self::ParticipantStatuses => "participant_statuses",
             Self::QueueState => "queue_state",
+            Self::StartState => "start_state",
             Self::ChatHistory => "chat_history",
         }
     }
@@ -435,6 +476,8 @@ mod tests {
             position: 12.0,
             generation: next_pending_play_generation(),
             position_ts: 1_700_000_000_000,
+            deadline_server_ts: 1_700_000_020_000,
+            shows_start: true,
         });
 
         let json = serde_json::to_value(room).unwrap();
@@ -446,6 +489,9 @@ mod tests {
         assert!(json.get("command_cooldown_until").is_none());
         assert!(json.get("guest_command_until").is_none());
         assert!(json["pending_play"].get("generation").is_none());
+        assert!(json["pending_play"].get("deadline_server_ts").is_none());
+        assert!(json.get("not_ready").is_none());
+        assert!(json.get("countdown_pending").is_none());
         assert_eq!(json["pending_play"]["position_ts"], 1_700_000_000_000_u64);
     }
 

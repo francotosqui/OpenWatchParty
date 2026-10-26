@@ -23,7 +23,7 @@ public class OpenWatchPartyController : ControllerBase
 
     /// <summary>
     /// WebSocket protocol version the issued token authorizes. Kept in sync with
-    /// the session server and the JavaScript client; see docs/technical/protocol.md.
+    /// the session server and the JavaScript client; see docs/src/content/docs/technical/protocol.md.
     /// </summary>
     internal const int ProtocolVersion = 1;
 
@@ -60,6 +60,8 @@ public class OpenWatchPartyController : ControllerBase
         "playback/bind.js",
         "playback/sync.js",
         "chat/messages.js",
+        "chat/emoji-data.js",
+        "chat/emoji-picker.js",
         "chat/input.js",
         "ws/send.js",
         "ws/auth.js",
@@ -71,6 +73,7 @@ public class OpenWatchPartyController : ControllerBase
         "ws/connection.js",
         "app/invite.js",
         "app/queue.js",
+        "app/start.js",
         "app/lifecycle.js",
         "app/cleanup.js"
     };
