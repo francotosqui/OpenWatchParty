@@ -1,6 +1,6 @@
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Model.Serialization;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Moq;
 using OpenWatchParty.Plugin.Configuration;
 using Xunit;
@@ -24,21 +24,46 @@ internal sealed class TestPlugin : IDisposable
 
     public TestPlugin(PluginConfiguration? configuration = null)
     {
+        Start(configuration);
+    }
+
+    public Plugin Plugin { get; private set; } = null!;
+
+    /// <summary>What the plugin logged when it was created.</summary>
+    public List<(LogLevel Level, string Message)> Log { get; } = new();
+
+    public string SigningKeyPath => Path.Combine(Plugin.DataFolderPath, "keys", "signing-key.json");
+
+    /// <summary>Creates the plugin again on the same folders, as when Jellyfin restarts.</summary>
+    public void Restart(PluginConfiguration? configuration = null)
+    {
+        Log.Clear();
+        Start(configuration);
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_root)) Directory.Delete(_root, true);
+    }
+
+    private void Start(PluginConfiguration? configuration)
+    {
         var paths = new Mock<IApplicationPaths>();
         paths.SetupGet(p => p.PluginsPath).Returns(Path.Combine(_root, "plugins"));
         paths.SetupGet(p => p.PluginConfigurationsPath).Returns(Path.Combine(_root, "configurations"));
         var serializer = new Mock<IXmlSerializer>();
         serializer.Setup(s => s.DeserializeFromFile(It.IsAny<Type>(), It.IsAny<string>()))
             .Returns(configuration ?? new PluginConfiguration());
-        Plugin = new Plugin(paths.Object, serializer.Object, NullLogger<Plugin>.Instance);
+        Plugin = new Plugin(paths.Object, serializer.Object, new ListLogger(Log));
     }
 
-    public Plugin Plugin { get; }
-
-    public string SigningKeyPath => Path.Combine(Plugin.DataFolderPath, "keys", "signing-key.json");
-
-    public void Dispose()
+    private sealed class ListLogger(List<(LogLevel Level, string Message)> entries) : ILogger<Plugin>
     {
-        if (Directory.Exists(_root)) Directory.Delete(_root, true);
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => entries.Add((logLevel, formatter(state, exception)));
     }
 }

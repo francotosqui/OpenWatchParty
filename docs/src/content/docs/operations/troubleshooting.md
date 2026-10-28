@@ -407,6 +407,7 @@ Location varies by installation:
 **Look for:**
 ```
 [OpenWatchParty] JWT authentication is enabled.
+[OpenWatchParty] JWT authentication is enabled with the RSA signing key.
 [OpenWatchParty] JwtSecret is not configured.
 ```
 
