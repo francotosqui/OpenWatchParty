@@ -10,6 +10,7 @@ use tungstenite::{client::IntoClientRequest, Message};
 use crate::{
     config::DesiredConfig,
     jellyfin::{JellyfinClient, OpenWatchPartyToken, PluginInfo, PublicSystemInfo},
+    paths::Paths,
     state::InstallationState,
 };
 
@@ -40,6 +41,20 @@ impl DiagnosticReport {
         self.checks.push(warning(id, summary));
         self.overall = overall_status(&self.checks);
     }
+}
+
+pub fn load(paths: &Paths) -> anyhow::Result<(Option<DesiredConfig>, Option<InstallationState>)> {
+    let config = paths
+        .config_file
+        .exists()
+        .then(|| crate::storage::read_toml(&paths.config_file))
+        .transpose()?;
+    let state = paths
+        .state_file
+        .exists()
+        .then(|| crate::storage::read_json(&paths.state_file))
+        .transpose()?;
+    Ok((config, state))
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -707,6 +722,26 @@ pub fn fetch_plugin_report(
     JellyfinClient::new(config.jellyfin.base_url.clone())?
         .with_token(token)
         .diagnostics_report()
+}
+
+pub fn collect_plugin_report(
+    report: &mut DiagnosticReport,
+    config: Option<&DesiredConfig>,
+    api_token_file: Option<&Path>,
+) -> Option<serde_json::Value> {
+    let (Some(config), Some(api_token_file)) = (config, api_token_file) else {
+        return None;
+    };
+    match fetch_plugin_report(config, api_token_file) {
+        Ok(value) => Some(value),
+        Err(error) => {
+            report.add_warning(
+                "plugin_report",
+                format!("could not collect the plugin diagnostics report: {error}"),
+            );
+            None
+        }
+    }
 }
 
 pub fn bundle(

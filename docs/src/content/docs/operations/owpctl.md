@@ -58,8 +58,8 @@ page and revoke the temporary API key in Jellyfin after setup and diagnostics.
 
 ## Remote Browser Access
 
-When `owpctl setup --web` runs over SSH, its loopback URL belongs to the
-remote machine, not your computer. Keep that setup process running and create
+When `owpctl setup --web` or `owpctl ui` runs over SSH, its loopback URL belongs
+to the remote machine, not your computer. Keep that process running and create
 an SSH local forward in another terminal on your computer. For example, if
 the printed URL uses port `43123`:
 
@@ -120,6 +120,20 @@ owpctl doctor --bundle /tmp/owp-support.json --api-token-file /run/owp-jellyfin-
 - `installation_phase`: warns when a saved installation did not reach its ready phase and should be resumed.
 
 It never prints the token, JWT or secret. `--bundle` writes a redacted support file containing the report, desired configuration, installation state and, when an admin token is supplied, the plugin's own diagnostics report. The installation secret fingerprint is removed, and a plugin-report collection failure is recorded as a warning instead of preventing the bundle from being written.
+
+## Dashboard
+
+`owpctl ui` opens a local, read-only dashboard that presents the `doctor`
+checks as tiles, with failures first. Use **Run again** to refresh the checks or
+**Download support report** to download the same file produced by `doctor --bundle`.
+The dashboard only reads configuration, state and service status.
+
+The printed URL contains a one-time token. After opening it, reloading works in
+the same browser session. Pass `--api-token-file <path>` to include the deep
+plugin checks and plugin diagnostics in support downloads, or `--no-open` to
+print the URL without launching a browser. Press Ctrl+C in the terminal to stop
+the dashboard. For remote use, forward the printed loopback port over SSH using
+the same local and remote port as described above.
 
 ## Maintenance
 
