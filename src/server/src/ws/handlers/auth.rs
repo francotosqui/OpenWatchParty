@@ -13,6 +13,7 @@ const PARTICIPANT_STATUS_FEATURE: &str = "participant_status";
 const PARTICIPANT_TRACKS_FEATURE: &str = "participant_tracks";
 const SHARED_PLAYBACK_FEATURE: &str = "shared_playback_control";
 const ROOM_MODERATION_FEATURE: &str = "room_moderation";
+const ROOM_PERMISSIONS_FEATURE: &str = "room_permissions";
 const MEDIA_QUEUE_FEATURE: &str = "media_queue";
 const ROOM_ACCESS_FEATURE: &str = "room_access";
 const START_WHEN_READY_FEATURE: &str = "start_when_ready";
@@ -27,6 +28,7 @@ async fn refresh_room_capabilities(client_id: &str, state: &SharedState) {
         .and_then(|id| state.rooms.get(id))
     {
         crate::room::send_room_capabilities(room, &state.clients);
+        crate::room::send_room_permissions(room, &state.clients, Some(client_id));
     }
 }
 
@@ -69,6 +71,9 @@ fn declared_features(payload: Option<&serde_json::Value>) -> Option<Vec<String>>
     }
     if declared.contains(&ROOM_MODERATION_FEATURE) {
         supported.push(ROOM_MODERATION_FEATURE.to_string());
+    }
+    if declared.contains(&ROOM_PERMISSIONS_FEATURE) {
+        supported.push(ROOM_PERMISSIONS_FEATURE.to_string());
     }
     if declared.contains(&MEDIA_QUEUE_FEATURE) {
         supported.push(MEDIA_QUEUE_FEATURE.to_string());
@@ -153,6 +158,9 @@ async fn handle_jwt_auth(
                     });
                     client.supports_room_access = features
                         .is_some_and(|features| features.iter().any(|f| f == ROOM_ACCESS_FEATURE));
+                    client.supports_room_permissions = features.is_some_and(|features| {
+                        features.iter().any(|f| f == ROOM_PERMISSIONS_FEATURE)
+                    });
                     client.supports_media_queue = features
                         .is_some_and(|features| features.iter().any(|f| f == MEDIA_QUEUE_FEATURE));
                     client.supports_start_when_ready = features.is_some_and(|features| {
@@ -213,6 +221,8 @@ async fn handle_identity(
                 .is_some_and(|features| features.iter().any(|f| f == ROOM_MODERATION_FEATURE));
             client.supports_room_access =
                 features.is_some_and(|features| features.iter().any(|f| f == ROOM_ACCESS_FEATURE));
+            client.supports_room_permissions = features
+                .is_some_and(|features| features.iter().any(|f| f == ROOM_PERMISSIONS_FEATURE));
             client.supports_media_queue =
                 features.is_some_and(|features| features.iter().any(|f| f == MEDIA_QUEUE_FEATURE));
             client.supports_start_when_ready = features
@@ -907,7 +917,7 @@ mod tests {
             "client",
             &auth_message(serde_json::json!({
                 "token": token,
-                "features": ["host_transfer", "shared_playback_control", "room_moderation", "media_queue", "start_when_ready", "chat_history", "future"]
+                "features": ["host_transfer", "shared_playback_control", "room_moderation", "room_permissions", "media_queue", "start_when_ready", "chat_history", "future"]
             })),
             &state,
             &jwt_config,
@@ -917,6 +927,7 @@ mod tests {
         assert!(state.read().await.clients["client"].supports_host_transfer);
         assert!(state.read().await.clients["client"].supports_shared_playback_control);
         assert!(state.read().await.clients["client"].supports_room_moderation);
+        assert!(state.read().await.clients["client"].supports_room_permissions);
         assert!(state.read().await.clients["client"].supports_media_queue);
         assert!(state.read().await.clients["client"].supports_start_when_ready);
         assert!(state.read().await.clients["client"].supports_chat_history);
@@ -926,6 +937,7 @@ mod tests {
                 "host_transfer",
                 "shared_playback_control",
                 "room_moderation",
+                "room_permissions",
                 "media_queue",
                 "start_when_ready",
                 "chat_history"
@@ -1001,6 +1013,81 @@ mod tests {
                 }
             );
         }
+    }
+
+    #[tokio::test]
+    async fn room_permissions_feature_is_negotiated_and_cleared_on_reauth() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("user", "Guest", true);
+        state.write().await.clients.insert("client".into(), client);
+        for (declared, expected) in [
+            (serde_json::json!(["room_permissions", "future"]), true),
+            (serde_json::json!([]), false),
+            (serde_json::json!("room_permissions"), false),
+        ] {
+            handle_auth(
+                "client",
+                &auth_message(serde_json::json!({ "user_name": "Guest", "features": declared })),
+                &state,
+                &insecure_jwt_config(),
+            )
+            .await;
+            assert_eq!(
+                state.read().await.clients["client"].supports_room_permissions,
+                expected
+            );
+            let features =
+                test_helpers::recv_msg(&mut rx).unwrap().payload.unwrap()["features"].clone();
+            assert_eq!(
+                features,
+                if expected {
+                    serde_json::json!(["room_permissions"])
+                } else {
+                    serde_json::json!([])
+                }
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn reauth_in_room_sends_current_room_permissions() {
+        let state = test_helpers::create_state();
+        let (mut client, mut rx) = test_helpers::create_client_with_rx("user", "Guest", true);
+        client.room_id = Some("room".into());
+        let mut room = test_helpers::create_room("room", "host");
+        room.clients.push("client".into());
+        room.permissions = crate::types::RoomPermissions {
+            seek: true,
+            change_media: false,
+            edit_queue: true,
+        };
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("client".into(), client);
+            locked.rooms.insert("room".into(), room);
+        }
+
+        handle_auth(
+            "client",
+            &auth_message(serde_json::json!({
+                "user_name": "Guest",
+                "features": ["room_permissions"]
+            })),
+            &state,
+            &insecure_jwt_config(),
+        )
+        .await;
+
+        assert_eq!(
+            test_helpers::recv_msg(&mut rx).unwrap().msg_type,
+            ServerMessageType::AuthSuccess
+        );
+        let permissions = test_helpers::recv_msg(&mut rx).unwrap();
+        assert_eq!(permissions.msg_type, ServerMessageType::RoomPermissions);
+        assert_eq!(
+            permissions.payload.unwrap(),
+            serde_json::json!({"seek": true, "change_media": false, "edit_queue": true})
+        );
     }
 
     #[tokio::test]

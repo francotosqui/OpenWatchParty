@@ -262,6 +262,7 @@ mod tests {
                 admitted_users: HashSet::new(),
                 pending_host_reconnect: None,
                 blocked_users: HashSet::new(),
+                permissions: Default::default(),
                 state: PlaybackState {
                     position: 0.0,
                     play_state: crate::types::PlayState::Paused,
@@ -296,6 +297,7 @@ mod tests {
                 admitted_users: HashSet::new(),
                 pending_host_reconnect: None,
                 blocked_users: HashSet::new(),
+                permissions: Default::default(),
                 state: PlaybackState {
                     position: 10.0,
                     play_state: crate::types::PlayState::Playing,

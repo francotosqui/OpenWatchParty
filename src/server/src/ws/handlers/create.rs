@@ -67,6 +67,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         admitted_users: HashSet::new(),
         pending_host_reconnect: None,
         blocked_users: HashSet::new(),
+        permissions: Default::default(),
         state: PlaybackState {
             position: start_pos,
             play_state: PlayState::Paused,
@@ -242,6 +243,7 @@ pub(in crate::ws) async fn handle_create_room(
         if let Some(room) = room {
             crate::room::access::send_access(room, clients);
             crate::room::send_room_capabilities(room, clients);
+            crate::room::send_room_permissions(room, clients, Some(client_id));
             send_room_participant_list(room, clients);
         }
         if let Some((statuses, tracks)) = participant_statuses {
@@ -349,6 +351,7 @@ mod tests {
             let state = test_helpers::create_state();
             let (mut host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
             host.supports_room_moderation = supports_moderation;
+            host.supports_room_permissions = true;
             state.write().await.clients.insert("host".to_string(), host);
             let parsed = IncomingMessage {
                 msg_type: crate::types::ClientMessageType::CreateRoom,
@@ -366,6 +369,14 @@ mod tests {
             assert_eq!(
                 test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
                 ServerMessageType::RoomState
+            );
+            let permissions = test_helpers::recv_msg(&mut host_rx).unwrap();
+            assert_eq!(permissions.msg_type, ServerMessageType::RoomPermissions);
+            assert_eq!(
+                permissions.payload.unwrap(),
+                serde_json::json!({
+                    "seek": false, "change_media": false, "edit_queue": false
+                })
             );
             let list = test_helpers::recv_msg(&mut host_rx).unwrap();
             assert_eq!(list.msg_type, ServerMessageType::ParticipantList);

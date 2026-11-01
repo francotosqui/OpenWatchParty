@@ -113,6 +113,8 @@
     OWP.ui?.updateRoomListUI?.();
     state.guestPaused = false;
     state.sharedPlaybackControl = false;
+    state.roomPermissions = { seek: false, change_media: false, edit_queue: false };
+    state.roomPermissionsReceived = false;
     if (!isReconnect && actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     state.desiredRoomId = id;
     state.rejectedRejoinRoomIds = state.rejectedRejoinRoomIds.filter(roomId => roomId !== id);
@@ -174,6 +176,10 @@
     send('remove_participant', { id, block });
   };
 
+  const setRoomPermissions = ({ seek, change_media, edit_queue }) => {
+    send('set_room_permissions', { seek, change_media, edit_queue });
+  };
+
   Object.assign(actions, {
     setRoomAccess(approval, unlisted) {
       if (state.serverFeatures.includes('room_access')) send('set_room_access', { approval, unlisted });
@@ -200,6 +206,7 @@
     resetRoomUI,
     createRoom,
     joinRoom,
+    setRoomPermissions,
     leaveRoom,
     closeRoom,
     removeParticipant

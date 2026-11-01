@@ -241,7 +241,7 @@ describe('host transfer client support', () => {
     socket.open();
 
     const auth = socket.sent.find(message => message.type === 'auth');
-    assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'room_moderation', 'media_queue', 'start_when_ready', 'chat_history', 'room_access']);
+    assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'room_moderation', 'media_queue', 'start_when_ready', 'room_permissions', 'chat_history', 'room_access']);
     socket.receive({
       type: 'auth_success',
       payload: { user_name: 'Guest', features: ['host_transfer'] }
@@ -262,7 +262,7 @@ describe('host transfer client support', () => {
       const socket = sockets[0];
       socket.open();
       const auth = socket.sent.find(message => message.type === 'auth');
-      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'room_moderation', 'media_queue', 'start_when_ready', 'chat_history', 'room_access']);
+      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'room_moderation', 'media_queue', 'start_when_ready', 'room_permissions', 'chat_history', 'room_access']);
       assert.equal(auth.payload.token, undefined);
     } finally {
       OWP.actions.fetchAuthToken = originalFetchAuthToken;
@@ -488,11 +488,15 @@ describe('host transfer client support', () => {
 
   it('clears stale server features when a new connection opens', async () => {
     OWP.state.serverFeatures = ['host_transfer'];
+    OWP.state.roomPermissions = { seek: true, change_media: true, edit_queue: true };
+    OWP.state.roomPermissionsReceived = true;
     await OWP.actions.connect();
     const socket = sockets[0];
     socket.open();
 
     assert.deepEqual(OWP.state.serverFeatures, []);
+    assert.deepEqual(OWP.state.roomPermissions, { seek: false, change_media: false, edit_queue: false });
+    assert.equal(OWP.state.roomPermissionsReceived, false);
     socket.receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
     Object.assign(OWP.state, {
       inRoom: true,

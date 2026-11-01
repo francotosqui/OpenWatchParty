@@ -14,6 +14,7 @@ pub(crate) use leave::{handle_leave_without_transfer, host_changed_message};
 pub(crate) use participants::send_room_capabilities;
 pub(crate) use participants::{
     participant_list_notification, participant_statuses_message, participant_tracks_message,
-    send_participant_list, send_room_participant_list, ParticipantListNotification,
+    reset_room_permissions_for_host, send_participant_list, send_room_participant_list,
+    send_room_permissions, ParticipantListNotification,
 };
 pub(crate) use queue::{Countdown, MediaQueue, QueueItem, MAX_QUEUE_ITEMS};

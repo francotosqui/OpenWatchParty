@@ -26,6 +26,7 @@ pub struct Client {
     pub supports_host_transfer: bool,
     pub supports_shared_playback_control: bool,
     pub supports_room_moderation: bool,
+    pub supports_room_permissions: bool,
     pub supports_media_queue: bool,
     pub supports_start_when_ready: bool,
     pub supports_chat_history: bool,
@@ -71,6 +72,8 @@ pub struct Room {
     /// Jellyfin user ids that may not rejoin while this room exists.
     #[serde(skip)]
     pub blocked_users: HashSet<String>,
+    #[serde(skip)]
+    pub permissions: RoomPermissions,
     pub state: PlaybackState,
     #[serde(skip)]
     pub state_server_ts: u64,
@@ -109,6 +112,14 @@ pub struct Room {
     /// created paused, or moved to another item that doesn't go on a series).
     #[serde(skip)]
     pub countdown_pending: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RoomPermissions {
+    pub seek: bool,
+    pub change_media: bool,
+    pub edit_queue: bool,
 }
 
 /// Why a member can't play yet: `readiness` from its client, or `loading`
@@ -244,6 +255,7 @@ pub enum ClientMessageType {
     QueueMove,
     QueueAdvance,
     QueueCountdown,
+    SetRoomPermissions,
     Readiness,
     StartNow,
     #[serde(other)]
@@ -278,6 +290,7 @@ impl ClientMessageType {
             Self::QueueMove => "queue_move",
             Self::QueueAdvance => "queue_advance",
             Self::QueueCountdown => "queue_countdown",
+            Self::SetRoomPermissions => "set_room_permissions",
             Self::Readiness => "readiness",
             Self::StartNow => "start_now",
             Self::Unknown => "unknown",
@@ -295,6 +308,7 @@ pub enum ServerMessageType {
     JoinRejected,
 
     RoomCapabilities,
+    RoomPermissions,
     ParticipantList,
     ParticipantStatuses,
     ParticipantTracks,
@@ -325,6 +339,7 @@ impl ServerMessageType {
             Self::JoinPending => "join_pending",
             Self::JoinRejected => "join_rejected",
 
+            Self::RoomPermissions => "room_permissions",
             Self::ClientHello => "client_hello",
             Self::AuthSuccess => "auth_success",
             Self::Error => "error",
@@ -410,6 +425,7 @@ mod tests {
             "participant_statuses",
             "participant_tracks",
             "room_capabilities",
+            "room_permissions",
         ] {
             for fixture in [
                 serde_json::json!({"type":name,"ts":0}),
@@ -547,6 +563,7 @@ mod tests {
         assert!(json.get("not_ready").is_none());
         assert!(json.get("countdown_pending").is_none());
         assert!(json.get("blocked_users").is_none());
+        assert!(json.get("permissions").is_none());
         assert_eq!(json["pending_play"]["position_ts"], 1_700_000_000_000_u64);
     }
 
@@ -574,6 +591,7 @@ mod tests {
             QueueMove,
             QueueAdvance,
             QueueCountdown,
+            SetRoomPermissions,
         ] {
             let wire = serde_json::to_string(&message_type).unwrap();
             assert_eq!(wire, format!("\"{}\"", message_type.as_str()));
