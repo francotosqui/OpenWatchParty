@@ -28,6 +28,7 @@ pub struct Client {
     pub supports_room_moderation: bool,
     pub supports_room_permissions: bool,
     pub supports_media_queue: bool,
+    pub supports_queue_suggestions: bool,
     pub supports_start_when_ready: bool,
     pub supports_chat_history: bool,
     pub supports_room_access: bool,
@@ -256,6 +257,9 @@ pub enum ClientMessageType {
     QueueAdvance,
     QueueCountdown,
     SetRoomPermissions,
+    QueueSuggest,
+    QueueDismiss,
+    QueueAvailability,
     Readiness,
     StartNow,
     #[serde(other)]
@@ -291,6 +295,9 @@ impl ClientMessageType {
             Self::QueueAdvance => "queue_advance",
             Self::QueueCountdown => "queue_countdown",
             Self::SetRoomPermissions => "set_room_permissions",
+            Self::QueueSuggest => "queue_suggest",
+            Self::QueueDismiss => "queue_dismiss",
+            Self::QueueAvailability => "queue_availability",
             Self::Readiness => "readiness",
             Self::StartNow => "start_now",
             Self::Unknown => "unknown",
@@ -326,6 +333,7 @@ pub enum ServerMessageType {
     RoomClosed,
     ChatMessage,
     QueueState,
+    QueueDetails,
     StartState,
     ChatHistory,
 }
@@ -357,10 +365,34 @@ impl ServerMessageType {
             Self::ParticipantStatuses => "participant_statuses",
             Self::ParticipantTracks => "participant_tracks",
             Self::QueueState => "queue_state",
+            Self::QueueDetails => "queue_details",
             Self::StartState => "start_state",
             Self::ChatHistory => "chat_history",
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub(crate) struct QueueDetails {
+    pub suggestions: Vec<QueueSuggestionDetails>,
+    pub unavailable: Vec<QueueUnavailableDetails>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub(crate) struct QueueSuggestionDetails {
+    pub id: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series: Option<String>,
+    pub by: String,
+    pub mine: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub(crate) struct QueueUnavailableDetails {
+    pub id: String,
+    pub names: Vec<String>,
+    pub you: bool,
 }
 
 impl std::fmt::Display for ServerMessageType {
@@ -426,6 +458,9 @@ mod tests {
             "participant_tracks",
             "room_capabilities",
             "room_permissions",
+            "queue_state",
+            "queue_details",
+            "start_state",
         ] {
             for fixture in [
                 serde_json::json!({"type":name,"ts":0}),
@@ -592,6 +627,11 @@ mod tests {
             QueueAdvance,
             QueueCountdown,
             SetRoomPermissions,
+            QueueSuggest,
+            QueueDismiss,
+            QueueAvailability,
+            Readiness,
+            StartNow,
         ] {
             let wire = serde_json::to_string(&message_type).unwrap();
             assert_eq!(wire, format!("\"{}\"", message_type.as_str()));

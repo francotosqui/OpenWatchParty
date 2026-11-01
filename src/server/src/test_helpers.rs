@@ -31,6 +31,7 @@ pub fn create_client_with_rx(
         supports_room_permissions: false,
         supports_media_queue: false,
         supports_room_access: false,
+        supports_queue_suggestions: false,
         supports_start_when_ready: false,
         supports_chat_history: false,
         message_count: 0,

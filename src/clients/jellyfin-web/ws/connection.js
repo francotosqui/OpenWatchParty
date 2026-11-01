@@ -154,6 +154,7 @@
       state.participants = [];
       Object.assign(state, OWP.stateFactories.createQueueState(), OWP.stateFactories.createStartState());
       state.roomBarSection = '';
+      if (OWP.queue?.resetRoom) OWP.queue.resetRoom();
     }
     ui.render();
     if (state.autoReconnect && !state.isConnecting) {
@@ -200,6 +201,7 @@
       case 'join_requests': h.handleJoinRequests(msg); break;
       case 'join_pending': h.handleJoinPending(msg); break;
       case 'join_rejected': h.handleJoinRejected(msg); break;
+      case 'queue_details': h.handleQueueDetails(msg); break;
       case 'start_state': h.handleStartState(msg); break;
       case 'chat_history': h.handleChatHistory(msg); break;
       case 'error': h.handleError(msg); break;

@@ -16,6 +16,7 @@ const ROOM_MODERATION_FEATURE: &str = "room_moderation";
 const ROOM_PERMISSIONS_FEATURE: &str = "room_permissions";
 const MEDIA_QUEUE_FEATURE: &str = "media_queue";
 const ROOM_ACCESS_FEATURE: &str = "room_access";
+const QUEUE_SUGGESTIONS_FEATURE: &str = "queue_suggestions";
 const START_WHEN_READY_FEATURE: &str = "start_when_ready";
 const CHAT_HISTORY_FEATURE: &str = "chat_history";
 
@@ -77,6 +78,9 @@ fn declared_features(payload: Option<&serde_json::Value>) -> Option<Vec<String>>
     }
     if declared.contains(&MEDIA_QUEUE_FEATURE) {
         supported.push(MEDIA_QUEUE_FEATURE.to_string());
+    }
+    if declared.contains(&QUEUE_SUGGESTIONS_FEATURE) {
+        supported.push(QUEUE_SUGGESTIONS_FEATURE.to_string());
     }
     if declared.contains(&START_WHEN_READY_FEATURE) {
         supported.push(START_WHEN_READY_FEATURE.to_string());
@@ -163,6 +167,9 @@ async fn handle_jwt_auth(
                     });
                     client.supports_media_queue = features
                         .is_some_and(|features| features.iter().any(|f| f == MEDIA_QUEUE_FEATURE));
+                    client.supports_queue_suggestions = features.is_some_and(|features| {
+                        features.iter().any(|f| f == QUEUE_SUGGESTIONS_FEATURE)
+                    });
                     client.supports_start_when_ready = features.is_some_and(|features| {
                         features.iter().any(|f| f == START_WHEN_READY_FEATURE)
                     });
@@ -225,6 +232,8 @@ async fn handle_identity(
                 .is_some_and(|features| features.iter().any(|f| f == ROOM_PERMISSIONS_FEATURE));
             client.supports_media_queue =
                 features.is_some_and(|features| features.iter().any(|f| f == MEDIA_QUEUE_FEATURE));
+            client.supports_queue_suggestions = features
+                .is_some_and(|features| features.iter().any(|f| f == QUEUE_SUGGESTIONS_FEATURE));
             client.supports_start_when_ready = features
                 .is_some_and(|features| features.iter().any(|f| f == START_WHEN_READY_FEATURE));
             client.supports_chat_history =
@@ -917,7 +926,7 @@ mod tests {
             "client",
             &auth_message(serde_json::json!({
                 "token": token,
-                "features": ["host_transfer", "shared_playback_control", "room_moderation", "room_permissions", "media_queue", "start_when_ready", "chat_history", "future"]
+                "features": ["host_transfer", "shared_playback_control", "room_moderation", "room_permissions", "media_queue", "queue_suggestions", "start_when_ready", "chat_history", "future"]
             })),
             &state,
             &jwt_config,
@@ -929,6 +938,7 @@ mod tests {
         assert!(state.read().await.clients["client"].supports_room_moderation);
         assert!(state.read().await.clients["client"].supports_room_permissions);
         assert!(state.read().await.clients["client"].supports_media_queue);
+        assert!(state.read().await.clients["client"].supports_queue_suggestions);
         assert!(state.read().await.clients["client"].supports_start_when_ready);
         assert!(state.read().await.clients["client"].supports_chat_history);
         assert_eq!(
@@ -939,6 +949,7 @@ mod tests {
                 "room_moderation",
                 "room_permissions",
                 "media_queue",
+                "queue_suggestions",
                 "start_when_ready",
                 "chat_history"
             ])
@@ -1162,6 +1173,33 @@ mod tests {
             .await;
             assert_eq!(
                 state.read().await.clients["client"].supports_media_queue,
+                expected
+            );
+            assert_eq!(
+                test_helpers::recv_msg(&mut rx).unwrap().payload.unwrap()["features"],
+                declared
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn queue_suggestions_capability_is_negotiated_and_cleared_on_identity() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("user", "Guest", true);
+        state.write().await.clients.insert("client".into(), client);
+        for (declared, expected) in [
+            (serde_json::json!(["queue_suggestions"]), true),
+            (serde_json::json!([]), false),
+        ] {
+            handle_auth(
+                "client",
+                &auth_message(serde_json::json!({ "user_name": "Guest", "features": declared })),
+                &state,
+                &insecure_jwt_config(),
+            )
+            .await;
+            assert_eq!(
+                state.read().await.clients["client"].supports_queue_suggestions,
                 expected
             );
             assert_eq!(

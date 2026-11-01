@@ -116,7 +116,7 @@ test('a guest allowed to change what is playing moves the room to the next item'
   await helpers.clickRoomBar(guest, '#owp-btn-queue');
   const section = guest.locator('#owp-queue-section');
   await expect(section.getByRole('button', { name: 'Next' })).toHaveCount(0);
-  await expect(section).toContainText('Only the host can change the queue.');
+  await expect(section).toContainText('The host decides what goes in the queue.');
 
   await switchPermission('change_media', true);
   await helpers.clickRoomBar(guest, section.getByRole('button', { name: 'Next' }));

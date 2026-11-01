@@ -17,4 +17,4 @@ pub(crate) use participants::{
     reset_room_permissions_for_host, send_participant_list, send_room_participant_list,
     send_room_permissions, ParticipantListNotification,
 };
-pub(crate) use queue::{Countdown, MediaQueue, QueueItem, MAX_QUEUE_ITEMS};
+pub(crate) use queue::{Countdown, MediaQueue, QueueItem, Suggestion, MAX_QUEUE_ITEMS};
