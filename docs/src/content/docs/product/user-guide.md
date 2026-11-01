@@ -161,7 +161,7 @@ Shared play/pause requires a compatible server and host. With an older host or s
 
 The panel follows the Jellyfin display language; English, Spanish, French and German (`en`, `es`, `fr`, `de`) are included.
 
-Over the player, the room bar, its drop-downs, the lobby panel, the up-next strip and the notifications are semi-transparent, so the video shows through them, blurred. The administrator sets their theme (Glass, Solid dark, Light or High contrast), opacity and text size under **Web Client** in the plugin settings (Glass, 55 % and 14 px by default). If your system asks apps to reduce transparency, they stay opaque.
+Over the player, the room bar, its drop-downs, the lobby panel, the up-next strip and the notifications are semi-transparent, so the video shows through them, blurred. The administrator sets their theme (Glass, Solid dark, Light, High contrast or Jellyfin), opacity and text size under **Web Client** in the plugin settings (Glass, 55 % and 14 px by default). If your system asks apps to reduce transparency, they stay opaque.
 
 ![Close-up of the room bar with its chat composer open](/assets/images/watch-party-panel-closeup.png)
 
