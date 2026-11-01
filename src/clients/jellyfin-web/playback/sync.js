@@ -385,5 +385,5 @@
     return { ...current, moved };
   };
 
-  Object.assign(playback, { watchReady, syncLoop, ownStatus, reportStatus, nudgeState, trackDrift, nudge });
+  Object.assign(playback, { watchReady, syncLoop, ownStatus, reportStatus, nudgeState, trackDrift, nudge, expectedPosition });
 })();

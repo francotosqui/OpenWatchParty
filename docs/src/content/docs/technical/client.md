@@ -32,10 +32,10 @@ plugin.js                    # Loader - loads modules in parallel waves
     │   └── handlers/
     │       ├── clock.js, playback.js, room.js, sync.js
     └── app/                 # Initialization and cleanup
-        ├── cleanup.js, invite.js, lifecycle.js, queue.js, tracks.js
+        ├── cleanup.js, invite.js, lifecycle.js, queue.js, tracks.js, segments.js
 ```
 
-The 40 modules are loaded in dependency waves, parallelizing where possible:
+The 44 modules are loaded in dependency waves, parallelizing where possible:
 `state.js` → utility waves → UI waves → playback and chat → `ws/send` →
 `ws/auth` → `ws/validation` → WebSocket handlers → `ws/connection` → `app/*`.
 
@@ -501,7 +501,7 @@ Playback command received from host:
 4. Actions based on `action`:
    - `play`: Schedule play at `target_server_ts` or immediate with compensation
    - `pause`: Schedule pause
-   - `seek`: Schedule seek
+   - `seek`: Schedule seek; when the room was in an intro, recap or credits segment (its expected position while playing, its position while paused) and the seek goes to its end, participants see whether the host or a guest skipped it
 
 #### `state_update`
 Periodic update from host:
@@ -690,3 +690,5 @@ Full cleanup for plugin unload:
 │        │                                                         │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+`app/segments.js` loads Intro, Recap and Outro media segments for the current room item. The native Jellyfin Skip button follows the room seek permission; an unauthorized automatic skip returns the guest to the room. Segment skips notify participants of their initiator.

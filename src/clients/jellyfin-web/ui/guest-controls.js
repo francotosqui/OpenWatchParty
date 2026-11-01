@@ -80,7 +80,7 @@
       return;
     }
     const seekButton = event.target?.closest?.(SEEK_BUTTON_SELECTOR);
-    if (isGuestLocked(video) && seekButton?.closest('.videoOsdBottom')) {
+    if (isGuestLocked(video) && (seekButton?.closest('.videoOsdBottom') || event.target?.closest?.('.skip-button'))) {
       blockEvent(event);
       return;
     }

@@ -37,8 +37,20 @@
     return activeVideo || (fallbackIsUsable ? fallbackVideo : null);
   };
 
+  // What the guests read when the host skips a segment with Jellyfin's Skip
+  // button, so the jump does not surprise them.
+  const SKIP_TOASTS = { Intro: 'hostSkippedIntro', Recap: 'hostSkippedRecap', Outro: 'hostSkippedCredits' };
+
   // The canonical event retains the initiating member, even after readiness.
   const fromGuest = msg => Boolean(msg.client) && msg.client !== state.roomHostId;
+
+  const notifySegmentSkip = (msg, before, position) => {
+    if (!OWP.segments || !ui.showToast) return;
+    OWP.segments.whenKnown(() => {
+      const skipped = OWP.segments.skipped(before, position);
+      if (skipped) ui.showToast(t(fromGuest(msg) ? SKIP_TOASTS[skipped].replace('host', 'guest') : SKIP_TOASTS[skipped]));
+    });
+  };
 
   const applyPlayerEvent = (msg, fallbackVideo) => {
     const video = resolveVideo(fallbackVideo);
@@ -73,7 +85,10 @@
         if (applyToVideo) video.pause();
         if (ui.showToast) ui.showToast(t(fromGuest(msg) ? 'guestPaused' : 'hostPaused'));
         break;
-      case 'seek':
+      case 'seek': {
+        // Where the room was before this seek; the guest may already have
+        // skipped locally while the room was still in the segment.
+        const before = state.lastSyncPlayState === 'playing' ? OWP.playback.expectedPosition?.() : state.lastSyncPosition;
         state.roomWaiting = false;
         applyPosition(video, position, hostPlayState === 'playing', msg.server_ts, applyToVideo);
         state.lastSyncPlayState = hostPlayState;
@@ -85,8 +100,14 @@
           state.syncStatus = 'synced';
           if (applyToVideo) video.pause();
         }
+        notifySegmentSkip(msg, before, position);
         break;
+      }
       case 'buffering':
+        // Seeking may report buffering at the target before seeked arrives.
+        // Recognize the segment jump before it replaces the room position.
+        notifySegmentSkip(msg, state.lastSyncPlayState === 'playing'
+          ? OWP.playback.expectedPosition?.() : state.lastSyncPosition, position);
         state.roomWaiting = true;
         applyPosition(video, position, false, null, applyToVideo);
         state.lastSyncPlayState = 'paused';
@@ -112,6 +133,7 @@
       state.reloadGuestCommand = { msg, roomId: state.roomId, attempt: state.playbackActionAttempt };
       return true;
     }
+    const before = video.currentTime;
     const changed = playing === video.paused;
     // A start the room waited for plays the held video at this same time
     // (app/start.js), maybe first: this play still resumed the room.
@@ -131,6 +153,7 @@
     state.wantsToPlay = playing;
     if (changed && playing) OWP.playback.safePlay(video, seek ? 'guest seek command' : 'guest play command');
     else if (changed) video.pause();
+    if (seek) notifySegmentSkip(msg, before, position);
     // Scheduled play retains its initiator; only guest actions get this toast.
     if (((changed && !seek) || resumedByStart) && ui.showToast && fromGuest(msg)) ui.showToast(t(playing ? 'guestResumed' : 'guestPaused'));
     return true;

@@ -31,7 +31,7 @@ The Watch Party button in the Jellyfin header opens the same panel, but **Create
 
 The **?** next to the panel's close button shows a short help. On the first run in a browser, the panel opens below the header button with this help; it is not shown again in that browser.
 
-As the host, you control playback for everyone. When you play, pause, or seek, all participants follow. Guests can play and pause too, for the whole room.
+As the host, you control playback for everyone. When you play, pause, or seek, all participants follow; that includes Jellyfin's own **Skip Intro** prompt (or credits, recap), which takes the whole room past the segment. Guests can play and pause too, for the whole room.
 
 ![The room bar during an active session](/assets/images/watch-party-panel.png)
 
@@ -289,6 +289,7 @@ OpenWatchParty displays toast notifications to keep you informed about room acti
 These appear briefly in the center of the screen:
 - **"Host resumed playback"** - The host started playing
 - **"Host paused playback"** - The host paused
+- **"The host skipped the intro"** (or the recap, the credits) - The host used Jellyfin's Skip button on a segment Intro Skipper marked
 - **"A guest resumed playback"** / **"A guest paused playback"** - A guest played or paused the room
 - **"A participant joined the room"** - Someone joined
 - **"A participant left the room"** - Someone left
@@ -363,3 +364,5 @@ Hidden rooms appear neither in the room list nor on the home row. Share the
 existing invite link to bring people in. A valid invite link always enters
 directly, including when approval is required. People using an older version
 cannot ask to join and must update OpenWatchParty or use an invite link.
+
+Jellyfin’s native **Skip Intro**, **Skip Recap** and **Skip Credits** buttons follow the room seek permission. Guests without that permission remain with the room, including when Jellyfin is configured to skip automatically.
