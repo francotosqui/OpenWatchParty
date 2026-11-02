@@ -253,6 +253,7 @@
     const active = document.activeElement;
     const focusedAction = active && list.contains(active) ? active.dataset?.moderationAction : '';
     const focusedParticipantId = active && list.contains(active) ? active.dataset?.participantId : '';
+    const focusedTracksKey = active && list.contains(active) ? active.dataset?.tracksKey : '';
     watchPresses();
     if (!state.participants.length) {
       openTracks = '';
@@ -298,6 +299,10 @@
       const replacement = Array.from(list.querySelectorAll('button')).find(button =>
         button.dataset.moderationAction === focusedAction
         && (!focusedParticipantId || button.dataset.participantId === focusedParticipantId));
+      if (replacement) replacement.focus({ preventScroll: true });
+    }
+    if (focusedTracksKey) {
+      const replacement = Array.from(list.querySelectorAll('.owp-tracks-fold')).find(fold => fold.dataset.tracksKey === focusedTracksKey);
       if (replacement) replacement.focus({ preventScroll: true });
     }
     if (state.isHost && state.serverFeatures.includes('room_access')) {
