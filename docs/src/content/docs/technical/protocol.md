@@ -183,7 +183,8 @@ when the client was in a room.
 ### `remove_participant`
 
 Remove one participant, or remove and block every connection for that participant's
-account. The sender's current room is used; only its current host may send this.
+account. The sender's current room is used. The Owner may target guests and the
+Administrator; the Administrator may target guests only.
 
 ```json
 {
@@ -210,6 +211,27 @@ with a valid invite ticket and as a host reclaim too. Rooms that block the authe
 
 In insecure mode the user id is the value declared by the client. A block therefore
 holds only for clients that continue to declare the same value.
+
+### `set_room_administrator`
+
+The Owner may assign exactly one authenticated participant whose client negotiated
+`room_administrator`, or revoke that participant's role. The role belongs to the
+participant's Jellyfin account and applies to its compatible connections. A second
+assignment requires revoking the current Administrator first.
+
+```json
+{
+  "type": "set_room_administrator",
+  "payload": { "participant_id": "uuid-client-id", "enabled": true },
+  "ts": 1678900000000
+}
+```
+
+The server checks the participant's current membership and account identity while
+changing the room state. Only the Owner may send this action.
+If the Administrator is disconnected, the Owner can revoke the stored role with
+`{"user_id":"jellyfin-user-id","enabled":false}` instead of `participant_id`.
+The server accepts this only when the ID matches the current Administrator account.
 
 ### `close_room`
 
@@ -703,6 +725,26 @@ same authenticated host reclaims the role after reconnecting.
 
 Clients from 0.6.0 treat an unknown message type as an invalid schema and stop processing that message, so they safely ignore `host_changed`. They are never selected as the new host because they did not declare `host_transfer`.
 
+### `room_administrator`
+
+Sent only to clients that negotiated `room_administrator`, after joining and whenever
+the role or the matching connections change. `participant_ids` lists the active
+connections of the Administrator's account; `user_id` is `null` when the slot is free.
+Legacy `participant_list` payloads remain unchanged.
+
+```json
+{
+  "type": "room_administrator",
+  "room": "uuid-room-id",
+  "payload": { "user_id": "jellyfin-user-id", "participant_ids": ["uuid-client-id"] },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
+On voluntary departure or after the Owner's reconnection grace expires, a connected
+Administrator with `host_transfer` takes ownership before the normal successor.
+
 ### `participant_statuses`
 
 Each participant's last reported `participant_status`, in the same order as the latest `participant_list`. Sent right after every `participant_list` and to the whole room whenever a status change.
@@ -1028,6 +1070,8 @@ Error response.
 | `CHAT_MESSAGE_TOO_LONG` | Chat text exceeds the configured limit |
 | `INVALID_QUEUE_PAYLOAD` | A queue message's payload is absent, malformed, or outside accepted bounds |
 | `INVALID_MODERATION_PAYLOAD` | A `remove_participant` payload is missing, malformed, or has unknown fields |
+| `INVALID_ADMINISTRATOR_PAYLOAD` | A `set_room_administrator` payload is missing or malformed |
+| `ADMINISTRATOR_ALREADY_ASSIGNED` | The room already has an Administrator |
 | `PARTICIPANT_NOT_FOUND` | The requested participant is no longer a room member |
 | `INVALID_MODERATION_TARGET` | The host targeted itself or tried to block an empty or host-owned user id |
 | `BLOCKED_FROM_ROOM` | The authenticated user's id is blocked from the requested room |

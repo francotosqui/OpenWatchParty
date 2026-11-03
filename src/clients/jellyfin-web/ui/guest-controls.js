@@ -30,7 +30,7 @@
   let lastBlockedToastAt = -Infinity;
 
   const getVideo = () => OWP.utils?.getVideo?.() || null;
-  const isGuest = () => state.inRoom && !state.isHost;
+  const isGuest = () => state.inRoom && !state.isHost && !state.isAdministrator;
   const isGuestWithVideo = video => Boolean(video && isGuest());
   const isGuestLocked = video => isGuestWithVideo(video) && !state.roomPermissions.seek;
   // Play and pause are everyone's; play only waits while the host's stream

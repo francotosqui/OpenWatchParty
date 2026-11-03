@@ -105,10 +105,15 @@
     });
   };
 
-  const canModerate = participant => state.isHost
+  const canModerate = participant => (state.isHost || state.isAdministrator)
     && state.serverFeatures.includes('room_moderation')
     && participant.id
-    && participant.id !== state.clientId;
+    && participant.id !== state.clientId
+    && participant.id !== (state.roomHostId || state.participants.find(member => member.isHost)?.id)
+    && (state.isHost || !state.administratorParticipantIds.includes(participant.id));
+
+  let roleConfirmation = null;
+  let offlineRoleConfirm = false;
 
 
   const moderationButton = (className, label, action) => {
@@ -120,6 +125,7 @@
 
 
   const closeModeration = (list, participantId) => {
+    roleConfirmation = null;
     state.moderationOpenParticipantId = '';
     fillParticipantList(list);
     const button = Array.from(list.querySelectorAll('.owp-mod-more'))
@@ -149,7 +155,11 @@
     const buttons = createElement('div', 'owp-mod-buttons');
     const cancel = moderationButton('owp-pill-btn secondary owp-mod-cancel', t('cancel'), 'cancel');
     const remove = moderationButton('owp-pill-btn secondary owp-mod-remove', t('removeParticipant'), 'remove');
+    remove.prepend(createIcon('user-x'));
     const block = moderationButton('owp-pill-btn danger owp-mod-block', t('blockParticipant'), 'block');
+    const isAdministrator = state.administratorParticipantIds.includes(participant.id);
+    const canChangeRole = state.isHost && state.serverFeatures.includes('room_administrator')
+      && (isAdministrator || !state.administratorUserId);
     cancel.onclick = () => closeModeration(list, participant.id);
     remove.onclick = () => {
       OWP.actions?.removeParticipant?.(participant.id, false);
@@ -165,6 +175,32 @@
       event.stopPropagation();
       closeModeration(list, participant.id);
     });
+    if (canChangeRole) {
+      const enabled = !isAdministrator;
+      const role = moderationButton('owp-pill-btn secondary owp-mod-role', t(enabled ? 'makeAdministrator' : 'removeAdministrator'), 'role');
+      role.dataset.participantId = participant.id;
+      role.onclick = () => {
+        roleConfirmation = { participantId: participant.id, enabled };
+        fillParticipantList(list);
+        list.querySelector('[data-moderation-action="confirm-role"]')?.focus?.({ preventScroll: true });
+      };
+      buttons.appendChild(role);
+    }
+    if (roleConfirmation?.participantId === participant.id) {
+      const confirmation = createElement('div', 'owp-mod-confirm');
+      confirmation.appendChild(createElement('span', '', t(roleConfirmation.enabled ? 'confirmMakeAdministrator' : 'confirmRemoveAdministrator', { name })));
+      const confirm = moderationButton('owp-pill-btn primary', t('confirm'), 'confirm-role');
+      confirm.dataset.participantId = participant.id;
+      confirm.onclick = () => {
+        OWP.actions?.setRoomAdministrator?.(participant.id, roleConfirmation.enabled);
+        closeModeration(list, participant.id);
+      };
+      const cancelRole = moderationButton('owp-pill-btn secondary', t('cancel'), 'cancel-role');
+      cancelRole.dataset.participantId = participant.id;
+      cancelRole.onclick = () => closeModeration(list, participant.id);
+      confirmation.append(confirm, cancelRole);
+      actions.appendChild(confirmation);
+    }
     buttons.append(cancel, remove, block);
     actions.append(hint, buttons);
     return [more, actions];
@@ -268,7 +304,9 @@
       const avatar = createElement('span', 'owp-participant-avatar', Array.from(name)[0].toUpperCase());
       avatar.setAttribute('aria-hidden', 'true');
       const nameEl = createElement('span', 'owp-participant-name', name);
-      const badge = participant.isHost ? createElement('span', 'owp-host-badge', t('host')) : null;
+      const isOwner = state.roomHostId && participant.id ? participant.id === state.roomHostId : participant.isHost;
+      const badge = isOwner ? createElement('span', 'owp-host-badge', t('owner'))
+        : state.administratorParticipantIds.includes(participant.id) ? createElement('span', 'owp-host-badge', t('administrator')) : null;
       const status = PARTICIPANT_STATUS[participant.status];
       const moderation = canModerate(participant) ? createModerationControls(list, participant, name) : [];
       if (moderation.length > 1) item.classList.add('owp-mod-row');
@@ -295,6 +333,37 @@
       item.append(avatar, main, ...moderation);
       return item;
     }));
+    if (state.isHost && state.serverFeatures.includes('room_administrator')
+        && state.administratorUserId && !state.administratorParticipantIds.length) {
+      const offline = createElement('div', 'owp-mod-actions owp-offline-admin');
+      offline.appendChild(createElement('span', 'owp-mod-hint', t('administratorDisconnected')));
+      const revoke = moderationButton('owp-pill-btn secondary', t('removeAdministrator'), 'revoke-offline');
+      revoke.onclick = () => {
+        offlineRoleConfirm = true;
+        fillParticipantList(list);
+        list.querySelector('[data-moderation-action="confirm-offline"]')?.focus?.({ preventScroll: true });
+      };
+      offline.appendChild(revoke);
+      if (offlineRoleConfirm) {
+        const confirm = moderationButton('owp-pill-btn primary', t('confirm'), 'confirm-offline');
+        confirm.onclick = () => {
+          OWP.actions?.revokeOfflineAdministrator?.(state.administratorUserId);
+          offlineRoleConfirm = false;
+          fillParticipantList(list);
+          list.querySelector('.owp-offline-admin button')?.focus?.({ preventScroll: true });
+        };
+        const cancel = moderationButton('owp-pill-btn secondary', t('cancel'), 'cancel-offline');
+        cancel.onclick = () => {
+          offlineRoleConfirm = false;
+          fillParticipantList(list);
+          list.querySelector('.owp-offline-admin button')?.focus?.({ preventScroll: true });
+        };
+        offline.append(createElement('span', 'owp-mod-hint', t('confirmOfflineAdministrator')), confirm, cancel);
+      }
+      list.appendChild(offline);
+    } else {
+      offlineRoleConfirm = false;
+    }
     if (focusedAction) {
       const replacement = Array.from(list.querySelectorAll('button')).find(button =>
         button.dataset.moderationAction === focusedAction

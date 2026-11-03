@@ -290,6 +290,12 @@
     room_capabilities: message => object(message.payload) && onlyKeys(message.payload, ['features']) && features(message.payload.features)
       ? null : 'room_capabilities is invalid',
     room_permissions: message => roomPermissions(message.payload) ? null : 'room_permissions is invalid',
+    room_administrator: message => object(message.payload) && onlyKeys(message.payload, ['user_id', 'participant_ids'])
+      && nullable(message.payload.user_id, id => string(id, MAX_ID_LENGTH))
+      && Array.isArray(message.payload.participant_ids)
+      && message.payload.participant_ids.length <= MAX_PARTICIPANTS
+      && message.payload.participant_ids.every(id => string(id, MAX_ID_LENGTH))
+      ? null : 'room_administrator is invalid',
     room_state: validateRoomState,
     participants_update: validateParticipantCount,
     client_left: validateParticipantCount,
@@ -313,6 +319,7 @@
     'room_state',
     'room_capabilities',
     'room_permissions',
+    'room_administrator',
     'participants_update',
     'client_left',
     'participant_list',

@@ -96,3 +96,7 @@ Server: `src/server/src/types.rs` owns role state and message types; `room/parti
 ## Plan review
 
 Spec coverage: role model/compatibility (1), single appointment (2), recovery (3), powers (4), interface (5), integration/evidence (6). Five review-focus cases have owning tests. The source branch stays isolated from production.
+
+## Implementation verification — 2026-11-03
+
+Implemented server and web client behavior in the isolated feature branch. Final verification: 425 Rust tests, 967 JavaScript tests, Clippy with warnings denied, Rust formatting, plugin Release build, and the new real Chromium E2E scenario all pass. The E2E covers appointment, revocation, playback control, guest moderation and succession. Production integration/deployment remains separate because the branch includes the documented dependency integration base.

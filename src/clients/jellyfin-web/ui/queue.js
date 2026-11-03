@@ -13,7 +13,7 @@
 
   const queue = () => OWP.queue || {};
   const hasQueue = () => state.inRoom && state.serverFeatures.includes('media_queue')
-    && (state.isHost || state.serverFeatures.includes('queue_suggestions') || state.queueItems.length > 0);
+    && ((state.isHost || state.isAdministrator) || state.serverFeatures.includes('queue_suggestions') || state.queueItems.length > 0);
 
   let viewRoom = '';
   let searchOpen = false;
@@ -84,10 +84,10 @@
   const resultAction = (result) => {
     const id = result.item.id;
     if (state.queueItems.some(item => item.id === id)) return createElement('span', 'owp-queue-state', t('queueInQueue'));
-    if (!state.isHost && state.queueSuggestions.some(item => item.id === id)) {
+    if (!(state.isHost || state.isAdministrator) && state.queueSuggestions.some(item => item.id === id)) {
       return createElement('span', 'owp-queue-state', t('queueSuggestedState'));
     }
-    const host = state.isHost;
+    const host = (state.isHost || state.isAdministrator);
     const full = !host && state.queueSuggestions.length >= 10;
     const button = pillButton(host ? 'primary' : 'secondary', t(host ? 'queueAddAction' : 'queueSuggestAction'), () => {
       if (host) queue().add?.(result.item);
@@ -129,7 +129,7 @@
     const existing = section.querySelector('.owp-queue-search');
     const search = existing || createSearch();
     const input = search.querySelector('input');
-    input.placeholder = t(state.isHost ? 'queueSearchHost' : 'queueSearchGuest');
+    input.placeholder = t((state.isHost || state.isAdministrator) ? 'queueSearchHost' : 'queueSearchGuest');
     input.setAttribute('aria-label', input.placeholder);
     const list = createElement('div', 'owp-queue-results');
     searchResults.forEach((result) => {
@@ -160,8 +160,8 @@
     const current = items.findIndex(item => item.id === state.roomMediaId);
     const head = createElement('div', 'owp-queue-head');
     head.appendChild(createElement('span', 'owp-queue-title', t('queueTitle')));
-    if (state.isHost || state.serverFeatures.includes('queue_suggestions')) {
-      const add = iconButton(t(state.isHost ? 'queueAdd' : 'queueSuggest'), 'plus', () => {
+    if ((state.isHost || state.isAdministrator) || state.serverFeatures.includes('queue_suggestions')) {
+      const add = iconButton(t((state.isHost || state.isAdministrator) ? 'queueAdd' : 'queueSuggest'), 'plus', () => {
         searchOpen = !searchOpen;
         ui.updateQueue();
       });
@@ -169,7 +169,7 @@
       add.setAttribute('aria-expanded', String(searchOpen));
       head.appendChild(add);
     }
-    if (state.isHost || state.roomPermissions.change_media) {
+    if ((state.isHost || state.isAdministrator) || state.roomPermissions.change_media) {
       const previous = queue().previousItem?.();
       const next = queue().nextItem?.();
       const back = pillButton('secondary', t('queuePrevious'), () => previous && queue().advance(previous.id), 'prev', true);
@@ -198,12 +198,12 @@
       if (unavailable) text.appendChild(unavailable);
       row.append(mark, text);
       if (index === current) row.appendChild(createElement('span', 'owp-queue-now', t('queueWatching')));
-      if (index > current && (state.isHost || state.roomPermissions.change_media || state.roomPermissions.edit_queue)) {
+      if (index > current && ((state.isHost || state.isAdministrator) || state.roomPermissions.change_media || state.roomPermissions.edit_queue)) {
         const actions = createElement('span', 'owp-queue-actions');
-        if (state.isHost || state.roomPermissions.change_media) {
+        if ((state.isHost || state.isAdministrator) || state.roomPermissions.change_media) {
           actions.appendChild(iconButton(t('queuePlayNow'), 'play', () => queue().advance(item.id)));
         }
-        if (state.isHost || state.roomPermissions.edit_queue) {
+        if ((state.isHost || state.isAdministrator) || state.roomPermissions.edit_queue) {
           actions.append(
             iconButton(t('queueMoveUp'), 'up', () => queue().move(item.id, index - 1), index === current + 1),
             iconButton(t('queueMoveDown'), 'down', () => queue().move(item.id, index + 1), index === items.length - 1),
@@ -235,7 +235,7 @@
         text.append(name, sub);
         // An empty mark keeps the titles in line with the queue's.
         row.append(createElement('span', 'owp-queue-mark'), text);
-        if (state.isHost) {
+        if ((state.isHost || state.isAdministrator)) {
           const actions = createElement('span', 'owp-queue-actions');
           actions.append(
             iconButton(t('queueAcceptSuggestion'), 'check', () => queue().accept?.(suggestion)),
@@ -248,7 +248,7 @@
         suggestions.appendChild(row);
       });
     }
-    const noteKey = state.isHost ? 'queueAutoNote'
+    const noteKey = (state.isHost || state.isAdministrator) ? 'queueAutoNote'
       : state.serverFeatures.includes('queue_suggestions') ? 'queueGuestNote'
         : !state.roomPermissions.change_media && !state.roomPermissions.edit_queue ? 'queueReadOnly' : '';
     const notes = noteKey ? [createElement('div', 'owp-queue-note', t(noteKey))] : [];
@@ -278,7 +278,7 @@
       searchPending = false;
       searchDone = false;
     }
-    if (searchOpen && !state.isHost && !state.serverFeatures.includes('queue_suggestions')) searchOpen = false;
+    if (searchOpen && !(state.isHost || state.isAdministrator) && !state.serverFeatures.includes('queue_suggestions')) searchOpen = false;
     if (!button) {
       button = iconButton(t('queue'), 'playlist', () => views.toggleRoomSection('queue'));
       button.id = BUTTON_ID;
@@ -287,7 +287,7 @@
       leaveBtn.parentNode.insertBefore(button, document.getElementById('owp-btn-invite') || leaveBtn);
     }
     let badge = button.querySelector('.owp-queue-badge');
-    if (state.isHost && state.queueSuggestions.length) {
+    if ((state.isHost || state.isAdministrator) && state.queueSuggestions.length) {
       if (!badge) {
         badge = createElement('span', 'owp-queue-badge');
         button.appendChild(badge);
@@ -305,7 +305,7 @@
     // and the button that has the focus, as they are.
     const key = JSON.stringify([
       state.queueItems, state.queueSuggestions, state.queueUnavailable, state.roomMediaId,
-      state.isHost, state.roomPermissions, searchOpen, searchTerm, searchResults, searchPending, searchDone
+      (state.isHost || state.isAdministrator), state.roomPermissions, searchOpen, searchTerm, searchResults, searchPending, searchDone
     ]);
     if (section.dataset.key !== key) {
       section.dataset.key = key;
@@ -332,9 +332,9 @@
     text.title = next.title;
     const time = createElement('span', 'owp-queue-next-time');
     strip.append(createIcon('next'), text, time);
-    if (state.isHost || state.roomPermissions.change_media) {
+    if ((state.isHost || state.isAdministrator) || state.roomPermissions.change_media) {
       const actions = createElement('div', 'owp-queue-next-actions');
-      if (state.isHost) actions.appendChild(pillButton('secondary', t('cancel'), () => queue().cancelCountdown()));
+      if ((state.isHost || state.isAdministrator)) actions.appendChild(pillButton('secondary', t('cancel'), () => queue().cancelCountdown()));
       actions.appendChild(pillButton('primary', t('queueNext'), () => queue().advance(next.id), 'next'));
       strip.appendChild(actions);
     }
@@ -350,7 +350,7 @@
       return;
     }
     let strip = document.getElementById(STRIP_ID);
-    const controls = `${state.isHost}|${state.roomPermissions.change_media}`;
+    const controls = `${(state.isHost || state.isAdministrator)}|${state.roomPermissions.change_media}`;
     if (!strip || strip.dataset.item !== next.id || strip.dataset.controls !== controls) {
       strip?.remove();
       strip = createStrip(next);

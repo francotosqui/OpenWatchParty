@@ -153,7 +153,7 @@
     const position = video.currentTime;
     // Maybe once Jellyfin answers: the room is looked at then.
     OWP.segments.whenKnown(() => {
-      if (!state.inRoom || state.isHost || state.roomPermissions.seek || state.lastSyncPlayState !== 'playing') return;
+      if (!state.inRoom || state.isHost || state.isAdministrator || state.roomPermissions.seek || state.lastSyncPlayState !== 'playing') return;
       // A stream that reloaded meanwhile is another video.
       if (state.currentVideoElement !== video) return;
       const roomPosition = playback.expectedPosition();
@@ -171,7 +171,7 @@
   const onGuestEvent = (action, video) => {
     const actions = OWP.actions;
     if (!state.inRoom || state.isHost || !actions || !actions.send || !utils.shouldSend()) return;
-    if (!state.sharedPlaybackControl) return;
+    if (!state.sharedPlaybackControl && !state.isAdministrator) return;
     const playing = action === 'play';
     if (state.lastSyncPlayState !== (playing ? 'paused' : 'playing')) return;
     // Not while the room waits for the host, nor for the pause that ends an
@@ -201,7 +201,7 @@
   // The room's position becomes this one, so the sync doesn't pull it back.
   const onGuestSeek = (video) => {
     const actions = OWP.actions;
-    if (!state.inRoom || state.isHost || !state.roomPermissions.seek || !actions?.send) return;
+    if (!state.inRoom || state.isHost || (!state.roomPermissions.seek && !state.isAdministrator) || !actions?.send) return;
     if (!utils.shouldSend() || state.isSyncing || hasPendingRoomWork() || isReloadingStream()) return;
     if (!utils.isVideoReady()) return;
     state.lastSyncPosition = video.currentTime;
@@ -265,7 +265,7 @@
         onHostEvent('play', video);
       },
       pause: () => {
-        if (state.inRoom && !state.isHost && !state.sharedPlaybackControl && state.lastSyncPlayState === 'playing') state.guestPaused = true;
+        if (state.inRoom && !state.isHost && !state.isAdministrator && !state.sharedPlaybackControl && state.lastSyncPlayState === 'playing') state.guestPaused = true;
         onGuestEvent('pause', video);
         onHostEvent('pause', video);
         if (OWP.queue?.onVideoTime) OWP.queue.onVideoTime(video);

@@ -245,6 +245,7 @@ pub(in crate::ws) async fn handle_create_room(
             crate::room::access::send_access(room, clients);
             crate::room::send_room_capabilities(room, clients);
             crate::room::send_room_permissions(room, clients, Some(client_id));
+            crate::room::send_room_administrator(room, clients, Some(client_id));
             send_room_participant_list(room, clients);
         }
         if let Some((statuses, tracks)) = participant_statuses {

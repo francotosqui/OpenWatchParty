@@ -329,7 +329,9 @@ pub(in crate::ws) async fn handle_playback(
                     ErrorCode::NotRoomMember,
                     "Client is not a member of this room",
                 )
-            } else if room.host_id != client_id
+            } else if !clients
+                .get(client_id)
+                .is_some_and(|client| crate::room::can_control(room, client_id, client))
                 && !message.is_open_to_guest(room, clients, client_id)
             {
                 PlaybackOutcome::Error(

@@ -92,6 +92,16 @@
     if (ui.updateRoomPermissions) ui.updateRoomPermissions();
   };
 
+  h.handleRoomAdministrator = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId || !state.serverFeatures.includes('room_administrator')) return;
+    state.administratorParticipantIds = msg.payload.participant_ids;
+    state.administratorUserId = msg.payload.user_id;
+    state.isAdministrator = !state.isHost && state.administratorParticipantIds.includes(state.clientId);
+    ui.updateParticipantList?.();
+    ui.updateGuestControls?.();
+    ui.updateQueue?.();
+  };
+
   h.handleParticipantsUpdate = (msg) => {
     state.participantCount = msg.payload.participant_count;
     if (state.inRoom) ui.updateParticipantList();
@@ -188,6 +198,7 @@
     state.hostControlAcks = [];
     const becameHost = msg.payload.host_id === state.clientId;
     state.isHost = becameHost;
+    state.isAdministrator = !becameHost && state.administratorParticipantIds.includes(state.clientId);
     state.roomHostId = msg.payload.host_id;
     if (becameHost && OWP.actions?.resetDriftCorrection) {
       OWP.actions.resetDriftCorrection();

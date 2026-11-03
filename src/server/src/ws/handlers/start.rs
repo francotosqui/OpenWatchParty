@@ -125,13 +125,15 @@ pub(in crate::ws) async fn handle_start_now(
             )),
             // As for a play: the host, or a guest when both share the controls.
             Some(room)
-                if room.host_id != client_id
-                    && !(clients
+                if !(clients
+                    .get(client_id)
+                    .is_some_and(|client| crate::room::can_control(room, client_id, client))
+                    || (clients
                         .get(client_id)
                         .is_some_and(|client| client.supports_shared_playback_control)
                         && clients
                             .get(&room.host_id)
-                            .is_some_and(|client| client.supports_shared_playback_control)) =>
+                            .is_some_and(|client| client.supports_shared_playback_control))) =>
             {
                 Some((
                     ErrorCode::HostPermissionRequired,

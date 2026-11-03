@@ -7,6 +7,17 @@ pub(crate) fn send_room_administrator(
     clients: &HashMap<String, Client>,
     only: Option<&str>,
 ) {
+    let participant_ids = room
+        .clients
+        .iter()
+        .filter(|id| {
+            clients.get(*id).is_some_and(|client| {
+                !client.user_id.is_empty()
+                    && room.administrator_user_id.as_deref() == Some(client.user_id.as_str())
+            })
+        })
+        .cloned()
+        .collect::<Vec<_>>();
     let senders = room
         .clients
         .iter()
@@ -21,7 +32,9 @@ pub(crate) fn send_room_administrator(
             msg_type: ServerMessageType::RoomAdministrator,
             room: Some(room.room_id.clone()),
             client: None,
-            payload: Some(serde_json::json!({"user_id": room.administrator_user_id})),
+            payload: Some(
+                serde_json::json!({"user_id": room.administrator_user_id, "participant_ids": participant_ids}),
+            ),
             ts: now_ms(),
             server_ts: Some(now_ms()),
         },

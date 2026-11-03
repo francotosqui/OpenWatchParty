@@ -12,6 +12,9 @@
       state.roomAccess = { approval: false, unlisted: false };
       state.joinRequests = [];
       state.participants = [];
+      state.administratorParticipantIds = [];
+      state.administratorUserId = null;
+      state.isAdministrator = false;
       state.sharedPlaybackControl = false;
       state.roomPermissions = { seek: false, change_media: false, edit_queue: false };
       state.roomPermissionsReceived = false;
@@ -26,6 +29,7 @@
       state.clientId = msg.client;
     }
     state.isHost = (msg.payload.host_id === state.clientId);
+    state.isAdministrator = !state.isHost && state.administratorParticipantIds.includes(state.clientId);
     if (state.isHost) state.guestPaused = false;
     state.roomHostId = msg.payload.host_id;
     if (!state.hasTimeSync && typeof msg.server_ts === 'number') {

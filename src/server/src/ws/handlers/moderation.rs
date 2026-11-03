@@ -53,7 +53,8 @@ fn remove_from_room(
     let Some(room) = state.rooms.get(&room_id) else {
         return Outcome::Error(ErrorCode::NotInRoom, "Client is not in a room");
     };
-    if room.host_id != client_id {
+    let actor = &state.clients[client_id];
+    if !crate::room::can_control(room, client_id, actor) {
         return Outcome::Error(
             ErrorCode::HostPermissionRequired,
             "Only the room host can remove participants",
@@ -69,7 +70,25 @@ fn remove_from_room(
             "That participant is no longer in the room",
         );
     };
-    if payload.id == client_id {
+    let owner_account = state
+        .clients
+        .get(&room.host_id)
+        .map(|client| client.user_id.as_str())
+        .or_else(|| {
+            room.pending_host_reconnect
+                .as_ref()
+                .map(|pending| pending.user_id.as_str())
+        });
+    let actor_is_administrator = matches!(
+        crate::room::role_of(room, client_id, actor),
+        crate::room::RoomRole::Administrator
+    );
+    let targets_owner = actor_is_administrator
+        && (payload.id == room.host_id
+            || owner_account.is_some_and(|id| !id.is_empty() && id == target.user_id));
+    let targets_administrator = actor_is_administrator
+        && room.administrator_user_id.as_deref() == Some(target.user_id.as_str());
+    if payload.id == client_id || targets_owner || targets_administrator {
         return Outcome::Error(
             ErrorCode::InvalidModerationTarget,
             "The host cannot remove themselves",
@@ -110,6 +129,15 @@ fn remove_from_room(
         {
             room.pending_host_reconnect = None;
         }
+    }
+    if state
+        .rooms
+        .get(&room_id)
+        .is_some_and(|room| room.administrator_user_id.as_deref() == Some(target_user_id.as_str()))
+    {
+        let room = state.rooms.get_mut(&room_id).expect("room still exists");
+        room.administrator_user_id = None;
+        crate::room::send_room_administrator(room, &state.clients, None);
     }
     let ServerState { clients, rooms } = state;
     let mut removed = Vec::new();
@@ -229,6 +257,73 @@ mod tests {
         assert_eq!(error.msg_type, ServerMessageType::Error);
         assert_eq!(error.payload.as_ref().unwrap()["code"], code);
         assert_eq!(error.payload.as_ref().unwrap()["message"], message);
+    }
+
+    #[test]
+    fn administrator_can_remove_guest_but_never_owner_account_or_self() {
+        let mut state = ServerState::default();
+        let mut room = test_helpers::create_room("room", "owner");
+        room.clients.extend([
+            "owner-tab".into(),
+            "admin".into(),
+            "admin-tab".into(),
+            "guest".into(),
+        ]);
+        room.administrator_user_id = Some("admin-account".into());
+        for (id, account) in [
+            ("owner", "owner-account"),
+            ("owner-tab", "owner-account"),
+            ("admin", "admin-account"),
+            ("admin-tab", "admin-account"),
+            ("guest", "guest-account"),
+        ] {
+            let (mut client, _) = test_helpers::create_client_with_rx(account, id, true);
+            client.room_id = Some("room".into());
+            client.supports_room_administrator = true;
+            state.clients.insert(id.into(), client);
+        }
+        state.rooms.insert("room".into(), room);
+        for id in ["owner", "owner-tab", "admin-tab"] {
+            assert!(matches!(
+                remove_from_room(
+                    "admin",
+                    &RemoveParticipantPayload {
+                        id: id.into(),
+                        block: true
+                    },
+                    &mut state
+                ),
+                Outcome::Error(ErrorCode::InvalidModerationTarget, _)
+            ));
+        }
+        assert!(matches!(
+            remove_from_room(
+                "admin",
+                &RemoveParticipantPayload {
+                    id: "guest".into(),
+                    block: false
+                },
+                &mut state
+            ),
+            Outcome::Removed(_, _)
+        ));
+        assert!(state.clients["guest"].room_id.is_none());
+        assert_eq!(
+            state.rooms["room"].administrator_user_id.as_deref(),
+            Some("admin-account")
+        );
+        assert!(matches!(
+            remove_from_room(
+                "owner",
+                &RemoveParticipantPayload {
+                    id: "admin".into(),
+                    block: false
+                },
+                &mut state
+            ),
+            Outcome::Removed(_, _)
+        ));
+        assert_eq!(state.rooms["room"].administrator_user_id, None);
     }
 
     #[tokio::test]

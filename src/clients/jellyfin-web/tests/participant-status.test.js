@@ -264,7 +264,7 @@ describe('participant statuses', () => {
       const [host, ana, bruno] = rows();
       assert.ok(host.classList.contains('owp-has-status'));
       assert.equal(host.querySelector('.owp-participant-line .owp-participant-name').textContent, 'Franco');
-      assert.equal(host.querySelector('.owp-participant-line .owp-host-badge').textContent, 'Host');
+      assert.equal(host.querySelector('.owp-participant-line .owp-host-badge').textContent, 'Owner');
       assert.equal(host.querySelector('.owp-participant-status').textContent, 'Playing');
       assert.ok(host.querySelector('.owp-participant-status').classList.contains('good'));
       assert.equal(ana.querySelector('.owp-participant-status').textContent, 'Needs to press Play');

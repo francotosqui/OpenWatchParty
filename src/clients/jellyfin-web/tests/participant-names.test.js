@@ -143,7 +143,7 @@ describe('participant names in the room panel', () => {
       { name: 'Ana', isHost: false, status: null, tracks: null }
     ]);
     assert.deepEqual(participantChips(), hostAndGuest);
-    assert.equal(participantsList().querySelector('.owp-host-badge').textContent, 'Host');
+    assert.equal(participantsList().querySelector('.owp-host-badge').textContent, 'Owner');
     assert.equal(participantsText().includes('Online'), false);
 
     renderRoomPanel();
