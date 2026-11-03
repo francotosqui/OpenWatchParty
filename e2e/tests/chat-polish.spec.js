@@ -47,6 +47,14 @@ test('typing, a picked mention and the toast mode reach the other member', async
     await input.fill('');
     await expect(host.locator('#owp-chat-typing')).toBeHidden();
 
+    // Moving the caret out of the mention closes its suggestions, so Enter
+    // does not pick one there.
+    await input.fill('hi @testh');
+    await expect(guest.locator('#owp-mention-list [role="option"]')).toHaveCount(1);
+    await input.press('Home');
+    await expect(guest.locator('#owp-mention-list')).toHaveCount(0);
+    await input.fill('');
+
     // A mention picked from the suggestions is highlighted for the host.
     await input.fill('@testh');
     await expect(guest.locator('#owp-mention-list [role="option"]')).toHaveCount(1);

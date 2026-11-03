@@ -104,4 +104,65 @@ describe('chat mentions', () => {
     M().close();
     assert.equal(document.getElementById('owp-mention-list'), null);
   });
+
+  // A longer known name wins: "@Ana Paula" does not mention Ana.
+  it('does not take a longer known name as a mention of a shorter one', () => {
+    const names = ['Ana', 'Ana Paula'];
+    assert.equal(M().mentionsMe('@Ana Paula hola', 'Ana', names), false);
+    assert.equal(M().mentionsMe('@Ana hola', 'Ana', names), true);
+    assert.equal(M().mentionsMe('@ana paula y @Ana', 'Ana', names), true);
+  });
+
+  // With an empty chat the input is near the top: no room above for six names.
+  it('opens the list below the input when it does not fit above', () => {
+    globalThis.innerHeight = 720;
+    const proto = Object.getPrototypeOf(document.createElement('div'));
+    const previous = proto.getBoundingClientRect;
+    proto.getBoundingClientRect = function getBoundingClientRect() {
+      return this.id === 'owp-mention-list' ? { height: 200 } : { top: 0, bottom: 0, left: 0, width: 0, height: 0 };
+    };
+    try {
+      Object.assign(OWP.state, { participants: people(['testhost', 'test1', 'test2', 'test3', 'test4', 'test5', 'test6']) });
+      const input = document.createElement('input');
+      input.getBoundingClientRect = () => ({ top: 115, bottom: 145, left: 797, width: 329, height: 30 });
+      document.body.appendChild(input);
+      M().attach(input);
+      input.value = '@test'; input.selectionStart = input.selectionEnd = 5; input.dispatchEvent({ type: 'input' });
+      const list = document.getElementById('owp-mention-list');
+      assert.equal(list.querySelectorAll('[role="option"]').length, 6);
+      assert.equal(list.style.top, '149px');
+      assert.equal(list.style.bottom, 'auto');
+      // Lower on the page there is room above, as before.
+      input.getBoundingClientRect = () => ({ top: 500, bottom: 530, left: 797, width: 329, height: 30 });
+      input.dispatchEvent({ type: 'input' });
+      const above = document.getElementById('owp-mention-list');
+      assert.equal(above.style.bottom, '224px');
+      assert.equal(above.style.top, 'auto');
+    } finally {
+      proto.getBoundingClientRect = previous;
+    }
+  });
+
+  // The suggestions belong to the "@query" at the caret; moving the caret away
+  // (Home, a click) leaves them stale.
+  it('closes the suggestions when the caret leaves the mention, and Enter does not pick', () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    M().attach(input);
+    input.value = 'hi @testc'; input.selectionStart = input.selectionEnd = 9; input.dispatchEvent({ type: 'input' });
+    assert.ok(document.getElementById('owp-mention-list'));
+    input.selectionStart = input.selectionEnd = 0;
+    assert.equal(M().handleKeydown(key('Enter')), false);
+    assert.equal(input.value, 'hi @testc');
+    assert.equal(document.getElementById('owp-mention-list'), null);
+
+    input.selectionStart = input.selectionEnd = 9; input.dispatchEvent({ type: 'input' });
+    assert.ok(document.getElementById('owp-mention-list'));
+    input.selectionStart = input.selectionEnd = 0;
+    input.dispatchEvent({ type: 'keyup', key: 'Home' });
+    assert.equal(document.getElementById('owp-mention-list'), null);
+    input.selectionStart = input.selectionEnd = 9;
+    input.dispatchEvent({ type: 'click' });
+    assert.ok(document.getElementById('owp-mention-list'));
+  });
 });

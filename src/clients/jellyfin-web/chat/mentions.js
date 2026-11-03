@@ -6,6 +6,9 @@
   const MAX_SUGGESTIONS = 6;
   const MAX_QUERY_LENGTH = 32;
   const LIST_ID = 'owp-mention-list';
+  const GAP = 4;
+  // Keys that move the caret without typing.
+  const CARET_KEYS = ['Home', 'End', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown'];
 
   // A mention starts after the text's start or a non-word character, and its
   // name ends at the text's end or a non-word character: mail@host is none.
@@ -40,7 +43,8 @@
     return result;
   };
 
-  const mentionsMe = (text, myName) => Boolean(myName) && segments(text, [myName], myName).some(part => part.me);
+  // Against every known name, as the highlight is: "@Ana Paula" is not Ana.
+  const mentionsMe = (text, myName, names = []) => Boolean(myName) && segments(text, [myName, ...names], myName).some(part => part.me);
 
   // Participants other than me whose name starts with the query, then those
   // that contain it.
@@ -93,6 +97,13 @@
     });
   };
 
+  // The suggestions belong to the "@query" at the caret; once the caret left
+  // it (Home, a click) they are stale.
+  const stale = () => {
+    const found = activeQuery(input.value, input.selectionStart ?? input.value.length);
+    return !match || !found || found.start !== match.start;
+  };
+
   const choose = index => {
     const participant = options[index];
     if (!participant || !match) return;
@@ -141,13 +152,17 @@
     hint.textContent = t('mentionHint');
     list.appendChild(hint);
     // The chat drop-down cuts what sticks out of it: drawn over the page, above
-    // the input, as the emoji suggestions are.
+    // the input as the emoji suggestions are, or below it when there is no
+    // room above (an empty chat puts the input near the top).
     document.body.appendChild(list);
     const rect = input.getBoundingClientRect?.();
     if (rect) {
       list.style.left = `${rect.left}px`;
       list.style.width = `${rect.width}px`;
-      list.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+      const height = list.getBoundingClientRect?.().height || 0;
+      const below = rect.top - GAP < height && window.innerHeight - rect.bottom > rect.top;
+      list.style.top = below ? `${rect.bottom + GAP}px` : 'auto';
+      list.style.bottom = below ? 'auto' : `${window.innerHeight - rect.top + GAP}px`;
     }
     input.setAttribute('aria-expanded', 'true');
     input.setAttribute('aria-controls', LIST_ID);
@@ -157,6 +172,10 @@
   // Called from the input's keydown first: true when the list used the key.
   const handleKeydown = event => {
     if (!options.length) return false;
+    if (stale()) {
+      close();
+      return false;
+    }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       const step = event.key === 'ArrowDown' ? 1 : -1;
@@ -182,6 +201,8 @@
     input.setAttribute('aria-autocomplete', 'list');
     input.setAttribute('aria-expanded', 'false');
     input.addEventListener('input', update);
+    input.addEventListener('keyup', event => { if (CARET_KEYS.includes(event.key)) update(); });
+    input.addEventListener('click', update);
     input.addEventListener('blur', close);
   };
 

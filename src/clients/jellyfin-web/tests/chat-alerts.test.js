@@ -189,4 +189,15 @@ describe('chat alerts', () => {
       assert.equal(event.stopped, true, type);
     }
   });
+
+  // The toast agrees with the highlight: a longer known name is someone else.
+  it('does not toast a mention of a longer name that starts with mine', () => {
+    Object.assign(OWP.state, { userName: 'Ana', participants: [{ name: 'Ana' }, { name: 'Ana Paula' }, { name: 'Bruno' }] });
+    OWP.chat.receive(message('@Ana Paula ¿venís?', 'c3', 'Bruno'));
+    assert.equal(toasts.length, 1);
+    assert.equal(toasts[0].options.mention, undefined);
+    assert.equal(OWP.chatAlerts.hasUnreadMention(), false);
+    OWP.chat.receive(message('@Ana vos también', 'c3', 'Bruno'));
+    assert.equal(toasts[1].options.mention, true);
+  });
 });

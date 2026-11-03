@@ -8,6 +8,9 @@
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Everyone the chat knows: me, the members and whoever wrote in it.
+  const knownNames = () => [OWP.state.userName, ...(OWP.state.participants || []).map(p => p.name), ...chat.messages.map(m => m.username)];
+
   // The message text, with "@name" of anyone known to the chat highlighted.
   const appendText = (element, message) => {
     const value = String(message.text);
@@ -15,8 +18,7 @@
       element.textContent = value;
       return;
     }
-    const names = [OWP.state.userName, ...(OWP.state.participants || []).map(p => p.name), ...chat.messages.map(m => m.username)];
-    for (const part of OWP.mentions.segments(value, names, OWP.state.userName)) {
+    for (const part of OWP.mentions.segments(value, knownNames(), OWP.state.userName)) {
       if (!part.mention) {
         element.appendChild(document.createTextNode(part.text));
         continue;
@@ -27,7 +29,7 @@
       element.appendChild(mention);
     }
   };
-  const mentionsMe = message => !message.isOwn && Boolean(OWP.mentions?.mentionsMe(String(message.text), OWP.state.userName));
+  const mentionsMe = message => !message.isOwn && Boolean(OWP.mentions?.mentionsMe(String(message.text), OWP.state.userName, knownNames()));
 
   const renderMessage = (message) => {
     const container = document.getElementById('owp-chat-messages');
