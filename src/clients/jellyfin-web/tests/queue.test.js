@@ -98,13 +98,32 @@ describe('room queue', () => {
 
   it('forgets the queue on entering another room', () => {
     h.handleQueueState(queueState('room-1', { items: [item('a')], current: 0, last_added: 'a', countdown_until: 1234 }));
+    OWP.state.roomPermissions = { seek: true, change_media: true, edit_queue: true };
+    OWP.state.roomPermissionsReceived = true;
     h.handleRoomState(roomState('room-2', 'x'), null);
     assert.deepEqual(OWP.state.queueItems, []);
     assert.equal(OWP.state.queueCurrent, null);
     assert.equal(OWP.state.queueCountdownUntil, 0);
     assert.equal(OWP.state.queueLastAdded, null);
     assert.equal(OWP.state.queueReceived, false);
+    assert.deepEqual(OWP.state.queueSuggestions, []);
+    assert.deepEqual(OWP.state.queueUnavailable, []);
     assert.equal(OWP.state.roomMediaId, 'x');
+    assert.deepEqual(OWP.state.roomPermissions, { seek: false, change_media: false, edit_queue: false });
+    assert.equal(OWP.state.roomPermissionsReceived, false);
+  });
+
+  it('stores queue details for its room and passes the previous suggestions to the queue logic', () => {
+    let previous;
+    OWP.queue.onQueueDetails = value => { previous = value; };
+    const suggestion = { id: 'a'.repeat(32), title: 'Pilot', by: 'Ana', mine: false };
+    const unavailable = { id: suggestion.id, names: ['Ana'], you: false };
+    h.handleQueueDetails({ room: 'room-1', payload: { suggestions: [suggestion], unavailable: [unavailable] } });
+    assert.deepEqual(previous, []);
+    assert.deepEqual(OWP.state.queueSuggestions, [suggestion]);
+    assert.deepEqual(OWP.state.queueUnavailable, [unavailable]);
+    h.handleQueueDetails({ room: 'room-2', payload: { suggestions: [], unavailable: [] } });
+    assert.deepEqual(OWP.state.queueSuggestions, [suggestion]);
   });
 
   it('loads the next item on the host too and reports ready again after an advance', () => {

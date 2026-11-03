@@ -73,6 +73,12 @@
     // the token still opens the socket, then closes it at its auth timeout.
     state.reconnectAttempts = 0;
     if (OWP.actions?.consumePendingInvite) OWP.actions.consumePendingInvite();
+    if (state.pendingJoin && !state.inRoom) {
+      const roomId = state.pendingJoin.roomId;
+      cancelRoomRejoin(false);
+      actions.joinRoom(roomId);
+      return;
+    }
     if (!state.rejoinPending || !state.desiredRoomId) return;
     const roomId = state.desiredRoomId;
     allowRoomState(roomId);
@@ -93,6 +99,8 @@
     state.lastAuthToastAt = 0;
     state.serverFeatures = [];
     state.sharedPlaybackControl = false;
+    state.roomPermissions = { seek: false, change_media: false, edit_queue: false };
+    state.roomPermissionsReceived = false;
     // The version is always declared: it is what lets the server negotiate
     // even when the client has no token or identity to authenticate with.
     const authPayload = { protocol_version: PROTOCOL_VERSION, features: CLIENT_FEATURES };
@@ -104,7 +112,7 @@
     actions.send('ping', { client_ts: utils.nowMs() });
     schedulePing();
     if (!token) handleAuthenticatedConnection();
-    else if (state.rejoinPending && state.desiredRoomId) {
+    else if (!state.pendingJoin && state.rejoinPending && state.desiredRoomId) {
       scheduleRoomRejoinTimeout(state.desiredRoomId, t('reauthFailed'));
     }
     ui.render();
@@ -146,6 +154,7 @@
       state.participants = [];
       Object.assign(state, OWP.stateFactories.createQueueState(), OWP.stateFactories.createStartState());
       state.roomBarSection = '';
+      if (OWP.queue?.resetRoom) OWP.queue.resetRoom();
     }
     ui.render();
     if (state.autoReconnect && !state.isConnecting) {
@@ -174,11 +183,13 @@
       case 'client_hello': h.handleClientHello(msg); break;
       case 'auth_success': h.handleAuthSuccess(msg); break;
       case 'room_capabilities': h.handleRoomCapabilities(msg); break;
+      case 'room_permissions': h.handleRoomPermissions(msg); break;
       case 'room_state': h.handleRoomState(msg, video); break;
       case 'participants_update': h.handleParticipantsUpdate(msg); break;
       case 'client_left': h.handleClientLeft(msg); break;
       case 'participant_list': h.handleParticipantList(msg); break;
       case 'participant_statuses': h.handleParticipantStatuses(msg); break;
+      case 'participant_tracks': h.handleParticipantTracks(msg); break;
       case 'host_changed': h.handleHostChanged(msg); break;
       case 'room_closed': h.handleRoomClosed(msg); break;
       case 'player_event': h.handlePlayerEvent(msg, video); break;
@@ -186,6 +197,11 @@
       case 'pong': h.handlePong(msg); break;
       case 'chat_message': if (OWP.chat && msg.payload) OWP.chat.receive(msg); break;
       case 'queue_state': h.handleQueueState(msg); break;
+      case 'room_access': h.handleRoomAccess(msg); break;
+      case 'join_requests': h.handleJoinRequests(msg); break;
+      case 'join_pending': h.handleJoinPending(msg); break;
+      case 'join_rejected': h.handleJoinRejected(msg); break;
+      case 'queue_details': h.handleQueueDetails(msg); break;
       case 'start_state': h.handleStartState(msg); break;
       case 'chat_history': h.handleChatHistory(msg); break;
       case 'error': h.handleError(msg); break;
@@ -208,7 +224,7 @@
       return;
     }
     try {
-      if (msg.type === 'room_state') {
+      if (msg.type === 'room_state' && msg.room !== state.cancelledJoinRoomId) {
         if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) {
           console.warn('[OpenWatchParty] Ignoring room_state for unexpected room:', msg.room);
           return;
@@ -218,7 +234,8 @@
           return;
         }
       }
-      if (!state.inRoom || msg.room === state.roomId || !msg.room || msg.type === 'room_state') {
+      if (!state.inRoom || msg.room === state.roomId || !msg.room || msg.type === 'room_state' || ['join_pending', 'join_rejected'].includes(msg.type)
+        || (msg.type === 'error' && msg.room === state.pendingJoin?.roomId)) {
         handleMessage(msg);
       }
     } catch (err) {

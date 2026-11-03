@@ -25,16 +25,40 @@ pub struct Client {
     pub authentication_version: u64,
     pub supports_host_transfer: bool,
     pub supports_shared_playback_control: bool,
+    pub supports_room_moderation: bool,
+    pub supports_room_permissions: bool,
     pub supports_media_queue: bool,
+    pub supports_queue_suggestions: bool,
     pub supports_start_when_ready: bool,
     pub supports_chat_history: bool,
+    pub supports_room_access: bool,
     pub message_count: u32,
     pub last_reset: Instant,
     pub last_seen: Instant, // For zombie connection detection
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoomAccess {
+    pub approval: bool,
+    pub unlisted: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct JoinRequest {
+    pub id: String,
+    pub client_id: String,
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Room {
+    pub access: RoomAccess,
+    #[serde(skip)]
+    pub join_requests: Vec<JoinRequest>,
+    /// Admission survives transport reconnects for the life of the room.
+    #[serde(skip)]
+    pub admitted_users: HashSet<String>,
     pub room_id: String,
     pub name: String,
     pub host_id: String,
@@ -46,6 +70,11 @@ pub struct Room {
     /// connection id before the grace-period task expires.
     #[serde(skip)]
     pub pending_host_reconnect: Option<PendingHostReconnect>,
+    /// Jellyfin user ids that may not rejoin while this room exists.
+    #[serde(skip)]
+    pub blocked_users: HashSet<String>,
+    #[serde(skip)]
+    pub permissions: RoomPermissions,
     pub state: PlaybackState,
     #[serde(skip)]
     pub state_server_ts: u64,
@@ -62,6 +91,10 @@ pub struct Room {
     pub statuses: HashMap<String, &'static str>,
     #[serde(skip)]
     pub status_broadcast: StatusBroadcast,
+    /// Each member's last reported audio and subtitle tracks
+    /// (`participant_tracks`), by client id.
+    #[serde(skip)]
+    pub tracks: HashMap<String, serde_json::Value>,
     /// Until when a guest's play or pause holds against the host's state
     /// updates sent before the host applied it.
     #[serde(skip)]
@@ -80,6 +113,14 @@ pub struct Room {
     /// created paused, or moved to another item that doesn't go on a series).
     #[serde(skip)]
     pub countdown_pending: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RoomPermissions {
+    pub seek: bool,
+    pub change_media: bool,
+    pub edit_queue: bool,
 }
 
 /// Why a member can't play yet: `readiness` from its client, or `loading`
@@ -191,12 +232,17 @@ pub(crate) fn next_host_reconnect_generation() -> u64 {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ClientMessageType {
+    SetRoomAccess,
+    CancelJoin,
+    AnswerJoin,
+
     Auth,
     ListRooms,
     CreateRoom,
     JoinRoom,
     Ready,
     LeaveRoom,
+    RemoveParticipant,
     CloseRoom,
     PlayerEvent,
     StateUpdate,
@@ -204,11 +250,16 @@ pub enum ClientMessageType {
     ClientLog,
     ChatMessage,
     ParticipantStatus,
+    ParticipantTracks,
     QueueAdd,
     QueueRemove,
     QueueMove,
     QueueAdvance,
     QueueCountdown,
+    SetRoomPermissions,
+    QueueSuggest,
+    QueueDismiss,
+    QueueAvailability,
     Readiness,
     StartNow,
     #[serde(other)]
@@ -220,11 +271,16 @@ impl ClientMessageType {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Auth => "auth",
+            Self::SetRoomAccess => "set_room_access",
+            Self::CancelJoin => "cancel_join",
+            Self::AnswerJoin => "answer_join",
+
             Self::ListRooms => "list_rooms",
             Self::CreateRoom => "create_room",
             Self::JoinRoom => "join_room",
             Self::Ready => "ready",
             Self::LeaveRoom => "leave_room",
+            Self::RemoveParticipant => "remove_participant",
             Self::CloseRoom => "close_room",
             Self::PlayerEvent => "player_event",
             Self::StateUpdate => "state_update",
@@ -232,11 +288,16 @@ impl ClientMessageType {
             Self::ClientLog => "client_log",
             Self::ChatMessage => "chat_message",
             Self::ParticipantStatus => "participant_status",
+            Self::ParticipantTracks => "participant_tracks",
             Self::QueueAdd => "queue_add",
             Self::QueueRemove => "queue_remove",
             Self::QueueMove => "queue_move",
             Self::QueueAdvance => "queue_advance",
             Self::QueueCountdown => "queue_countdown",
+            Self::SetRoomPermissions => "set_room_permissions",
+            Self::QueueSuggest => "queue_suggest",
+            Self::QueueDismiss => "queue_dismiss",
+            Self::QueueAvailability => "queue_availability",
             Self::Readiness => "readiness",
             Self::StartNow => "start_now",
             Self::Unknown => "unknown",
@@ -248,9 +309,16 @@ impl ClientMessageType {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ServerMessageType {
+    RoomAccess,
+    JoinRequests,
+    JoinPending,
+    JoinRejected,
+
     RoomCapabilities,
+    RoomPermissions,
     ParticipantList,
     ParticipantStatuses,
+    ParticipantTracks,
     ClientHello,
     AuthSuccess,
     Error,
@@ -265,6 +333,7 @@ pub enum ServerMessageType {
     RoomClosed,
     ChatMessage,
     QueueState,
+    QueueDetails,
     StartState,
     ChatHistory,
 }
@@ -273,6 +342,12 @@ impl ServerMessageType {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::RoomCapabilities => "room_capabilities",
+            Self::RoomAccess => "room_access",
+            Self::JoinRequests => "join_requests",
+            Self::JoinPending => "join_pending",
+            Self::JoinRejected => "join_rejected",
+
+            Self::RoomPermissions => "room_permissions",
             Self::ClientHello => "client_hello",
             Self::AuthSuccess => "auth_success",
             Self::Error => "error",
@@ -288,11 +363,36 @@ impl ServerMessageType {
             Self::ChatMessage => "chat_message",
             Self::ParticipantList => "participant_list",
             Self::ParticipantStatuses => "participant_statuses",
+            Self::ParticipantTracks => "participant_tracks",
             Self::QueueState => "queue_state",
+            Self::QueueDetails => "queue_details",
             Self::StartState => "start_state",
             Self::ChatHistory => "chat_history",
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub(crate) struct QueueDetails {
+    pub suggestions: Vec<QueueSuggestionDetails>,
+    pub unavailable: Vec<QueueUnavailableDetails>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub(crate) struct QueueSuggestionDetails {
+    pub id: String,
+    pub title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub series: Option<String>,
+    pub by: String,
+    pub mine: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub(crate) struct QueueUnavailableDetails {
+    pub id: String,
+    pub names: Vec<String>,
+    pub you: bool,
 }
 
 impl std::fmt::Display for ServerMessageType {
@@ -355,7 +455,12 @@ mod tests {
             "chat_message",
             "participant_list",
             "participant_statuses",
+            "participant_tracks",
             "room_capabilities",
+            "room_permissions",
+            "queue_state",
+            "queue_details",
+            "start_state",
         ] {
             for fixture in [
                 serde_json::json!({"type":name,"ts":0}),
@@ -492,6 +597,8 @@ mod tests {
         assert!(json["pending_play"].get("deadline_server_ts").is_none());
         assert!(json.get("not_ready").is_none());
         assert!(json.get("countdown_pending").is_none());
+        assert!(json.get("blocked_users").is_none());
+        assert!(json.get("permissions").is_none());
         assert_eq!(json["pending_play"]["position_ts"], 1_700_000_000_000_u64);
     }
 
@@ -505,6 +612,7 @@ mod tests {
             JoinRoom,
             Ready,
             LeaveRoom,
+            RemoveParticipant,
             CloseRoom,
             PlayerEvent,
             StateUpdate,
@@ -512,11 +620,18 @@ mod tests {
             ClientLog,
             ChatMessage,
             ParticipantStatus,
+            ParticipantTracks,
             QueueAdd,
             QueueRemove,
             QueueMove,
             QueueAdvance,
             QueueCountdown,
+            SetRoomPermissions,
+            QueueSuggest,
+            QueueDismiss,
+            QueueAvailability,
+            Readiness,
+            StartNow,
         ] {
             let wire = serde_json::to_string(&message_type).unwrap();
             assert_eq!(wire, format!("\"{}\"", message_type.as_str()));

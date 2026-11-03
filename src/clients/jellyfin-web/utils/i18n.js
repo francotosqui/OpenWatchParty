@@ -2,8 +2,38 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
 
   const en = {
+    leaveToAskToJoin: "Leave your room to ask to join another one",
+    accessApproval: "Ask to join",
+    accessApprovalHint: "The host decides who comes in",
+    accessUnlisted: "Hide from the room list",
+    accessUnlistedHint: "Hidden from the room list. Anyone with the room ID can still request to join.",
+    roomAccess: "Room access",
+    wantsToJoin: "Wants to join",
+    reject: "Reject",
+    letIn: "Let in",
+    joinRequest: "{name} wants to join the room",
+    moreWaiting_one: "and 1 more waiting",
+    moreWaiting_other: "and {count} more waiting",
+    approvalNeeded: "Approval needed",
+    askToJoin: "Ask to join",
+    joinWaiting: "Waiting for {host} to let you in…",
+    joinRejected: "{host} didn't let you in",
+    joinUnavailable: "This room can't take requests right now",
+    joinWaitingCount: "{count} waiting to join",
+    errorApprovalRequired: "This room asks the host’s approval to join. Update OpenWatchParty to ask to join.",
+    errorAccessPayload: "Invalid room access settings",
+
     unavailable: 'Unavailable',
     hostOnlySeek: 'Only the host can seek',
+    hostOnlyTrack: 'Only the host can skip to another item',
+    guestControls: 'Guest controls', guestCanDo: 'What guests can do',
+    permSeek: 'Seek', permSeekHint: 'Progress bar, chapters, rewind and fast-forward',
+    permChangeMedia: 'Change what is playing', permChangeMediaHint: 'Play another item from the queue',
+    permEditQueue: 'Edit the queue', permEditQueueHint: 'Remove and reorder items',
+    sharedPlayPause: 'Play and pause are always shared.', permYes: 'Yes', permNo: 'No',
+    guestPermissionSeekOn: 'The host now lets guests seek', guestPermissionSeekOff: 'The host no longer lets guests seek',
+    guestPermissionChangeMediaOn: 'The host now lets guests change what is playing', guestPermissionChangeMediaOff: 'The host no longer lets guests change what is playing',
+    guestPermissionEditQueueOn: 'The host now lets guests edit the queue', guestPermissionEditQueueOff: 'The host no longer lets guests edit the queue', guestPermissionsChanged: 'The host changed what guests can do',
     guestResumed: 'A guest resumed playback', guestPaused: 'A guest paused playback', waitingForHost: 'Waiting for the host…',
     status_playing: 'Playing', status_paused: 'Paused', status_in_sync: 'In sync', status_catching_up: 'Catching up', status_buffering: 'Buffering', status_loading: 'Loading', status_blocked: 'Needs to press Play', status_not_watching: 'Not watching',
     lobbyHelp: 'Watch movies and shows together, in sync. This panel opens from the Watch Party button, at the top of Jellyfin or in the player.', gotIt: 'Got it', help: 'Help', syncAdjustment: 'Sync adjustment', nudgeBehind: '{seconds} s behind the host', nudgeAhead: '{seconds} s ahead of the host', nudgeSynced: 'In sync with the host', nudgeBusy: 'Following the host...', nudgePaused: 'The room is paused', nudgeLoading: 'Waiting for the video', autoRateFor: 'Automatic correction: {rate}× speed for {seconds} s.', autoRate: 'Automatic correction: {rate}× speed.', autoOutFor: 'Automatic correction: out of sync for {seconds} s.', autoStarting: 'Automatic correction: starting.', moveAhead: 'Move ahead {step} s', moveBack: 'Move back {step} s', nudgeNote: 'Only moves your video; the host stays in control.',
@@ -13,6 +43,7 @@
     chatUnread_one: 'Chat, {count} unread', chatUnread_other: 'Chat, {count} unread',
     latency: 'Latency to the watch party server (client {client})', leaveRoom: 'Leave room', closeRoom: 'Close room',
     invite: 'Invite', typeMessage: 'Type a message...', sendMessage: 'Send message', emoji: 'Emoji', emojiPicker: 'Emoji picker', emojiCat_faces: 'Smileys & Emotion', emojiCat_hands: 'People & Body', emojiCat_symbols: 'Symbols', emojiCat_nature: 'Animals & Nature', emojiCat_food: 'Food & Drink', emojiCat_activity: 'Activities', cancel: 'Cancel', leave: 'Leave', closeForEveryone: 'Close for everyone', leaveHint: 'If you leave, {name} becomes the host and the room stays open.',
+    participantOptions: 'Options for {name}', moderationHint: 'Someone removed can join again. Someone blocked can’t come back to this room.', removeParticipant: 'Remove', blockParticipant: 'Block',
     closeRoomQuestion: 'Close the room for everyone?', leaveRoomQuestion: 'Leave the room?', noActiveRooms: 'No active rooms.',
     user_one: '{count} user', user_other: '{count} users', noMedia: 'No media', join: 'Join',
     watching_one: '{count} watching', watching_other: '{count} watching', loading: 'Loading...', unknown: 'Unknown',
@@ -27,8 +58,7 @@
     playbackStartFailed: 'Failed to start playback. Try refreshing the page.',
     playbackBlocked: 'Playback was blocked. Press Play in Jellyfin to continue.', waitingForMedia: 'Still waiting for the watch party media',
     hostOnlyPlayback: 'Only the host can control playback', participantJoined: 'A participant joined the room',
-    participantLeft: 'A participant left the room', roomClosed: 'The room was closed', unknownError: 'Unknown error',
-    hostResumed: 'Host resumed playback', hostPaused: 'Host paused playback', roomName: "{name}'s room", queue: 'Queue', queueTitle: 'Room queue', queuePrevious: 'Previous', queueNext: 'Next', queuePlayNow: 'Play now', queueMoveUp: 'Move up', queueMoveDown: 'Move down', queueRemove: 'Remove', queueWatching: 'Watching', queueAutoNote: 'The next episodes are added automatically.', queueReadOnly: 'Only the host can change the queue.', queueUpNext: 'Up next:', queueSeconds: '{seconds} s', queueEpisodeTitle: 'S{season}:E{episode} · {name}',
+    participantLeft: 'A participant left the room', participantRemoved: '{name} was removed from the room', participantBlocked: '{name} was blocked from this room', roomClosed: 'The room was closed', unknownError: 'Unknown error', hostSkippedIntro: 'The host skipped the intro', hostSkippedRecap: 'The host skipped the recap', hostSkippedCredits: 'The host skipped the credits', guestSkippedIntro: "A guest skipped the intro", guestSkippedRecap: "A guest skipped the recap", guestSkippedCredits: "A guest skipped the credits", hostResumed: 'Host resumed playback', hostPaused: 'Host paused playback', tracksAudio: 'Audio', tracksSubtitles: 'Subtitles', tracksOff: 'Off', tracksNone: 'None', tracksForced: '{track} (forced)', tracksOf: 'Audio and subtitles of {name}', roomName: "{name}'s room", queue: 'Queue', queueTitle: 'Room queue', queuePrevious: 'Previous', queueNext: 'Next', queuePlayNow: 'Play now', queueMoveUp: 'Move up', queueMoveDown: 'Move down', queueRemove: 'Remove', queueWatching: 'Watching', queueAutoNote: 'The next episodes are added automatically.', queueReadOnly: 'Only the host can change the queue.', queueUpNext: 'Up next:', queueSeconds: '{seconds} s', queueEpisodeTitle: 'S{season}:E{episode} · {name}', queueEpisodeCode: 'S{season}:E{episode}', queueAdd: 'Add to the queue', queueSuggest: 'Suggest something for the queue', queueSearchHost: 'Search the library', queueSearchGuest: 'Search for something to suggest', queueCloseSearch: 'Close search', queueSearching: 'Searching…', queueNoResults: 'Nothing found', queueKindMovie: 'Movie', queueKindSeries: 'Series', queueKindEpisode: 'Episode', queueKindVideo: 'Video', queueContinuesWith: 'continues with {episode}', queueSeriesEpisodeTitle: '{series} · {episode}', queueAddAction: 'Add', queueSuggestAction: 'Suggest', queueInQueue: 'In the queue', queueSuggestedState: 'Suggested', queueSuggestionsFull: 'There are already 10 suggestions', queueSuggestions: 'Suggestions', queueSuggestedBy: 'Suggested by {name}', queueYourSuggestion: 'Your suggestion · waiting for the host', queueAcceptSuggestion: 'Add to the queue', queueDismissSuggestion: 'Dismiss', queueWithdrawSuggestion: 'Withdraw my suggestion', queueSuggested: '{name} suggested “{title}”', queueYou: 'you', queueUnavailableOne: 'Not available for {a}', queueUnavailableTwo: 'Not available for {a} and {b}', queueUnavailableMore: 'Not available for {a} and {count} more', queueEmpty: 'The queue is empty.', queueGuestNote: 'The host decides what goes in the queue.',
     rejoinFailed: 'Could not rejoin the watch party', reauthFailed: 'Could not reauthenticate the watch party connection',
     hostDisconnected: 'The watch party closed when the host disconnected', youAreHost: 'You are now the host', nowHost: '{name} is now the host', authInvalidResult: 'OpenWatchParty authentication returned an invalid result',
     urlString: 'Session server URL must be a string', urlAbsolute: 'Session server URL must be an absolute ws:// or wss:// URL with a host',
@@ -42,13 +72,43 @@
     authBadUrl: 'OpenWatchParty token endpoint returned an invalid session server URL: {error}',
     authBadResponse: 'OpenWatchParty token endpoint returned an invalid authentication response', authTimeout: 'OpenWatchParty token request timed out',
     authAborted: 'OpenWatchParty token request was aborted', authUnreachable: 'Could not reach the OpenWatchParty token endpoint',
-    errorRoomNotFound: 'Room not found', errorRoomFull: 'Room is full', errorRateLimited: 'Rate limit exceeded', errorHostOnly: 'Only the room host can do that', errorChatTooLong: 'Message too long', errorProtocol: 'The OpenWatchParty client and server versions are incompatible', inviteExpired: 'Invite ticket has expired', inviteWrongRoom: 'Invite ticket does not match this room', roomClosedHostLeft: 'Host left the room', roomClosedNewRoom: 'Host started a new room', roomClosedHostClosed: 'Host closed the room', inviteHostOnly: 'Only the room host can create invite links', inviteUnreachable: 'Could not reach the invite service. Check that your reverse proxy sends /invite to the session server.', authInvalidated: 'Authentication request was invalidated',
+    errorRoomNotFound: 'Room not found', errorRoomFull: 'Room is full', errorRateLimited: 'Rate limit exceeded', errorHostOnly: 'Only the room host can do that', errorChatTooLong: 'Message too long', errorProtocol: 'The OpenWatchParty client and server versions are incompatible', inviteExpired: 'Invite ticket has expired', inviteWrongRoom: 'Invite ticket does not match this room', roomClosedHostLeft: 'Host left the room', roomClosedNewRoom: 'Host started a new room', roomClosedHostClosed: 'Host closed the room', roomClosedRemoved: 'The host removed you from the room', roomClosedBlocked: 'The host removed you from the room and blocked you from rejoining', blockedFromRoom: 'The host blocked you from this room', participantNotFound: 'That person is no longer in the room', cannotBlockOwnAccount: 'You can’t block your own account', inviteHostOnly: 'Only the room host can create invite links', inviteUnreachable: 'Could not reach the invite service. Check that your reverse proxy sends /invite to the session server.', authInvalidated: 'Authentication request was invalidated',
     startWaiting: 'Waiting for {names}', startTwoNames: '{first} and {second}', startManyNames: '{count} people', startCountdown: 'Starting in', startNowHint: 'Select to start without waiting', startIs_loading: 'loading the video', startIs_transcoding: 'the server is converting the video', startIs_buffering: 'filling the buffer', startIs_autoplay_blocked: 'the browser stopped the play: press Play', startWas_loading: 'still loading', startWas_transcoding: 'the server was still converting the video', startWas_buffering: 'still filling the buffer', startWas_autoplay_blocked: 'the browser stopped the play', startWaitingFor: 'Waiting for {name}: {reason}', startMemberReady: '{name} is ready ({seconds} s)', startWithout: 'Started without {name} ({reason})', startCancelled: 'Start cancelled'
   };
 
   const es = {
+    leaveToAskToJoin: "Salí de tu sala para pedir entrar a otra",
+    accessApproval: "Pedir aprobación para entrar",
+    accessApprovalHint: "El anfitrión decide quién entra",
+    accessUnlisted: "Ocultar de la lista",
+    accessUnlistedHint: "No aparece en la lista de salas. Quien tenga el ID puede intentar entrar.",
+    roomAccess: "Acceso a la sala",
+    wantsToJoin: "Quiere entrar",
+    reject: "Rechazar",
+    letIn: "Dejar pasar",
+    joinRequest: "{name} quiere entrar a la sala",
+    moreWaiting_one: "y 1 más esperando",
+    moreWaiting_other: "y {count} más esperando",
+    approvalNeeded: "Con aprobación",
+    askToJoin: "Pedir entrar",
+    joinWaiting: "Esperando que {host} te deje pasar…",
+    joinRejected: "{host} no te dejó entrar",
+    joinUnavailable: "Esta sala no acepta solicitudes ahora",
+    joinWaitingCount: "{count} esperando para entrar",
+    errorApprovalRequired: "Esta sala requiere la aprobación del anfitrión. Actualizá OpenWatchParty para pedir entrar.",
+    errorAccessPayload: "Configuración de acceso inválida",
+
     unavailable: 'No disponible',
     hostOnlySeek: 'Solo el anfitrión puede adelantar o atrasar',
+    hostOnlyTrack: 'Solo el anfitrión puede pasar a otro elemento',
+    guestControls: 'Controles de los invitados', guestCanDo: 'Lo que pueden hacer los invitados',
+    permSeek: 'Adelantar y retroceder', permSeekHint: 'Barra de progreso, capítulos, adelantar y retroceder',
+    permChangeMedia: 'Cambiar lo que se ve', permChangeMediaHint: 'Pasar a otro elemento de la cola',
+    permEditQueue: 'Editar la cola', permEditQueueHint: 'Quitar y reordenar elementos',
+    sharedPlayPause: 'Pausar y reanudar siempre es compartido.', permYes: 'Sí', permNo: 'No',
+    guestPermissionSeekOn: 'El anfitrión dejó que los invitados adelanten y retrocedan', guestPermissionSeekOff: 'El anfitrión ya no deja que los invitados adelanten y retrocedan',
+    guestPermissionChangeMediaOn: 'El anfitrión dejó que los invitados cambien lo que se ve', guestPermissionChangeMediaOff: 'El anfitrión ya no deja que los invitados cambien lo que se ve',
+    guestPermissionEditQueueOn: 'El anfitrión dejó que los invitados editen la cola', guestPermissionEditQueueOff: 'El anfitrión ya no deja que los invitados editen la cola', guestPermissionsChanged: 'El anfitrión cambió lo que pueden hacer los invitados',
     guestResumed: 'Un invitado reanudó la reproducción', guestPaused: 'Un invitado pausó la reproducción', waitingForHost: 'Esperando al anfitrión…',
     status_playing: 'Reproduciendo', status_paused: 'En pausa', status_in_sync: 'Sincronizado', status_catching_up: 'Alcanzando', status_buffering: 'Esperando datos', status_loading: 'Cargando', status_blocked: 'Debe pulsar Reproducir', status_not_watching: 'No está viendo',
     lobbyHelp: 'Ver películas y series en grupo, sincronizados. Este panel se abre desde el botón Watch Party, arriba en Jellyfin o en el reproductor.', gotIt: 'Entendido', help: 'Ayuda', syncAdjustment: 'Ajuste de sincronización', nudgeBehind: '{seconds} s atrás del anfitrión', nudgeAhead: '{seconds} s adelante del anfitrión', nudgeSynced: 'Sincronizado con el anfitrión', nudgeBusy: 'Siguiendo al anfitrión...', nudgePaused: 'La sala está en pausa', nudgeLoading: 'Esperando el video', autoRateFor: 'Corrección automática: velocidad {rate}× desde hace {seconds} s.', autoRate: 'Corrección automática: velocidad {rate}×.', autoOutFor: 'Corrección automática: sin sincronizar desde hace {seconds} s.', autoStarting: 'Corrección automática: empezando.', moveAhead: 'Adelantar {step} s', moveBack: 'Atrasar {step} s', nudgeNote: 'Solo mueve este video; el anfitrión sigue al mando.',
@@ -58,6 +118,7 @@
     chatUnread_one: 'Chat, {count} sin leer', chatUnread_other: 'Chat, {count} sin leer',
     latency: 'Latencia al servidor de la sala (cliente {client})', leaveRoom: 'Salir de la sala', closeRoom: 'Cerrar sala',
     invite: 'Invitar', typeMessage: 'Escribir un mensaje...', sendMessage: 'Enviar mensaje', emoji: 'Emoji', emojiPicker: 'Selector de emojis', emojiCat_faces: 'Emoticonos y emociones', emojiCat_hands: 'Personas y cuerpo', emojiCat_symbols: 'Símbolos', emojiCat_nature: 'Animales y naturaleza', emojiCat_food: 'Comida y bebida', emojiCat_activity: 'Actividades', cancel: 'Cancelar', leave: 'Salir', closeForEveryone: 'Cerrar para todos', leaveHint: 'Si te vas, {name} pasa a ser el anfitrión y la sala sigue abierta.',
+    participantOptions: 'Opciones para {name}', moderationHint: 'Si se la quita, puede volver a entrar. Si se la bloquea, no puede volver a esta sala.', removeParticipant: 'Quitar', blockParticipant: 'Bloquear',
     closeRoomQuestion: '¿Cerrar la sala para todos?', leaveRoomQuestion: '¿Salir de la sala?', noActiveRooms: 'No hay salas activas.',
     user_one: '{count} usuario', user_other: '{count} usuarios', noMedia: 'Sin contenido', join: 'Unirse',
     watching_one: '{count} viendo', watching_other: '{count} viendo', loading: 'Cargando...', unknown: 'Desconocido',
@@ -72,8 +133,7 @@
     playbackStartFailed: 'No se pudo iniciar la reproducción. Recargar la página puede ayudar.',
     playbackBlocked: 'El navegador bloqueó la reproducción. Para continuar, pulsar Reproducir en Jellyfin.', waitingForMedia: 'Esperando el contenido de la sala',
     hostOnlyPlayback: 'Solo el anfitrión controla la reproducción', participantJoined: 'Se unió un participante',
-    participantLeft: 'Un participante salió de la sala', roomClosed: 'La sala se cerró', unknownError: 'Error desconocido',
-    hostResumed: 'El anfitrión reanudó la reproducción', hostPaused: 'El anfitrión pausó la reproducción', roomName: 'Sala de {name}', queue: 'Cola', queueTitle: 'Cola de la sala', queuePrevious: 'Anterior', queueNext: 'Siguiente', queuePlayNow: 'Reproducir ahora', queueMoveUp: 'Subir', queueMoveDown: 'Bajar', queueRemove: 'Quitar', queueWatching: 'Viendo', queueAutoNote: 'Los episodios siguientes se agregan solos.', queueReadOnly: 'Solo el anfitrión cambia la cola.', queueUpNext: 'A continuación:', queueSeconds: '{seconds} s', queueEpisodeTitle: 'T{season}:E{episode} · {name}',
+    participantLeft: 'Un participante salió de la sala', participantRemoved: 'Se quitó a {name} de la sala', participantBlocked: 'Se bloqueó a {name} en esta sala', roomClosed: 'La sala se cerró', unknownError: 'Error desconocido', hostSkippedIntro: 'El anfitrión saltó la intro', hostSkippedRecap: 'El anfitrión saltó el resumen', hostSkippedCredits: 'El anfitrión saltó los créditos', guestSkippedIntro: "Un invitado saltó la introducción", guestSkippedRecap: "Un invitado saltó el resumen", guestSkippedCredits: "Un invitado saltó los créditos", hostResumed: 'El anfitrión reanudó la reproducción', hostPaused: 'El anfitrión pausó la reproducción', tracksAudio: 'Audio', tracksSubtitles: 'Subtítulos', tracksOff: 'Desactivados', tracksNone: 'Ninguno', tracksForced: '{track} (forzados)', tracksOf: 'Audio y subtítulos de {name}', roomName: 'Sala de {name}', queue: 'Cola', queueTitle: 'Cola de la sala', queuePrevious: 'Anterior', queueNext: 'Siguiente', queuePlayNow: 'Reproducir ahora', queueMoveUp: 'Subir', queueMoveDown: 'Bajar', queueRemove: 'Quitar', queueWatching: 'Viendo', queueAutoNote: 'Los episodios siguientes se agregan solos.', queueReadOnly: 'Solo el anfitrión cambia la cola.', queueUpNext: 'A continuación:', queueSeconds: '{seconds} s', queueEpisodeTitle: 'T{season}:E{episode} · {name}', queueEpisodeCode: 'T{season}:E{episode}', queueAdd: 'Agregar a la cola', queueSuggest: 'Sugerir algo para la cola', queueSearchHost: 'Buscar en la biblioteca', queueSearchGuest: 'Buscar algo para sugerir', queueCloseSearch: 'Cerrar la búsqueda', queueSearching: 'Buscando…', queueNoResults: 'No se encontró nada', queueKindMovie: 'Película', queueKindSeries: 'Serie', queueKindEpisode: 'Episodio', queueKindVideo: 'Video', queueContinuesWith: 'sigue con {episode}', queueSeriesEpisodeTitle: '{series} · {episode}', queueAddAction: 'Agregar', queueSuggestAction: 'Sugerir', queueInQueue: 'En la cola', queueSuggestedState: 'Sugerida', queueSuggestionsFull: 'Ya hay 10 sugerencias', queueSuggestions: 'Sugerencias', queueSuggestedBy: 'Sugerida por {name}', queueYourSuggestion: 'Tu sugerencia · esperando al anfitrión', queueAcceptSuggestion: 'Agregar a la cola', queueDismissSuggestion: 'Descartar', queueWithdrawSuggestion: 'Retirar mi sugerencia', queueSuggested: '{name} sugirió «{title}»', queueYou: 'ti', queueUnavailableOne: 'No disponible para {a}', queueUnavailableTwo: 'No disponible para {a} y {b}', queueUnavailableMore: 'No disponible para {a} y {count} más', queueEmpty: 'La cola está vacía.', queueGuestNote: 'El anfitrión decide qué entra en la cola.',
     rejoinFailed: 'No se pudo volver a la sala', reauthFailed: 'No se pudo reautenticar la conexión',
     hostDisconnected: 'La sala se cerró al desconectarse el anfitrión', youAreHost: 'Pasaste a ser el anfitrión', nowHost: '{name} pasó a ser el anfitrión', authInvalidResult: 'La autenticación de OpenWatchParty devolvió un resultado no válido',
     urlString: 'La URL del servidor debe ser texto', urlAbsolute: 'La URL debe ser absoluta, ws:// o wss://, y tener un host',
@@ -86,13 +146,43 @@
     authMissingUrl: 'El servicio de tokens debe proporcionar session_server_url', authBadUrl: 'El servicio de tokens devolvió una URL no válida: {error}',
     authBadResponse: 'El servicio de tokens devolvió una respuesta de autenticación no válida', authTimeout: 'La solicitud del token agotó el tiempo',
     authAborted: 'Se canceló la solicitud del token', authUnreachable: 'No se pudo acceder al servicio de tokens',
-    errorRoomNotFound: 'La sala ya no existe', errorRoomFull: 'La sala está llena', errorRateLimited: 'Demasiadas solicitudes. Intentar de nuevo en un momento.', errorHostOnly: 'Solo el anfitrión puede hacer eso', errorChatTooLong: 'Mensaje demasiado largo', errorProtocol: 'Las versiones del cliente y del servidor de OpenWatchParty no son compatibles', inviteExpired: 'El enlace de invitación expiró', inviteWrongRoom: 'El enlace de invitación es de otra sala', roomClosedHostLeft: 'El anfitrión salió de la sala', roomClosedNewRoom: 'El anfitrión creó otra sala', roomClosedHostClosed: 'El anfitrión cerró la sala', inviteHostOnly: 'Solo el anfitrión puede crear enlaces de invitación', inviteUnreachable: 'No se pudo llegar al servicio de invitaciones. El proxy inverso tiene que enviar /invite al servidor de sesiones.', authInvalidated: 'Se invalidó la solicitud de autenticación',
+    errorRoomNotFound: 'La sala ya no existe', errorRoomFull: 'La sala está llena', errorRateLimited: 'Demasiadas solicitudes. Intentar de nuevo en un momento.', errorHostOnly: 'Solo el anfitrión puede hacer eso', errorChatTooLong: 'Mensaje demasiado largo', errorProtocol: 'Las versiones del cliente y del servidor de OpenWatchParty no son compatibles', inviteExpired: 'El enlace de invitación expiró', inviteWrongRoom: 'El enlace de invitación es de otra sala', roomClosedHostLeft: 'El anfitrión salió de la sala', roomClosedNewRoom: 'El anfitrión creó otra sala', roomClosedHostClosed: 'El anfitrión cerró la sala', roomClosedRemoved: 'El anfitrión te quitó de la sala', roomClosedBlocked: 'El anfitrión te quitó de la sala y no te deja volver a entrar', blockedFromRoom: 'El anfitrión no te deja entrar a esta sala', participantNotFound: 'Esa persona ya no está en la sala', cannotBlockOwnAccount: 'No se puede bloquear la propia cuenta', inviteHostOnly: 'Solo el anfitrión puede crear enlaces de invitación', inviteUnreachable: 'No se pudo llegar al servicio de invitaciones. El proxy inverso tiene que enviar /invite al servidor de sesiones.', authInvalidated: 'Se invalidó la solicitud de autenticación',
     startWaiting: 'Esperando a {names}', startTwoNames: '{first} y {second}', startManyNames: '{count} personas', startCountdown: 'Arranca en', startNowHint: 'Tocá para arrancar sin esperar', startIs_loading: 'cargando el video', startIs_transcoding: 'el servidor está convirtiendo el video', startIs_buffering: 'llenando el buffer', startIs_autoplay_blocked: 'el navegador frenó el play: tiene que tocar Play', startWas_loading: 'seguía cargando', startWas_transcoding: 'el servidor seguía convirtiendo el video', startWas_buffering: 'seguía llenando el buffer', startWas_autoplay_blocked: 'el navegador frenó el play', startWaitingFor: 'Esperando a {name}: {reason}', startMemberReady: '{name} ya está ({seconds} s)', startWithout: 'Arrancó sin {name} ({reason})', startCancelled: 'Arranque cancelado'
   };
 
   const fr = {
+    leaveToAskToJoin: "Quittez votre salle pour demander à en rejoindre une autre",
+    accessApproval: "Demander à rejoindre",
+    accessApprovalHint: "L’hôte décide qui peut entrer",
+    accessUnlisted: "Masquer dans la liste des salles",
+    accessUnlistedHint: "Masquée dans la liste des salles. Toute personne connaissant son identifiant peut demander à entrer.",
+    roomAccess: "Accès à la salle",
+    wantsToJoin: "Souhaite rejoindre",
+    reject: "Refuser",
+    letIn: "Accepter",
+    joinRequest: "{name} souhaite rejoindre la salle",
+    moreWaiting_one: "et 1 autre personne en attente",
+    moreWaiting_other: "et {count} autres personnes en attente",
+    approvalNeeded: "Approbation requise",
+    askToJoin: "Demander à rejoindre",
+    joinWaiting: "En attente de l’accord de {host}…",
+    joinRejected: "{host} n’a pas accepté votre demande",
+    joinUnavailable: "Cette salle ne peut pas recevoir de demandes actuellement",
+    joinWaitingCount: "{count} en attente pour rejoindre",
+    errorApprovalRequired: "Cette salle nécessite l’accord de l’hôte. Mettez OpenWatchParty à jour pour demander à rejoindre.",
+    errorAccessPayload: "Paramètres d’accès invalides",
+
     unavailable: 'Indisponible',
     hostOnlySeek: "Seul l'hôte peut changer la position",
+    hostOnlyTrack: "Seul l'hôte peut passer à un autre élément",
+    guestControls: 'Contrôles des invités', guestCanDo: 'Ce que les invités peuvent faire',
+    permSeek: 'Changer la position', permSeekHint: 'Barre de progression, chapitres, retour et avance rapides',
+    permChangeMedia: 'Changer le contenu en cours', permChangeMediaHint: "Lire un autre élément de la file d'attente",
+    permEditQueue: "Modifier la file d'attente", permEditQueueHint: 'Supprimer et réorganiser des éléments',
+    sharedPlayPause: 'Lecture et pause sont toujours partagées.', permYes: 'Oui', permNo: 'Non',
+    guestPermissionSeekOn: "L'hôte autorise maintenant les invités à changer la position", guestPermissionSeekOff: "L'hôte n'autorise plus les invités à changer la position",
+    guestPermissionChangeMediaOn: "L'hôte autorise maintenant les invités à changer le contenu en cours", guestPermissionChangeMediaOff: "L'hôte n'autorise plus les invités à changer le contenu en cours",
+    guestPermissionEditQueueOn: "L'hôte autorise maintenant les invités à modifier la file d'attente", guestPermissionEditQueueOff: "L'hôte n'autorise plus les invités à modifier la file d'attente", guestPermissionsChanged: "L'hôte a modifié ce que les invités peuvent faire",
     guestResumed: "Un invité a repris la lecture", guestPaused: "Un invité a mis en pause", waitingForHost: "En attente de l'hôte…",
     status_playing: 'Lecture', status_paused: 'En pause', status_in_sync: 'Synchronisé', status_catching_up: 'Rattrapage', status_buffering: 'Mise en mémoire tampon', status_loading: 'Chargement', status_blocked: 'Doit appuyer sur Lecture', status_not_watching: 'Ne regarde pas',
     lobbyHelp: 'Regarder des films et des séries ensemble, synchronisés. Ce panneau s’ouvre depuis le bouton Watch Party, en haut de Jellyfin ou dans le lecteur.', gotIt: 'Compris', help: 'Aide', syncAdjustment: 'Réglage de la synchronisation', nudgeBehind: '{seconds} s de retard sur l’hôte', nudgeAhead: '{seconds} s d’avance sur l’hôte', nudgeSynced: 'Synchronisé avec l’hôte', nudgeBusy: 'Suit l’hôte...', nudgePaused: 'La salle est en pause', nudgeLoading: 'En attente de la vidéo', autoRateFor: 'Correction automatique : vitesse {rate}× depuis {seconds} s.', autoRate: 'Correction automatique : vitesse {rate}×.', autoOutFor: 'Correction automatique : désynchronisé depuis {seconds} s.', autoStarting: 'Correction automatique : démarrage.', moveAhead: 'Avancer de {step} s', moveBack: 'Reculer de {step} s', nudgeNote: 'Ne déplace que cette vidéo ; l’hôte garde la main.',
@@ -102,6 +192,7 @@
     chatUnread_one: 'Chat, {count} non lu', chatUnread_other: 'Chat, {count} non lus',
     latency: 'Latence vers le serveur de session (client {client})', leaveRoom: 'Quitter le salon', closeRoom: 'Fermer le salon',
     invite: 'Inviter', typeMessage: 'Écrire un message...', sendMessage: 'Envoyer', emoji: 'Emoji', emojiPicker: 'Sélecteur d’émojis', emojiCat_faces: 'Émoticônes et émotions', emojiCat_hands: 'Personnes et corps', emojiCat_symbols: 'Symboles', emojiCat_nature: 'Animaux et nature', emojiCat_food: 'Nourriture et boissons', emojiCat_activity: 'Activités', cancel: 'Annuler', leave: 'Quitter', closeForEveryone: 'Fermer pour tous', leaveHint: "Si vous partez, {name} devient l'hôte et le salon reste ouvert.",
+    participantOptions: 'Options pour {name}', moderationHint: 'Une personne retirée peut revenir. Une personne bloquée ne peut plus revenir dans ce salon.', removeParticipant: 'Retirer', blockParticipant: 'Bloquer',
     closeRoomQuestion: 'Fermer le salon pour tous ?', leaveRoomQuestion: 'Quitter le salon ?', noActiveRooms: 'Aucun salon actif.',
     user_one: '{count} personne', user_other: '{count} personnes', noMedia: 'Aucun média', join: 'Rejoindre',
     watching_one: '{count} spectateur', watching_other: '{count} spectateurs', loading: 'Chargement...', unknown: 'Inconnu',
@@ -116,8 +207,7 @@
     playbackStartFailed: 'Impossible de lancer la lecture. Actualisez la page.',
     playbackBlocked: 'Lecture bloquée. Appuyez sur Lecture dans Jellyfin.', waitingForMedia: 'En attente du média de la Watch Party',
     hostOnlyPlayback: "Seul l'hôte contrôle la lecture", participantJoined: 'Un participant a rejoint le salon',
-    participantLeft: 'Un participant a quitté le salon', roomClosed: 'Le salon a été fermé', unknownError: 'Erreur inconnue',
-    hostResumed: "L'hôte a repris la lecture", hostPaused: "L'hôte a mis en pause", roomName: 'Salon : {name}', queue: "File d'attente", queueTitle: "File d'attente du salon", queuePrevious: 'Précédent', queueNext: 'Suivant', queuePlayNow: 'Lire maintenant', queueMoveUp: 'Monter', queueMoveDown: 'Descendre', queueRemove: 'Retirer', queueWatching: 'En cours', queueAutoNote: 'Les épisodes suivants sont ajoutés automatiquement.', queueReadOnly: "Seul l'hôte peut modifier la file d'attente.", queueUpNext: 'À suivre :', queueSeconds: '{seconds} s', queueEpisodeTitle: 'S{season}:E{episode} · {name}',
+    participantLeft: 'Un participant a quitté le salon', participantRemoved: '{name} a été retiré du salon', participantBlocked: '{name} a été bloqué dans ce salon', roomClosed: 'Le salon a été fermé', unknownError: 'Erreur inconnue', hostSkippedIntro: "L'hôte a passé l'intro", hostSkippedRecap: "L'hôte a passé le résumé", hostSkippedCredits: "L'hôte a passé le générique", guestSkippedIntro: "Un invité a passé le générique de début", guestSkippedRecap: "Un invité a passé le récapitulatif", guestSkippedCredits: "Un invité a passé le générique de fin", hostResumed: "L'hôte a repris la lecture", hostPaused: "L'hôte a mis en pause", tracksAudio: 'Audio', tracksSubtitles: 'Sous-titres', tracksOff: 'Désactivés', tracksNone: 'Aucun', tracksForced: '{track} (forcés)', tracksOf: 'Audio et sous-titres de {name}', roomName: 'Salon : {name}', queue: "File d'attente", queueTitle: "File d'attente du salon", queuePrevious: 'Précédent', queueNext: 'Suivant', queuePlayNow: 'Lire maintenant', queueMoveUp: 'Monter', queueMoveDown: 'Descendre', queueRemove: 'Retirer', queueWatching: 'En cours', queueAutoNote: 'Les épisodes suivants sont ajoutés automatiquement.', queueReadOnly: "Seul l'hôte peut modifier la file d'attente.", queueUpNext: 'À suivre :', queueSeconds: '{seconds} s', queueEpisodeTitle: 'S{season}:E{episode} · {name}', queueEpisodeCode: 'S{season}:E{episode}', queueAdd: "Ajouter à la file d'attente", queueSuggest: "Suggérer un contenu pour la file d'attente", queueSearchHost: 'Rechercher dans la médiathèque', queueSearchGuest: 'Rechercher un contenu à suggérer', queueCloseSearch: 'Fermer la recherche', queueSearching: 'Recherche…', queueNoResults: 'Aucun résultat', queueKindMovie: 'Film', queueKindSeries: 'Série', queueKindEpisode: 'Épisode', queueKindVideo: 'Vidéo', queueContinuesWith: 'continue avec {episode}', queueSeriesEpisodeTitle: '{series} · {episode}', queueAddAction: 'Ajouter', queueSuggestAction: 'Suggérer', queueInQueue: "Dans la file d'attente", queueSuggestedState: 'Suggéré', queueSuggestionsFull: 'Il y a déjà 10 suggestions', queueSuggestions: 'Suggestions', queueSuggestedBy: 'Suggéré par {name}', queueYourSuggestion: "Votre suggestion · en attente de l'hôte", queueAcceptSuggestion: "Ajouter à la file d'attente", queueDismissSuggestion: 'Ignorer', queueWithdrawSuggestion: 'Retirer ma suggestion', queueSuggested: '{name} a suggéré « {title} »', queueYou: 'vous', queueUnavailableOne: 'Non disponible pour {a}', queueUnavailableTwo: 'Non disponible pour {a} et {b}', queueUnavailableMore: 'Non disponible pour {a} et {count} autres', queueEmpty: "La file d'attente est vide.", queueGuestNote: "L'hôte décide ce qui entre dans la file d'attente.",
     rejoinFailed: 'Impossible de rejoindre à nouveau la Watch Party', reauthFailed: 'Impossible de réauthentifier la connexion',
     hostDisconnected: "La Watch Party a été fermée après la déconnexion de l'hôte", youAreHost: "Vous êtes maintenant l'hôte", nowHost: "{name} est maintenant l'hôte", authInvalidResult: "Résultat d'authentification OpenWatchParty invalide",
     urlString: "L'URL du serveur doit être une chaîne", urlAbsolute: "L'URL doit être absolue, en ws:// ou wss://, avec un hôte",
@@ -130,13 +220,43 @@
     authMissingUrl: 'Le service de jetons doit fournir session_server_url', authBadUrl: 'Le service de jetons a renvoyé une URL invalide : {error}',
     authBadResponse: "Réponse d'authentification du service de jetons invalide", authTimeout: 'La demande de jeton a expiré',
     authAborted: 'La demande de jeton a été annulée', authUnreachable: 'Le service de jetons est inaccessible',
-    errorRoomNotFound: "Le salon n'existe plus", errorRoomFull: 'Le salon est complet', errorRateLimited: 'Trop de requêtes. Réessayez dans un instant.', errorHostOnly: "Seul l'hôte peut faire cela", errorChatTooLong: 'Message trop long', errorProtocol: 'Les versions du client et du serveur OpenWatchParty sont incompatibles', inviteExpired: "Le lien d'invitation a expiré", inviteWrongRoom: "Le lien d'invitation correspond à un autre salon", roomClosedHostLeft: "L'hôte a quitté le salon", roomClosedNewRoom: "L'hôte a créé un autre salon", roomClosedHostClosed: "L'hôte a fermé le salon", inviteHostOnly: "Seul l'hôte peut créer des liens d'invitation", inviteUnreachable: "Impossible de joindre le service d'invitation. Le proxy inverse doit envoyer /invite au serveur de session.", authInvalidated: "La demande d'authentification a été invalidée",
+    errorRoomNotFound: "Le salon n'existe plus", errorRoomFull: 'Le salon est complet', errorRateLimited: 'Trop de requêtes. Réessayez dans un instant.', errorHostOnly: "Seul l'hôte peut faire cela", errorChatTooLong: 'Message trop long', errorProtocol: 'Les versions du client et du serveur OpenWatchParty sont incompatibles', inviteExpired: "Le lien d'invitation a expiré", inviteWrongRoom: "Le lien d'invitation correspond à un autre salon", roomClosedHostLeft: "L'hôte a quitté le salon", roomClosedNewRoom: "L'hôte a créé un autre salon", roomClosedHostClosed: "L'hôte a fermé le salon", roomClosedRemoved: 'L’hôte vous a retiré du salon', roomClosedBlocked: 'L’hôte vous a retiré du salon et vous a interdit d’y revenir', blockedFromRoom: 'L’hôte vous a bloqué dans ce salon', participantNotFound: 'Cette personne n’est plus dans le salon', cannotBlockOwnAccount: 'Vous ne pouvez pas bloquer votre propre compte', inviteHostOnly: "Seul l'hôte peut créer des liens d'invitation", inviteUnreachable: "Impossible de joindre le service d'invitation. Le proxy inverse doit envoyer /invite au serveur de session.", authInvalidated: "La demande d'authentification a été invalidée",
     startWaiting: 'En attente de {names}', startTwoNames: '{first} et {second}', startManyNames: '{count} personnes', startCountdown: 'Début dans', startNowHint: 'Sélectionnez pour commencer sans attendre', startIs_loading: 'charge la vidéo', startIs_transcoding: 'le serveur convertit la vidéo', startIs_buffering: 'remplit le tampon', startIs_autoplay_blocked: 'le navigateur a bloqué la lecture : appuyer sur Lecture', startWas_loading: 'chargeait encore', startWas_transcoding: 'le serveur convertissait encore la vidéo', startWas_buffering: 'remplissait encore le tampon', startWas_autoplay_blocked: 'le navigateur a bloqué la lecture', startWaitingFor: 'En attente de {name} : {reason}', startMemberReady: '{name} peut commencer ({seconds} s)', startWithout: 'Démarré sans {name} ({reason})', startCancelled: 'Démarrage annulé'
   };
 
   const de = {
+    leaveToAskToJoin: "Verlasse deinen Raum, um den Beitritt zu einem anderen anzufragen",
+    accessApproval: "Beitritt anfragen",
+    accessApprovalHint: "Der Gastgeber entscheidet, wer beitritt",
+    accessUnlisted: "In der Raumliste ausblenden",
+    accessUnlistedHint: "In der Raumliste verborgen. Wer die Raum-ID kennt, kann weiterhin den Beitritt anfragen.",
+    roomAccess: "Raumzugang",
+    wantsToJoin: "Möchte beitreten",
+    reject: "Ablehnen",
+    letIn: "Zulassen",
+    joinRequest: "{name} möchte dem Raum beitreten",
+    moreWaiting_one: "und 1 weitere Person wartet",
+    moreWaiting_other: "und {count} weitere Personen warten",
+    approvalNeeded: "Genehmigung erforderlich",
+    askToJoin: "Beitritt anfragen",
+    joinWaiting: "Warten auf die Genehmigung von {host}…",
+    joinRejected: "{host} hat dich nicht zugelassen",
+    joinUnavailable: "Dieser Raum kann gerade keine Anfragen annehmen",
+    joinWaitingCount: "{count} warten auf den Beitritt",
+    errorApprovalRequired: "Dieser Raum erfordert die Zustimmung des Gastgebers. Aktualisiere OpenWatchParty, um den Beitritt anzufragen.",
+    errorAccessPayload: "Ungültige Zugangseinstellungen",
+
     unavailable: 'Nicht verfügbar',
     hostOnlySeek: 'Nur der Host kann die Position ändern',
+    hostOnlyTrack: 'Nur der Host kann zu einem anderen Element wechseln',
+    guestControls: 'Gaststeuerung', guestCanDo: 'Was Gäste tun können',
+    permSeek: 'Spulen', permSeekHint: 'Fortschrittsleiste, Kapitel, Zurück- und Vorspulen',
+    permChangeMedia: 'Wiedergabe wechseln', permChangeMediaHint: 'Ein anderes Element aus der Warteschlange abspielen',
+    permEditQueue: 'Warteschlange bearbeiten', permEditQueueHint: 'Elemente entfernen und neu anordnen',
+    sharedPlayPause: 'Wiedergabe und Pause werden immer geteilt.', permYes: 'Ja', permNo: 'Nein',
+    guestPermissionSeekOn: 'Der Host erlaubt Gästen jetzt zu spulen', guestPermissionSeekOff: 'Der Host erlaubt Gästen nicht mehr zu spulen',
+    guestPermissionChangeMediaOn: 'Der Host erlaubt Gästen jetzt die Wiedergabe zu wechseln', guestPermissionChangeMediaOff: 'Der Host erlaubt Gästen nicht mehr die Wiedergabe zu wechseln',
+    guestPermissionEditQueueOn: 'Der Host erlaubt Gästen jetzt die Warteschlange zu bearbeiten', guestPermissionEditQueueOff: 'Der Host erlaubt Gästen nicht mehr die Warteschlange zu bearbeiten', guestPermissionsChanged: 'Der Host hat geändert, was Gäste tun können',
     guestResumed: 'Ein Gast hat die Wiedergabe fortgesetzt', guestPaused: 'Ein Gast hat die Wiedergabe pausiert', waitingForHost: 'Warten auf den Host…',
     status_playing: 'Spielt', status_paused: 'Pausiert', status_in_sync: 'Synchron', status_catching_up: 'Holt auf', status_buffering: 'Puffert', status_loading: 'Lädt', status_blocked: 'Muss Play drücken', status_not_watching: 'Schaut nicht zu',
     lobbyHelp: 'Filme und Serien gemeinsam und synchron ansehen. Dieses Panel öffnet sich über die Watch-Party-Schaltfläche oben in Jellyfin oder im Player.', gotIt: 'Verstanden', help: 'Hilfe', syncAdjustment: 'Synchronisation anpassen', nudgeBehind: '{seconds} s hinter dem Host', nudgeAhead: '{seconds} s vor dem Host', nudgeSynced: 'Synchron mit dem Host', nudgeBusy: 'Folgt dem Host...', nudgePaused: 'Der Raum ist pausiert', nudgeLoading: 'Warten auf das Video', autoRateFor: 'Automatische Korrektur: {rate}-fache Geschwindigkeit seit {seconds} s.', autoRate: 'Automatische Korrektur: {rate}-fache Geschwindigkeit.', autoOutFor: 'Automatische Korrektur: seit {seconds} s nicht synchron.', autoStarting: 'Automatische Korrektur: startet.', moveAhead: '{step} s vorspringen', moveBack: '{step} s zurückspringen', nudgeNote: 'Verschiebt nur dieses Video; der Host behält die Kontrolle.',
@@ -146,6 +266,7 @@
     chatUnread_one: 'Chat, {count} ungelesen', chatUnread_other: 'Chat, {count} ungelesen',
     latency: 'Latenz zum Watch-Party-Server (Client {client})', leaveRoom: 'Raum verlassen', closeRoom: 'Raum schließen',
     invite: 'Einladen', typeMessage: 'Nachricht schreiben...', sendMessage: 'Senden', emoji: 'Emoji', emojiPicker: 'Emoji-Auswahl', emojiCat_faces: 'Smileys & Emotionen', emojiCat_hands: 'Menschen & Körper', emojiCat_symbols: 'Symbole', emojiCat_nature: 'Tiere & Natur', emojiCat_food: 'Essen & Trinken', emojiCat_activity: 'Aktivitäten', cancel: 'Abbrechen', leave: 'Verlassen', closeForEveryone: 'Für alle schließen', leaveHint: 'Beim Verlassen wird {name} der Host und der Raum bleibt offen.',
+    participantOptions: 'Optionen für {name}', moderationHint: 'Entfernte Personen können erneut beitreten. Gesperrte Personen können nicht in diesen Raum zurückkehren.', removeParticipant: 'Entfernen', blockParticipant: 'Sperren',
     closeRoomQuestion: 'Raum für alle schließen?', leaveRoomQuestion: 'Raum verlassen?', noActiveRooms: 'Keine aktiven Räume.',
     user_one: '{count} Person', user_other: '{count} Personen', noMedia: 'Keine Medien', join: 'Beitreten',
     watching_one: '{count} schaut zu', watching_other: '{count} schauen zu', loading: 'Lädt...', unknown: 'Unbekannt',
@@ -160,8 +281,7 @@
     playbackStartFailed: 'Wiedergabe konnte nicht starten. Seite neu laden.',
     playbackBlocked: 'Wiedergabe wurde blockiert. In Jellyfin Play drücken.', waitingForMedia: 'Warten auf Watch-Party-Medien',
     hostOnlyPlayback: 'Nur der Host steuert die Wiedergabe', participantJoined: 'Ein Teilnehmer ist beigetreten',
-    participantLeft: 'Ein Teilnehmer hat den Raum verlassen', roomClosed: 'Der Raum wurde geschlossen', unknownError: 'Unbekannter Fehler',
-    hostResumed: 'Der Host hat die Wiedergabe fortgesetzt', hostPaused: 'Der Host hat die Wiedergabe pausiert', roomName: 'Raum von {name}', queue: 'Warteschlange', queueTitle: 'Warteschlange des Raums', queuePrevious: 'Zurück', queueNext: 'Weiter', queuePlayNow: 'Jetzt abspielen', queueMoveUp: 'Nach oben', queueMoveDown: 'Nach unten', queueRemove: 'Entfernen', queueWatching: 'Läuft', queueAutoNote: 'Die nächsten Folgen werden automatisch hinzugefügt.', queueReadOnly: 'Nur der Host kann die Warteschlange ändern.', queueUpNext: 'Als Nächstes:', queueSeconds: '{seconds} s', queueEpisodeTitle: 'S{season}:E{episode} · {name}',
+    participantLeft: 'Ein Teilnehmer hat den Raum verlassen', participantRemoved: '{name} wurde aus dem Raum entfernt', participantBlocked: '{name} wurde für diesen Raum gesperrt', roomClosed: 'Der Raum wurde geschlossen', unknownError: 'Unbekannter Fehler', hostSkippedIntro: 'Der Host hat das Intro übersprungen', hostSkippedRecap: 'Der Host hat den Rückblick übersprungen', hostSkippedCredits: 'Der Host hat den Abspann übersprungen', guestSkippedIntro: "Ein Gast hat das Intro übersprungen", guestSkippedRecap: "Ein Gast hat die Zusammenfassung übersprungen", guestSkippedCredits: "Ein Gast hat den Abspann übersprungen", hostResumed: 'Der Host hat die Wiedergabe fortgesetzt', hostPaused: 'Der Host hat die Wiedergabe pausiert', tracksAudio: 'Audio', tracksSubtitles: 'Untertitel', tracksOff: 'Aus', tracksNone: 'Keine', tracksForced: '{track} (erzwungen)', tracksOf: 'Audio und Untertitel von {name}', roomName: 'Raum von {name}', queue: 'Warteschlange', queueTitle: 'Warteschlange des Raums', queuePrevious: 'Zurück', queueNext: 'Weiter', queuePlayNow: 'Jetzt abspielen', queueMoveUp: 'Nach oben', queueMoveDown: 'Nach unten', queueRemove: 'Entfernen', queueWatching: 'Läuft', queueAutoNote: 'Die nächsten Folgen werden automatisch hinzugefügt.', queueReadOnly: 'Nur der Host kann die Warteschlange ändern.', queueUpNext: 'Als Nächstes:', queueSeconds: '{seconds} s', queueEpisodeTitle: 'S{season}:E{episode} · {name}', queueEpisodeCode: 'S{season}:E{episode}', queueAdd: 'Zur Warteschlange hinzufügen', queueSuggest: 'Etwas für die Warteschlange vorschlagen', queueSearchHost: 'Mediathek durchsuchen', queueSearchGuest: 'Nach einem Vorschlag suchen', queueCloseSearch: 'Suche schließen', queueSearching: 'Suche…', queueNoResults: 'Nichts gefunden', queueKindMovie: 'Film', queueKindSeries: 'Serie', queueKindEpisode: 'Folge', queueKindVideo: 'Video', queueContinuesWith: 'weiter mit {episode}', queueSeriesEpisodeTitle: '{series} · {episode}', queueAddAction: 'Hinzufügen', queueSuggestAction: 'Vorschlagen', queueInQueue: 'In der Warteschlange', queueSuggestedState: 'Vorgeschlagen', queueSuggestionsFull: 'Es gibt bereits 10 Vorschläge', queueSuggestions: 'Vorschläge', queueSuggestedBy: 'Vorgeschlagen von {name}', queueYourSuggestion: 'Dein Vorschlag · wartet auf den Host', queueAcceptSuggestion: 'Zur Warteschlange hinzufügen', queueDismissSuggestion: 'Verwerfen', queueWithdrawSuggestion: 'Meinen Vorschlag zurückziehen', queueSuggested: '{name} hat „{title}“ vorgeschlagen', queueYou: 'dich', queueUnavailableOne: 'Nicht verfügbar für {a}', queueUnavailableTwo: 'Nicht verfügbar für {a} und {b}', queueUnavailableMore: 'Nicht verfügbar für {a} und {count} weitere', queueEmpty: 'Die Warteschlange ist leer.', queueGuestNote: 'Der Host entscheidet, was in die Warteschlange kommt.',
     rejoinFailed: 'Watch Party konnte nicht erneut betreten werden', reauthFailed: 'Verbindung konnte nicht neu authentifiziert werden',
     hostDisconnected: 'Watch Party wurde nach Trennung des Hosts geschlossen', youAreHost: 'Host-Rolle übernommen', nowHost: '{name} ist jetzt der Host', authInvalidResult: 'Ungültiges OpenWatchParty-Authentifizierungsergebnis',
     urlString: 'Server-URL muss Text sein', urlAbsolute: 'Server-URL muss absolut sein und ws:// oder wss:// mit Host verwenden',
@@ -174,7 +294,7 @@
     authMissingUrl: 'Token-Dienst muss session_server_url angeben', authBadUrl: 'Token-Dienst lieferte eine ungültige URL: {error}',
     authBadResponse: 'Token-Dienst lieferte eine ungültige Authentifizierungsantwort', authTimeout: 'Token-Anfrage hat das Zeitlimit überschritten',
     authAborted: 'Token-Anfrage wurde abgebrochen', authUnreachable: 'Token-Dienst ist nicht erreichbar',
-    errorRoomNotFound: 'Der Raum existiert nicht mehr', errorRoomFull: 'Der Raum ist voll', errorRateLimited: 'Zu viele Anfragen. Bitte gleich erneut versuchen.', errorHostOnly: 'Nur der Host kann das tun', errorChatTooLong: 'Nachricht zu lang', errorProtocol: 'Die Versionen von OpenWatchParty-Client und -Server sind nicht kompatibel', inviteExpired: 'Der Einladungslink ist abgelaufen', inviteWrongRoom: 'Der Einladungslink gehört zu einem anderen Raum', roomClosedHostLeft: 'Der Host hat den Raum verlassen', roomClosedNewRoom: 'Der Host hat einen neuen Raum erstellt', roomClosedHostClosed: 'Der Host hat den Raum geschlossen', inviteHostOnly: 'Nur der Host kann Einladungslinks erstellen', inviteUnreachable: 'Der Einladungsdienst ist nicht erreichbar. Der Reverse-Proxy muss /invite an den Sitzungsserver weiterleiten.', authInvalidated: 'Die Authentifizierungsanfrage ist nicht mehr gültig',
+    errorRoomNotFound: 'Der Raum existiert nicht mehr', errorRoomFull: 'Der Raum ist voll', errorRateLimited: 'Zu viele Anfragen. Bitte gleich erneut versuchen.', errorHostOnly: 'Nur der Host kann das tun', errorChatTooLong: 'Nachricht zu lang', errorProtocol: 'Die Versionen von OpenWatchParty-Client und -Server sind nicht kompatibel', inviteExpired: 'Der Einladungslink ist abgelaufen', inviteWrongRoom: 'Der Einladungslink gehört zu einem anderen Raum', roomClosedHostLeft: 'Der Host hat den Raum verlassen', roomClosedNewRoom: 'Der Host hat einen neuen Raum erstellt', roomClosedHostClosed: 'Der Host hat den Raum geschlossen', roomClosedRemoved: 'Der Host hat dich aus dem Raum entfernt', roomClosedBlocked: 'Der Host hat dich aus dem Raum entfernt und für einen erneuten Beitritt gesperrt', blockedFromRoom: 'Der Host hat dich für diesen Raum gesperrt', participantNotFound: 'Diese Person ist nicht mehr im Raum', cannotBlockOwnAccount: 'Du kannst dein eigenes Konto nicht sperren', inviteHostOnly: 'Nur der Host kann Einladungslinks erstellen', inviteUnreachable: 'Der Einladungsdienst ist nicht erreichbar. Der Reverse-Proxy muss /invite an den Sitzungsserver weiterleiten.', authInvalidated: 'Die Authentifizierungsanfrage ist nicht mehr gültig',
     startWaiting: 'Warten auf {names}', startTwoNames: '{first} und {second}', startManyNames: '{count} Personen', startCountdown: 'Start in', startNowHint: 'Auswählen, um ohne Warten zu starten', startIs_loading: 'lädt das Video', startIs_transcoding: 'der Server wandelt das Video um', startIs_buffering: 'füllt den Puffer', startIs_autoplay_blocked: 'der Browser hat die Wiedergabe blockiert: Play drücken', startWas_loading: 'lud noch', startWas_transcoding: 'der Server wandelte das Video noch um', startWas_buffering: 'füllte noch den Puffer', startWas_autoplay_blocked: 'der Browser hat die Wiedergabe blockiert', startWaitingFor: 'Warten auf {name}: {reason}', startMemberReady: '{name} ist bereit ({seconds} s)', startWithout: 'Ohne {name} gestartet ({reason})', startCancelled: 'Start abgebrochen'
   };
 
@@ -215,10 +335,12 @@
   // Known error codes and reasons are shown in the viewer's language; anything
   // else is shown as the server wrote it.
   const SERVER_ERROR_KEYS = {
-    ROOM_NOT_FOUND: 'errorRoomNotFound',
+    INVALID_ACCESS_PAYLOAD: 'errorAccessPayload', ROOM_APPROVAL_REQUIRED: 'errorApprovalRequired', ROOM_NOT_FOUND: 'errorRoomNotFound',
     ROOM_FULL: 'errorRoomFull',
     RATE_LIMITED: 'errorRateLimited',
     HOST_PERMISSION_REQUIRED: 'errorHostOnly',
+    BLOCKED_FROM_ROOM: 'blockedFromRoom',
+    PARTICIPANT_NOT_FOUND: 'participantNotFound',
     NOT_IN_ROOM: 'notInRoom',
     NOT_ROOM_MEMBER: 'notInRoom',
     CHAT_MESSAGE_TOO_LONG: 'errorChatTooLong',
@@ -230,13 +352,17 @@
     'Invalid invite ticket': 'inviteInvalid',
     'Invite ticket has expired': 'inviteExpired',
     'Invite ticket does not match this room': 'inviteWrongRoom',
-    'Only the room host can control playback': 'hostOnlyPlayback'
+    'Only the room host can control playback': 'hostOnlyPlayback',
+    'You cannot block your own account': 'cannotBlockOwnAccount'
   };
   const ROOM_CLOSED_KEYS = {
     'Host left the room': 'roomClosedHostLeft',
     'Host started a new room': 'roomClosedNewRoom',
-    'Host closed the room': 'roomClosedHostClosed'
+    'Host closed the room': 'roomClosedHostClosed',
+    'The host removed you from the room': 'roomClosedRemoved',
+    'The host removed you from the room and blocked you from rejoining': 'roomClosedBlocked'
   };
+  const MODERATION_ROOM_CLOSED_KEYS = new Set(['roomClosedRemoved', 'roomClosedBlocked']);
   const ownKey = (map, key) => (Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null);
   const localizeServerError = (code, message) => {
     const key = ownKey(SERVER_MESSAGE_KEYS, message) || ownKey(SERVER_ERROR_KEYS, code);
@@ -246,6 +372,7 @@
     const key = ownKey(ROOM_CLOSED_KEYS, reason);
     return key ? t(key) : (reason || t('roomClosed'));
   };
+  const isModerationRoomClosedReason = reason => MODERATION_ROOM_CLOSED_KEYS.has(ownKey(ROOM_CLOSED_KEYS, reason));
 
   const formatNumber = (value, min, max) => {
     try {
@@ -255,5 +382,8 @@
     }
   };
 
-  OWP.i18n = { t, locale, formatNumber, catalogs, localizeRoomName, localizeServerError, localizeRoomClosedReason };
+  OWP.i18n = {
+    t, locale, formatNumber, catalogs, localizeRoomName, localizeServerError, localizeRoomClosedReason,
+    isModerationRoomClosedReason
+  };
 })();

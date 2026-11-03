@@ -31,7 +31,7 @@ The Watch Party button in the Jellyfin header opens the same panel, but **Create
 
 The **?** next to the panel's close button shows a short help. On the first run in a browser, the panel opens below the header button with this help; it is not shown again in that browser.
 
-As the host, you control playback for everyone. When you play, pause, or seek, all participants follow. Guests can play and pause too, for the whole room.
+As the host, you control playback for everyone. When you play, pause, or seek, all participants follow; that includes Jellyfin's own **Skip Intro** prompt (or credits, recap), which takes the whole room past the segment. Guests can play and pause too, for the whole room.
 
 ![The room bar during an active session](/assets/images/watch-party-panel.png)
 
@@ -114,6 +114,12 @@ The leave confirmation names the participant who will take over before you
 leave. The promoted participant then sees the **Host** badge in the room's
 participant list.
 
+### Removing someone
+
+The host can open **Participants**, select the three-dot button beside a person, and choose **Remove** or **Block**. Remove takes only that browser out of the room; the person sees why they were removed and can join again immediately. Block removes every connection signed in with that Jellyfin account, hides the room from that account, and prevents it from rejoining until the room closes. There is no unblock action for a live room.
+
+The three-dot controls appear only when the server and host client support moderation. In insecure mode, blocking uses the `user_id` declared by the client, so it holds only while clients continue to declare that same id.
+
 ![Host leave confirmation naming testclient1 as the next host](/assets/images/watch-party-host-transfer.png)
 
 ![Participant list after transfer, with testclient1 marked Host](/assets/images/watch-party-host-role.png)
@@ -130,26 +136,32 @@ This needs a session server and clients with the feature. With an older client o
 
 ## Participant Experience
 
-As a participant:
+As a participant, Play and Pause are shared: your pause pauses the whole room, the host included, and anyone's play resumes everyone. Only while the room waits for the host's stream (after a track change, for example) is the play control dimmed and does nothing.
 
-While you are in a room, seeking is locked to the host: the timeline, skip, chapter, rewind, and fast-forward controls are dimmed, and keyboard seeking is ignored. Play and pause are shared: your pause pauses the whole room, the host included, and anyone's play resumes everyone. Only while the room waits for the host's stream (after a track change, for example) is the play control dimmed and does nothing.
+### Guest controls
 
-Shared controls require a compatible server and host. With an older host or server, your pause stays local and Play is locked while the room is paused. Resuming your local pause catches you up to the room. Upgrading clients does not grant guests permission to seek or close the room.
+Open **Participants** to see the room's guest controls. The host can allow guests to seek (the timeline, chapters, rewind and fast-forward), change what is playing from the room queue, and remove or reorder upcoming queue items. Changes take effect immediately for everyone. Previous/Next item controls in Jellyfin itself remain host-only, as do adding items, cancelling the up-next countdown, invites, host transfer and closing the room.
+
+Guests see **What guests can do** with a Yes/No value for each permission. Without seek permission, the timeline and seeking controls stay dimmed and seek keys are ignored. Without either queue permission, the queue remains read-only. Rooms on an older client or server keep the previous host-only behavior and do not show this section.
+
+Shared play/pause requires a compatible server and host. With an older host or server, your pause stays local and Play is locked while the room is paused. Resuming your local pause catches you up to the room. Guest permissions never allow closing the room.
 
 | What Happens | What You See |
 |--------------|--------------|
 | Host or a guest plays | Video starts automatically |
 | Host or a guest pauses | Video pauses automatically |
-| Host seeks | Video jumps to new position |
+| Host, or an allowed guest, seeks | Video jumps to new position |
 | Host leaves | A compatible participant becomes host; otherwise the room closes |
 | Host reloads or briefly loses connection | The same signed-in user remains host when they reconnect within 10 seconds |
+| Host removes you | You leave the room with a notice and may join it again |
+| Host blocks you | You leave with a notice; the room disappears and cannot be joined again while it exists |
 | Drift detected | Playback speed adjusts (0.90x-1.15x) to catch up |
 
 ## The Panel Interface
 
 The panel follows the Jellyfin display language; English, Spanish, French and German (`en`, `es`, `fr`, `de`) are included.
 
-Over the player, the room bar, its drop-downs, the lobby panel, the up-next strip and the notifications are semi-transparent, so the video shows through them, blurred. The administrator sets their theme (Glass, Solid dark, Light or High contrast), opacity and text size under **Web Client** in the plugin settings (Glass, 55 % and 14 px by default). If your system asks apps to reduce transparency, they stay opaque.
+Over the player, the room bar, its drop-downs, the lobby panel, the up-next strip and the notifications are semi-transparent, so the video shows through them, blurred. The administrator sets their theme (Glass, Solid dark, Light, High contrast or Jellyfin), opacity and text size under **Web Client** in the plugin settings (Glass, 55 % and 14 px by default). If your system asks apps to reduce transparency, they stay opaque.
 
 ![Close-up of the room bar with its chat composer open](/assets/images/watch-party-panel-closeup.png)
 
@@ -166,10 +178,10 @@ In a room the panel becomes a single bar at the top right (below the header when
 - **Sync dot** - Your sync status; hover it for the details (the host's is always green)
 - **Latency** - Round-trip time from you to the session server, in milliseconds
 - **Room name** - Current watch party name; hover it if it is cut short
-- **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge on the host and each person's status under their name (older session servers show only the number of people)
+- **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge, each person's status, and the [guest controls](#guest-controls)
 - **Chat** (chat icon) - Opens the chat; a red badge counts unread messages
 - **Sync adjustment** (circular arrows, guests only, when the administrator enables it) - Shows how far you are from the host and lets you nudge your video toward them; see [Sync adjustment](#sync-adjustment)
-- **Queue** (list icon, while the room has a queue) - Opens the room's queue; see [Watching a series](#watching-a-series)
+- **Queue** (list icon) - Opens the room's queue and library search; see [Using the room queue](#using-the-room-queue)
 - **Invite** (share icon, host only) - Copies a short-lived invite link that joins people to this room automatically
 - **Leave** (exit icon) - Guests confirm leaving normally. On a compatible server, a host with other participants can choose **Leave** to pass the room to the named next host or **Close for everyone** to end it. A host who is alone, or connected to an older server, sees the existing **Close room** confirmation.
 - **Close (X)** - Only hides the bar: you stay in the room
@@ -192,13 +204,21 @@ The participants list shows how each person is doing, with a colored dot:
 
 A status changes after it has held for about a second. People on an older version of OpenWatchParty show no status.
 
-## Watching a series
+The arrow at the end of a person's row shows which **Audio** and **Subtitles** they have on (for example "Español (doblaje)" and "Spanish (forced)", or **Off**). It is only to see them: everyone chooses their own tracks in the player. Select the arrow again, or anywhere else in the panel, to close it. People on an older version show no arrow.
 
-While the room plays an episode, the host's player fills the room's queue with the next episodes of the series, in Jellyfin's order across seasons, up to five episodes ahead, and tops it up each time the room moves to the next one. The room queue can contain up to 20 items, including the current episode. Episodes missing from the library are skipped, and one the host removes doesn't come back, even after the host reloads the page or someone else becomes the host. A room playing a movie has no queue and works as before.
+## Using the room queue
+
+The room queue can contain any movie, series episode or video in the host's Jellyfin library, up to 20 items including the current one. Select **Add to the queue** and search by title; choosing a series adds the next episode for your Jellyfin user, or its first episode when you have no next one. If the current room item is not in the queue yet, it is added first.
+
+Guests on a compatible client can use **Suggest something for the queue**. A suggestion waits below the queue with the name of the person who made it. The guest can withdraw their own suggestion; the host sees a badge and notice, then can add or dismiss it. A room keeps up to 10 suggestions, and the host always decides what enters the queue.
+
+When an item is not present in one or more current members' Jellyfin libraries, a **Not available for…** warning appears under that queued item or suggestion. The warning names you first when it affects you, then the other affected members. It does not remove the item; it lets the host choose something everyone can open.
+
+While the room plays an episode, the host's player also fills the queue with the next episodes of the series, in Jellyfin's order across seasons, up to five episodes ahead, and tops it up each time the room moves to the next one. Episodes missing from the host's library are skipped, and one the host removes doesn't come back, even after the host reloads the page or someone else becomes the host.
 
 - **Queue** (list icon in the bar) opens the list: watched episodes dimmed with a check, the one playing highlighted as **Watching**, and the upcoming ones numbered.
-- The host can go to the **Previous** or **Next** episode, and play, move up, move down or remove an upcoming one. Guests see the list only.
-- **Up next:** when the host's video reaches the credits (an *Outro* segment, as Intro Skipper marks them), or 15 seconds before the end of an episode without them, everyone sees the next title and a 10-second countdown: below the bar, or on its own over the video while the panel is closed. The host can **Cancel** it or go to the **Next** episode at once. Pausing the room or seeking back before the credits cancels it; it starts again if the room plays on in the credits, unless the host cancelled it on that episode.
+- The host can go to the **Previous** or **Next** item, and play, move up, move down or remove an upcoming one. Guests get the matching controls only when the host allows changing what is playing or editing the queue.
+- **Up next:** when the host's video reaches the credits (an *Outro* segment, as Intro Skipper marks them), or 15 seconds before the end of an episode without them, everyone sees the next title and a 10-second countdown: below the bar, or on its own over the video while the panel is closed. The host can **Cancel** it or go to the **Next** item at once; a guest allowed to change what is playing gets **Next**, but not **Cancel**. Pausing the room or seeking back before the credits cancels it; it starts again if the room plays on in the credits, unless the host cancelled it on that episode.
 - When the room moves to another episode, everyone loads it and starts from the beginning together, as when joining a room.
 
 ![OpenWatchParty episode queue with the current and next episodes](/assets/images/watch-party-queue.png)
@@ -269,6 +289,7 @@ OpenWatchParty displays toast notifications to keep you informed about room acti
 These appear briefly in the center of the screen:
 - **"Host resumed playback"** - The host started playing
 - **"Host paused playback"** - The host paused
+- **"The host skipped the intro"** (or the recap, the credits) - The host used Jellyfin's Skip button on a segment Intro Skipper marked
 - **"A guest resumed playback"** / **"A guest paused playback"** - A guest played or paused the room
 - **"A participant joined the room"** - Someone joined
 - **"A participant left the room"** - Someone left
@@ -328,3 +349,20 @@ When the chat is closed, incoming messages appear as toasts in the bottom-right 
 - The Invite button is unavailable in insecure development mode
 
 For more troubleshooting, see [Troubleshooting Guide](/operations/troubleshooting/).
+
+
+## Private rooms
+
+When creating a room, or later in **People → Room access**, the host can turn
+on **Ask to join** and **Hide from the room list** independently. Both start off.
+Ask to join lets the host accept or reject each guest. Guests select **Ask to
+join**, see a waiting message and can cancel; a rejected request shows a message
+and can be tried again. Leave your current room before asking to join another
+approval room. The host sees requests below the room bar or in People.
+
+Hidden rooms appear neither in the room list nor on the home row. Share the
+existing invite link to bring people in. A valid invite link always enters
+directly, including when approval is required. People using an older version
+cannot ask to join and must update OpenWatchParty or use an invite link.
+
+Jellyfin’s native **Skip Intro**, **Skip Recap** and **Skip Credits** buttons follow the room seek permission. Guests without that permission remain with the room, including when Jellyfin is configured to skip automatically.

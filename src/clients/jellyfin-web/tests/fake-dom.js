@@ -104,6 +104,13 @@ class FakeNode {
     if (index !== -1) this.parentNode.childNodes.splice(index, 1);
     this.parentNode = null;
   }
+
+  replaceWith(node) {
+    const parent = this.parentNode;
+    if (!parent) return;
+    parent.insertBefore(node, this);
+    this.remove();
+  }
 }
 
 class FakeText extends FakeNode {
@@ -120,9 +127,14 @@ const matchesSimple = (element, selector) => {
     if (matchesSimple(element, notMatch[1])) return false;
   }
   const attributes = [...selector.matchAll(/\[([\w-]+)(?:(\*?=)"([^"]*)")?\]/g)];
-  const attributeValue = name => (name === 'class'
-    ? element.className || undefined
-    : (Object.prototype.hasOwnProperty.call(element.attributes, name) ? element.attributes[name] : undefined));
+  const attributeValue = name => {
+    if (name === 'class') return element.className || undefined;
+    if (name.startsWith('data-')) {
+      const key = name.slice(5).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+      if (Object.prototype.hasOwnProperty.call(element.dataset, key)) return element.dataset[key];
+    }
+    return Object.prototype.hasOwnProperty.call(element.attributes, name) ? element.attributes[name] : undefined;
+  };
   if (attributes.some(([, name, operator, value]) => {
     const actual = attributeValue(name);
     if (operator === undefined) return actual === undefined;
@@ -234,6 +246,14 @@ class FakeElement extends FakeNode {
 
   click() {
     this.dispatchEvent({ type: 'click', stopPropagation() {}, preventDefault() {} });
+  }
+
+  focus() {
+    if (globalThis.document) globalThis.document.activeElement = this;
+  }
+
+  blur() {
+    if (globalThis.document?.activeElement === this) globalThis.document.activeElement = null;
   }
 
   querySelectorAll(selector) {

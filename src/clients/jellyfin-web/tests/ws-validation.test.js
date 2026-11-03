@@ -25,6 +25,19 @@ describe('WebSocket message schema validation', () => {
     invalid(envelope('room_capabilities', { features: [] }));
   });
 
+  it('validates all three room permissions as strict booleans', () => {
+    const permissions = payload => envelope('room_permissions', payload, { room: 'room-1' });
+    valid(permissions({ seek: true, change_media: false, edit_queue: true }));
+    for (const payload of [
+      null, [], {},
+      { seek: true, change_media: false },
+      { seek: 'yes', change_media: false, edit_queue: true },
+      { seek: true, change_media: false, edit_queue: 1 },
+      { seek: true, change_media: false, edit_queue: true, extra: false }
+    ]) invalid(permissions(payload));
+    invalid(envelope('room_permissions', { seek: false, change_media: false, edit_queue: false }));
+  });
+
   it('validates the room queue strictly', () => {
     const item = { id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', title: 'Pilot' };
     const queue = payload => envelope('queue_state', payload, { room: 'room-1' });
@@ -47,6 +60,36 @@ describe('WebSocket message schema validation', () => {
       invalid(queue(payload));
     }
     invalid(envelope('queue_state', { items: [], current: null, last_added: null, countdown_until: null }));
+  });
+  it('validates queue suggestions and availability strictly', () => {
+    const id = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const series = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const details = payload => envelope('queue_details', payload, { room: 'room-1' });
+    const suggestion = { id, title: 'Pilot', series, by: 'Ana', mine: false };
+    const unavailable = { id, names: ['Ana'], you: true };
+    valid(details({ suggestions: [suggestion], unavailable: [unavailable] }));
+    valid(details({ suggestions: [{ id, title: 'Pilot', by: 'Ana', mine: true }], unavailable: [] }));
+    for (const payload of [
+      { suggestions: [], unavailable: [], extra: true },
+      { suggestions: Array(11).fill(suggestion), unavailable: [] },
+      { suggestions: [{ ...suggestion, id: 'bad' }], unavailable: [] },
+      { suggestions: [{ ...suggestion, title: '' }], unavailable: [] },
+      { suggestions: [{ ...suggestion, title: 'a'.repeat(101) }], unavailable: [] },
+      { suggestions: [{ ...suggestion, series: 'bad' }], unavailable: [] },
+      { suggestions: [{ ...suggestion, by: '' }], unavailable: [] },
+      { suggestions: [{ ...suggestion, mine: 1 }], unavailable: [] },
+      { suggestions: [{ ...suggestion, extra: true }], unavailable: [] },
+      { suggestions: [], unavailable: Array(31).fill(unavailable) },
+      { suggestions: [], unavailable: [{ ...unavailable, id: 'bad' }] },
+      { suggestions: [], unavailable: [{ ...unavailable, names: 'Ana' }] },
+      { suggestions: [], unavailable: [{ ...unavailable, names: Array(21).fill('Ana') }] },
+      { suggestions: [], unavailable: [{ ...unavailable, names: [''] }] },
+      { suggestions: [], unavailable: [{ ...unavailable, names: ['a'.repeat(101)] }] },
+      { suggestions: [], unavailable: [{ ...unavailable, you: 'yes' }] },
+      { suggestions: [], unavailable: [{ ...unavailable, extra: true }] }
+    ]) invalid(details(payload));
+    invalid(details(null));
+    invalid(envelope('queue_details', { suggestions: [], unavailable: [] }));
   });
   it('validates the start state strictly', () => {
     const start = payload => envelope('start_state', payload, { room: 'room-1' });

@@ -9,8 +9,12 @@
   const applyRoomState = (msg) => {
     // Names from another room must not show until this room's list arrives.
     if (msg.room !== state.roomId) {
+      state.roomAccess = { approval: false, unlisted: false };
+      state.joinRequests = [];
       state.participants = [];
       state.sharedPlaybackControl = false;
+      state.roomPermissions = { seek: false, change_media: false, edit_queue: false };
+      state.roomPermissionsReceived = false;
       Object.assign(state, OWP.stateFactories.createQueueState());
     }
     state.inRoom = true;
@@ -161,9 +165,23 @@
   };
 
   h.handleRoomState = (msg, video) => {
+    if (msg.room === state.cancelledJoinRoomId) {
+      OWP.actions.send('leave_room', {}, msg.room);
+      return;
+    }
     if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) return;
     const rejoined = state.rejoinPending && msg.room === state.desiredRoomId;
     if (!state.rejoinPending && state.rejectedRejoinRoomIds.includes(msg.room)) return;
+    if (state.createRoomPending && msg.payload.host_id === state.clientId) {
+      state.createRoomPending = false;
+      state.pendingJoin = null;
+      state.joinOutcome = null;
+      state.joinTarget = '';
+    }
+    if (state.joinTarget === msg.room) state.joinTarget = '';
+    if (state.pendingJoin?.roomId === msg.room) state.pendingJoin = null;
+    if (state.joinOutcome?.roomId === msg.room) state.joinOutcome = null;
+    if (msg.payload.host_id === state.clientId) state.createAccess = { approval: false, unlisted: false };
     state.hostControlAcks = [];
     // The room moved from its item to another queue item: everyone, the host
     // too, loads it as on joining and reports ready again.
@@ -176,6 +194,7 @@
     if (OWP.actions?.completeRoomRejoin) OWP.actions.completeRoomRejoin(msg.room);
     ui.render();
     if (OWP.queue?.refresh) OWP.queue.refresh();
+    if (OWP.segments?.refresh) OWP.segments.refresh();
     if (acceptedAsGuest && msg.payload?.media_id) {
       state.pendingMediaId = msg.payload.media_id;
       state.pendingMediaUntil = 0;
@@ -220,7 +239,8 @@
       state.lastSyncPlayState = msg.payload.play_state || state.lastSyncPlayState;
       if (msg.payload.play_state === 'playing') state.roomWaiting = false;
     }
-    if (state.guestPaused) {
+    // A rejected play needs user action, not another attempt on every update.
+    if (state.guestPaused || (state.playbackBlocked && video.paused)) {
       state.lastSyncServerTs = msg.server_ts || utils.getServerNow();
       state.lastSyncPosition = msg.payload.position ?? state.lastSyncPosition;
       return;

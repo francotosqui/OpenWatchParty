@@ -24,7 +24,7 @@ The WebSocket protocol has its own version, independent of the product release. 
 
 **Compatibility rules:**
 
-- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue`, `start_when_ready` and `chat_history`.
+- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `participant_tracks`, `shared_playback_control`, `room_moderation`, `room_permissions`, `media_queue`, `queue_suggestions`, `start_when_ready`, `chat_history` and `room_access`.
 - The web client validates known message and payload schemas strictly. An unknown server message type or unknown field is warned about and dropped by the client; the session continues. An unknown client request type receives `UNKNOWN_MESSAGE_TYPE`. Do not assume new fields on an existing payload are ignored by every client.
 - A server may send an optional extension only to clients that advertised the corresponding feature, or use a new message whose absence leaves legacy behavior intact. Version 1 remains unchanged for these additive extensions; changing an existing field's meaning or removing/retyping it requires a compatibility review and protocol version change.
 
@@ -66,7 +66,7 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
   "payload": {
     "token": "eyJhbGciOiJIUzI1NiIs...",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready", "chat_history"]
+    "features": ["host_transfer", "participant_status", "participant_tracks", "shared_playback_control", "room_moderation", "room_permissions", "media_queue", "queue_suggestions", "start_when_ready", "chat_history", "room_access"]
   },
   "ts": 1678900000000
 }
@@ -76,10 +76,10 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
 |---------------|------|----------|-------------|
 | `token` | string | No | JWT issued by the `/OpenWatchParty/Token` endpoint |
 | `protocol_version` | number | No | Client protocol version; defaults to `1` when omitted |
-| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue`, `start_when_ready` and `chat_history` |
+| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `participant_tracks`, `shared_playback_control`, `room_moderation`, `room_permissions`, `media_queue`, `queue_suggestions`, `start_when_ready`, `chat_history` and `room_access` |
 
 On a protocol version mismatch the server answers with `error` (`PROTOCOL_VERSION_UNSUPPORTED`) and closes the connection.
-Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, and gets `queue_state` only when it declared `media_queue`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged `media_queue`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room. A client gets `start_state` only when it declared `start_when_ready`, and the web client sends `readiness` and `start_now` (see [Start when ready](#start-when-ready)) only to a server that acknowledged it.
+Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, gets participant ids only when it declared `room_moderation`, and gets `queue_state` only when it declared `media_queue`, and gets `queue_details` only when it declared `queue_suggestions`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged the corresponding feature. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room. A client gets `start_state` only when it declared `start_when_ready`, and the web client sends `readiness` and `start_now` (see [Start when ready](#start-when-ready)) only to a server that acknowledged it.
 A joining client gets the last 50 chat messages only when it declared `chat_history`; history is sent before `start_state` so loading it does not replace the new SERVER lines.
 
 ### `list_rooms`
@@ -121,8 +121,8 @@ Create a new watch party room.
 
 **Effects:**
 - Client becomes host
-- After `room_state`, the host receives `room_capabilities` if it negotiated shared playback control, then its `participant_list` and `participant_statuses`
-- Members that negotiated `media_queue` receive the initial `queue_state`
+- After `room_state`, the host receives `room_capabilities` and `room_permissions` for the features it negotiated, then its `participant_list`, `participant_statuses` and `participant_tracks`
+- Members that negotiated `media_queue` receive the initial `queue_state`; members that negotiated `queue_suggestions` then receive their `queue_details`
 - Broadcast `room_list` to all clients
 
 ### `join_room`
@@ -143,15 +143,19 @@ Join an existing room.
 - Client added to `room.clients`
 - Client removed from `room.ready_clients`
 - Broadcast `participants_update` to other participants
-- Broadcast `participant_list`, then `participant_statuses`, to everyone in the room, including the new client
+- Broadcast `participant_list`, then `participant_statuses` and `participant_tracks`, to everyone in the room, including the new client
 - Send `room_capabilities` to negotiated members; this reports whether the current host also supports shared guest playback
-- Send the new client `queue_state` if it negotiated `media_queue`
+- Send `room_permissions` to the new client if it negotiated the feature
+- Send the new client `queue_state` if it negotiated `media_queue`, then its `queue_details` if it negotiated `queue_suggestions`
 - Send the new client `chat_history` if it negotiated `chat_history` and the room has messages
 - Broadcast `room_list` to all clients, with the room's new count (and the previous room's, when the client moved)
 
 ### `leave_room`
 
-Leave the current room.
+Leave the current room. If `room` is supplied, it must match the client's current
+room; a mismatching leave is ignored. This prevents a late cancellation from
+leaving a room the client has since joined or created. Omitting `room` leaves the
+current room as before.
 
 ```json
 {
@@ -162,9 +166,9 @@ Leave the current room.
 ```
 
 **Effects:**
-- If the host leaves and another member declared `host_transfer`: promote the earliest-joined supporting member, preserve media and playback state, clear `pending_play`, and broadcast `client_left`, `host_changed`, then `participant_list` and `participant_statuses`
+- If the host leaves and another member declared `host_transfer`: promote the earliest-joined supporting member, preserve media and playback state, clear `pending_play`, and broadcast `client_left`, `host_changed`, then `participant_list`, `participant_statuses` and `participant_tracks`
 - If the host leaves and no remaining member supports transfer, or the room is empty: close the room and broadcast `room_closed` as before
-- Otherwise: broadcast `client_left`, then `participant_list` and `participant_statuses` (the leaving client's status is dropped)
+- Otherwise: broadcast `client_left`, then `participant_list`, `participant_statuses` and `participant_tracks` (the leaving client's status and tracks are dropped)
 - Broadcast `room_list` to all
 
 A non-host WebSocket disconnect has the same room behavior as `leave_room`. When a
@@ -175,6 +179,37 @@ grace period expires first, the server promotes the earliest transfer-capable me
 or closes the room when no such member remains. An explicit `leave_room` still
 transfers or closes the room immediately. A disconnect broadcasts `room_list` only
 when the client was in a room.
+
+### `remove_participant`
+
+Remove one participant, or remove and block every connection for that participant's
+account. The sender's current room is used; only its current host may send this.
+
+```json
+{
+  "type": "remove_participant",
+  "payload": { "id": "uuid-client-id", "block": true },
+  "ts": 1678900000000
+}
+```
+
+Both `id` (string) and `block` (boolean) are required, and unknown payload fields
+are rejected. A plain removal affects only that connection and it may immediately
+join again. A block stores the target's non-empty user id for the lifetime of the
+room, removes every connection with that user id, cancels a pending host reclaim
+for it, and cannot be undone. The host cannot target itself and cannot block an
+empty user id or its own account, though another connection of the host's account
+may be removed without blocking.
+
+Removed clients receive `room_closed` with reason "The host removed you from the
+room"; blocked clients receive "The host removed you from the room and blocked you
+from rejoining". Blocking also revokes the account's previous room admission and
+prevents it from requesting approval again. A blocked user's `join_room` is refused with `BLOCKED_FROM_ROOM`,
+with a valid invite ticket and as a host reclaim too. Rooms that block the authenticated user are omitted from every
+`room_list` sent to that user.
+
+In insecure mode the user id is the value declared by the client. A block therefore
+holds only for clients that continue to declare the same value.
 
 ### `close_room`
 
@@ -211,7 +246,7 @@ Indicate client is ready to receive playback commands.
 
 ### `player_event`
 
-Send a playback event. Guests may send `play` and `pause` only when both they and the current host negotiated `shared_playback_control` in `auth`. Otherwise guest commands receive `HOST_PERMISSION_REQUIRED`. `seek`, `buffering` and `state_update` remain host only.
+Send a playback event. Guests may send `play` and `pause` only when both they and the current host negotiated `shared_playback_control` in `auth`. A guest may send `seek` when the room's `seek` permission is enabled: its position is used, its `play_state` is ignored in favor of the room's current state, and every other member (including the host) receives the event. Guest `buffering` and `state_update` remain host only. Refused guest commands receive `HOST_PERMISSION_REQUIRED`.
 
 The server sends `room_capabilities` with `{ "features": ["shared_playback_control"] }` (or an empty array) only to clients that negotiated this extension. It follows room creation/join, host transfer/reclaim and authentication changes. Legacy clients receive no new fields or message types. A new client uses shared controls only after both the server acknowledgement and the room announcement; otherwise it keeps the guest seek/play lock and private pause behavior.
 
@@ -250,7 +285,35 @@ A guest's `play` or `pause` holds the room's play state: until its cooldown ends
 
 `PendingPlay` retains the initiating client ID. Both readiness completion and the readiness timeout emit the scheduled event under that ID, including the sender in the broadcast. Readiness updates do not turn a guest's play into a host command.
 
-Only the host seeks, so a guest's `play` or `pause` cannot move the room: its `position` is replaced by where the room is (the last position, moved on by the time since it took effect while playing).
+Unless it is a permitted `seek`, a guest command cannot move the room: a guest's `play` or `pause` position is replaced by where the room is (the last position, moved on by the time since it took effect while playing).
+
+### `set_room_permissions`
+
+The current host sets the guest permissions for its current room. The payload is
+strict: all three boolean fields are required and unknown fields are rejected.
+
+```json
+{
+  "type": "set_room_permissions",
+  "payload": {
+    "seek": true,
+    "change_media": false,
+    "edit_queue": true
+  },
+  "ts": 1678900000000
+}
+```
+
+An unauthenticated client receives `AUTHENTICATION_REQUIRED`, malformed payloads
+receive `INVALID_PERMISSIONS_PAYLOAD`, a client outside a room receives
+`NOT_IN_ROOM`, and a guest receives `HOST_PERMISSION_REQUIRED`. An unchanged
+value is ignored. A change is broadcast as `room_permissions` only to room
+members that negotiated the feature.
+
+New rooms start with every permission `false`. The host can always seek, change
+media and edit the queue. These settings do not affect `queue_add`,
+`queue_countdown`, `close_room`, `start_now`, invites, or host transfer; their
+existing host and readiness rules remain in force.
 
 ### `state_update`
 
@@ -353,9 +416,37 @@ Report how this client is doing, for the room's participants list. Informational
 - A room gets at most one `participant_statuses` every 250 ms for status changes: the first change is sent at once, and later changes within the 250 ms are sent together when they end, with the latest statuses
 - The web client sends it only to a server that sent `participant_statuses` for its room (an older server answers unknown types with an error), once a status has held for a second, and again after reconnecting
 
+### `participant_tracks`
+
+Report the audio and subtitle tracks this client plays, for the others to see in the participants list. Informational only: nothing changes anyone's tracks. Sent only to a server that acknowledged the `participant_tracks` feature.
+
+```json
+{
+  "type": "participant_tracks",
+  "payload": {
+    "media_id": "09a5f21d9ff1211e52063842163eb2e0",
+    "audio": { "title": "Español (doblaje)", "language": "spa" },
+    "subtitle": { "language": "spa", "forced": true }
+  },
+  "ts": 1678900000000
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `media_id` | string | The Jellyfin item the tracks belong to (32 hexadecimal digits) |
+| `audio`, `subtitle` | object or null | The track, or `null` for none (subtitles off). Each one has only these optional fields: `title` (the stream's title, 1 to 100 characters, no control characters; trimmed), `language` (its language code, 1 to 16 letters, digits or hyphens) and `forced` (boolean) |
+
+**Effects:**
+- The tracks are stored for the client's current room; a change is sent to the room as `participant_tracks`
+- A malformed payload, an unchanged report, or a client outside a room are ignored silently (no error)
+- The web client reads its own tracks from its Jellyfin session (`GET /Sessions?deviceId=`) every 5 seconds at most, and at once for a new item, and sends them when they change, once per room and connection
+
 ### Room queue
 
-`queue_add`, `queue_remove`, `queue_move`, `queue_advance` and `queue_countdown` change the server-authoritative room queue, bounded to 20 items by count, watched ones included. This count limit is not a byte-size or process-memory bound. Only the host sends them: other members get `HOST_PERMISSION_REQUIRED`, a client outside a room `NOT_IN_ROOM`, and a malformed payload `INVALID_QUEUE_PAYLOAD`. A command that changes nothing (an item already queued, an unknown id, the room's own item, a countdown already running) is ignored without an error. Members that declared `media_queue` get the result as `queue_state` (see below).
+`queue_add`, `queue_remove`, `queue_move`, `queue_advance` and `queue_countdown` change the server-authoritative room queue, bounded to 20 items by count, watched ones included. This count limit is not a byte-size or process-memory bound. The host may send every command. A guest may send `queue_advance` when `change_media` is enabled, and `queue_remove` or `queue_move` when `edit_queue` is enabled. Guest `queue_add` and `queue_countdown` remain host-only. Other members get `HOST_PERMISSION_REQUIRED`, a client outside a room `NOT_IN_ROOM`, and a malformed payload `INVALID_QUEUE_PAYLOAD`. A command that changes nothing (an item already queued, an unknown id, the room's own item, a countdown already running) is ignored without an error. Members that declared `media_queue` get the result as `queue_state` (see below).
+
+`queue_suggest`, `queue_dismiss` and `queue_availability` may be sent by any authenticated room member, without a feature check. Malformed payloads receive `INVALID_QUEUE_PAYLOAD`, and a member outside a room receives `NOT_IN_ROOM`.
 
 ```json
 {
@@ -369,11 +460,14 @@ Report how this client is doing, for the room's participants list. Informational
 
 | Message | Payload | Effect |
 |---------|---------|--------|
-| `queue_add` | `items`: 1 to 20 `{ id, title, series? }`. `id` is a Jellyfin item id like `media_id` (32 hexadecimal characters); `title` is cleaned like a name and cut to 100 characters; `series`, optional, is the Jellyfin id of an episode's series. The server keeps it to tell whether the next item goes on the same series and never sends it back in `queue_state` | Appends the items not queued yet. A full queue evicts its oldest watched item for each new item; the current and upcoming items are not evicted. Items that still do not fit are left out |
+| `queue_add` | `items`: 1 to 20 `{ id, title, series? }`. `id` is a Jellyfin item id like `media_id` (32 hexadecimal characters); `title` is cleaned like a name and cut to 100 characters; `series`, optional, is the Jellyfin id of an episode's series. The server keeps it to tell whether the next item goes on the same series and never sends it back in `queue_state` | Appends the items not queued yet. A full queue evicts its oldest watched item for each new item; the current and upcoming items are not evicted. Items that still do not fit are left out. Each item actually appended drops a suggestion with the same id |
 | `queue_remove` | `id` | Removes an item other than the room's own |
 | `queue_move` | `id`, `to` (the item's new index) | Moves an upcoming item to another upcoming place; the room's item and the watched ones keep theirs |
 | `queue_advance` | `id` | Moves the room to that queued item |
 | `queue_countdown` | `start` (boolean) | Starts a 10-second countdown toward the next item, or cancels it |
+| `queue_suggest` | `{ id, title, series? }`, validated like one `queue_add` item | Appends a suggestion with the sender's current display name, unless the id is queued or suggested already or there are already 10 suggestions |
+| `queue_dismiss` | `id` | Removes a suggestion when sent by the host or by the member who suggested it; otherwise it is ignored |
+| `queue_availability` | `missing`: 0 to 30 item ids | Replaces this member's report of queued or suggested items their Jellyfin user cannot open; the report is forgotten when they leave |
 
 **Moving to another item** (`queue_advance`, or a countdown that ends):
 - The room's `media_id` becomes the item's; the position goes back to 0, paused, and the ready set is cleared
@@ -441,7 +535,7 @@ Sent after a successful `auth` with a JWT, and for feature-aware clients in inse
   "payload": {
     "user_name": "Alice",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready", "chat_history"]
+    "features": ["host_transfer", "participant_status", "participant_tracks", "shared_playback_control", "room_moderation", "room_permissions", "media_queue", "queue_suggestions", "start_when_ready", "chat_history", "room_access"]
   },
   "ts": 1678900000000,
   "server_ts": 1678900000000
@@ -470,6 +564,8 @@ List of active rooms.
   "server_ts": 1678900000000
 }
 ```
+
+Rooms that block the receiving user's id are omitted.
 
 ### `room_state`
 
@@ -517,6 +613,28 @@ feature. This announcement is additive in protocol version 1.
 }
 ```
 
+### `room_permissions`
+
+The room's current guest permissions, sent only to clients that advertised
+`room_permissions`: after they create or join a room, after a host changes to a
+client without the feature and the permissions reset, and after the host changes
+them. It is a separate message so strictly validating legacy `room_state`
+payloads remain unchanged.
+
+```json
+{
+  "type": "room_permissions",
+  "room": "uuid-room-id",
+  "payload": {
+    "seek": false,
+    "change_media": false,
+    "edit_queue": false
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
 ### `participants_update`
 
 Participant count update.
@@ -543,8 +661,8 @@ Display names of the room's participants, in join order. Sent to the host when t
   "room": "uuid-room-id",
   "payload": {
     "participants": [
-      { "name": "Alice", "is_host": true },
-      { "name": "Bob", "is_host": false }
+      { "id": "uuid-client-id", "name": "Alice", "is_host": true },
+      { "id": "uuid-client-id", "name": "Bob", "is_host": false }
     ]
   },
   "ts": 1678900000000,
@@ -554,10 +672,16 @@ Display names of the room's participants, in join order. Sent to the host when t
 
 | Payload Field | Type | Description |
 |---------------|------|-------------|
+| `participants[].id` | string | Participant client id (the same id used by `client_left` and `host_changed`); present only for recipients that negotiated `room_moderation` |
 | `participants[].name` | string | Display name of the participant |
 | `participants[].is_host` | boolean | Whether the participant is the room host |
 
-It is a separate message so that `room_state`, `participants_update` and `client_left` keep their payloads: clients validate those strictly. A client that does not know `participant_list` ignores it, and the web client keeps showing the participant count until it receives one.
+Recipients that did not negotiate `room_moderation` receive the legacy entries with
+only `name` and `is_host`, because older clients reject unknown fields. It is a
+separate message so that `room_state`, `participants_update` and `client_left` keep
+their payloads: clients validate those strictly. A client that does not know
+`participant_list` ignores it, and the web client keeps showing the participant
+count until it receives one.
 
 ### `host_changed`
 
@@ -601,9 +725,34 @@ Each participant's last reported `participant_status`, in the same order as the 
 
 It is a separate message because `participant_list` rejects unknown fields: clients that do not know `participant_statuses` ignore it. The web client ignores a list of statuses whose length does not match its participants list.
 
+### `participant_tracks`
+
+Each participant's last reported `participant_tracks`, in the same order as the latest `participant_list`. Sent right after every `participant_statuses` that follows a `participant_list`, and to the whole room whenever a member's tracks change.
+
+```json
+{
+  "type": "participant_tracks",
+  "room": "uuid-room-id",
+  "payload": {
+    "tracks": [
+      { "media_id": "09a5f21d9ff1211e52063842163eb2e0", "audio": { "title": "Español (doblaje)", "language": "spa" }, "subtitle": null },
+      null
+    ]
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `tracks[]` | object or null | The participant's report, as it sent it (title trimmed, `media_id` in lowercase), or `null` if they have not sent one |
+
+Clients that do not know it ignore it, as for `participant_statuses`. The web client ignores a list whose length does not match its participants list, and shows only reports for the room's current item.
+
 ### `queue_state`
 
-The room's authoritative [queue](#room-queue), sent only to members that declared `media_queue`: after each change, on creating the room and on joining it (after `room_state`, participant list/statuses and `room_capabilities`), and after a move to another item (after `room_state`).
+The room's authoritative [queue](#room-queue), sent only to members that declared `media_queue`: after each change, on creating the room and on joining it (after `room_state`, participant list/statuses, `room_capabilities` and `room_permissions`), and after a move to another item (after `room_state`).
 
 ```json
 {
@@ -629,6 +778,25 @@ The room's authoritative [queue](#room-queue), sent only to members that declare
 | `current` | number or null | Index of the room's `media_id` in `items`, or `null` when it isn't queued |
 | `last_added` | string or null | The last item `queue_add` appended, or `null` before the first. It stays after that item is removed: the host's web client fills the queue on from it, so an episode the host removed doesn't come back after a reload or a host change |
 | `countdown_until` | number or null | Server time (ms) at which the room moves to the next item, or `null` |
+
+### `queue_details`
+
+Suggestions and item availability, sent only to members that declared `queue_suggestions`. It follows every `queue_state`, is sent after a suggestion is added or dismissed, after a visible availability change, and after a reporting member leaves. The payload is built for each recipient.
+
+```json
+{
+  "type": "queue_details",
+  "room": "uuid-room-id",
+  "payload": {
+    "suggestions": [{ "id": "0123456789abcdef0123456789abcdef", "title": "The Storm", "by": "Ana", "mine": false }],
+    "unavailable": [{ "id": "0123456789abcdef0123456789abcdef", "names": ["Ana"], "you": false }]
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
+`suggestions` keeps suggestion order; optional `series` is present only when supplied, and `mine` uses the suggester's stable user id (or client id when no user id exists). `unavailable` follows queue order and then suggestion order and omits items nobody currently reports. It lists each other reporting account once in room join order, using the user id to deduplicate rather than the display name. If any connection of the recipient's account reports an item missing, `you` is true and that account is excluded from `names`. Connections without a user id remain distinct by client id. Reports for ids no longer queued or suggested are ignored.
 
 ### `start_state`
 
@@ -705,7 +873,8 @@ Periodic state update relayed from host.
 
 Room was closed because the host explicitly closed it, no transfer-capable member
 remained after the host left or after its reconnect grace period expired, or the room
-became empty.
+became empty. A participant removed by the host gets it too, alone, with one of
+the exact moderation reasons documented under [`remove_participant`](#remove_participant).
 
 ```json
 {
@@ -850,14 +1019,18 @@ Error response.
 | `ROOM_NOT_FOUND` | The requested room does not exist |
 | `ROOM_FULL` | The requested room reached its participant limit |
 | `NOT_ROOM_MEMBER` | The client is not a member of the requested room |
-| `HOST_PERMISSION_REQUIRED` | A non-host client sent a `seek`, a `buffering` event, a `state_update`, `close_room` or a queue message |
+| `HOST_PERMISSION_REQUIRED` | A non-host client sent a `seek`, a `buffering` event, a `state_update`, `close_room`, `remove_participant` or a queue message |
 | `INVALID_PLAYBACK_PAYLOAD` | A playback payload is absent, malformed, or outside accepted bounds |
-| `NOT_IN_ROOM` | `leave_room`, `close_room` or a queue message was sent while the client had no room |
+| `NOT_IN_ROOM` | `leave_room`, `close_room`, `remove_participant` or a queue message was sent while the client had no room |
 | `INVALID_READY` | A `ready` transition is missing required room context |
 | `INVALID_CHAT_PAYLOAD` | The chat payload does not contain a string `text` field |
 | `CHAT_MESSAGE_EMPTY` | Chat text is empty |
 | `CHAT_MESSAGE_TOO_LONG` | Chat text exceeds the configured limit |
 | `INVALID_QUEUE_PAYLOAD` | A queue message's payload is absent, malformed, or outside accepted bounds |
+| `INVALID_MODERATION_PAYLOAD` | A `remove_participant` payload is missing, malformed, or has unknown fields |
+| `PARTICIPANT_NOT_FOUND` | The requested participant is no longer a room member |
+| `INVALID_MODERATION_TARGET` | The host targeted itself or tried to block an empty or host-owned user id |
+| `BLOCKED_FROM_ROOM` | The authenticated user's id is blocked from the requested room |
 
 ## Sequence Diagram: Complete Session
 
@@ -980,3 +1153,56 @@ https://jellyfin.example/web/?owp_invite=<ticket>
 ```
 
 The client reads `owp_invite` on load, waits for the WebSocket authentication to finish, then sends `join_room` for the room named in the ticket and removes the parameter from the URL. Invalid or expired tickets show a toast and leave the client on the normal room list.
+
+## Room access (`room_access`)
+
+Clients advertise `room_access` in `auth.features`; supporting servers echo it in
+`auth_success.features`. Both settings default to false and are independent.
+Access settings are never logged. This extension adds these client payloads:
+
+| Message | Payload | Authorization |
+| --- | --- | --- |
+| `create_room` | Existing fields, optional `access: {"approval": true, "unlisted": false}` | Authenticated; access ignored without negotiation |
+| `set_room_access` | `{"approval": true, "unlisted": false}` | Negotiated host |
+| `cancel_join` | `{}` | Negotiated requester, withdraws its request anywhere |
+| `answer_join` | `{"id": "request UUID", "admit": true}` | Negotiated host; unknown id ignored |
+
+Both access keys must be booleans, both are required, and no other access keys
+are accepted. Invalid create access creates no room. Invalid access settings
+return `INVALID_ACCESS_PAYLOAD`; non-host updates return
+`HOST_PERMISSION_REQUIRED`, and updates outside a room return `NOT_IN_ROOM`.
+The three new request types are ignored without negotiation.
+
+| Server message | Payload | Recipient |
+| --- | --- | --- |
+| `room_access` | `{"approval": true, "unlisted": false}` | Negotiated members |
+| `join_requests` | `{"requests": [{"id": "UUID v4", "name": "Guest"}]}` | Negotiated host only, including empty lists |
+| `join_pending` | `{"host_name": "Host"}` | Requester |
+| `join_rejected` | `{"reason": "rejected", "host_name": "Host"}` | Requester |
+
+All four messages have the room id in the envelope's `room` field.
+`room_access` follows `room_state` on create/join, and is also sent on changes
+and host changes. Hosts receive `join_requests` on create, promotion, reclaim,
+and every request list change. Requests remain in arrival order, at most 20;
+repeat joins resend `join_pending` without duplicating. A request in another
+room is withdrawn first. Names use the sanitized join name or stored user name.
+Too many waiting requests return `ROOM_FULL`.
+
+Approval defers membership until admitted. The room remembers the non-empty
+Jellyfin user id of everyone who becomes a member for its lifetime. Returning
+admitted users, existing members, valid invite tickets and reclaiming hosts
+bypass approval. Empty user ids are never remembered. Legacy clients receive
+`ROOM_APPROVAL_REQUIRED`: "This room asks the host's approval to join. Update
+OpenWatchParty to ask to join." Admission uses normal joining, including
+capacity checks, leaving an earlier room and normal join messages. Turning
+off approval admits the waiting list in order; overflow receives `ROOM_FULL`.
+Rejection removes the request and sends reason `rejected`. Closing a room by
+any path sends reason `closed`; disconnecting requesters are removed. When a
+host without this feature takes over, approval turns off, waiting requests get
+reason `unavailable`, and members receive updated access. Unlisted stays set.
+
+Room lists exclude unlisted rooms for everyone, including members. An unlisted
+room can still be joined by id. Lists are built per negotiated recipient group:
+feature clients receive an extra boolean `approval` on each entry; legacy
+clients receive exactly the previous schema. Only authenticated clients receive
+lists. Changes to room access rebroadcast lists, including appearance/removal.

@@ -108,13 +108,13 @@
     // the same ranges as the plugin settings.
     APPEARANCE: {
       baseTextSize: 12,
-      presets: ['glass', 'solid', 'light', 'contrast'], // Color presets; the first is the default
+      presets: ['glass', 'solid', 'light', 'contrast', 'jellyfin'], // Color presets; the first is the default
       opacity: { min: 40, max: 100, step: 5, default: 55 },
       textSize: { min: 12, max: 18, step: 1, default: 14 }
     },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'chat_history'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'room_moderation', 'media_queue', 'queue_suggestions', 'start_when_ready', 'room_permissions', 'chat_history', 'room_access'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -176,6 +176,8 @@
     queueCountdownUntil: 0, // Server time the room moves to the next item, 0 without a countdown
     queueLastAdded: null,   // The item the room's queue_add appended last, where filling goes on
     queueReceived: false,   // Whether queue_state came since entering the room or reconnecting
+    queueSuggestions: [],   // Suggestions visible to this member, from queue_details
+    queueUnavailable: [],   // Per-item availability visible to this member, from queue_details
   });
 
   // A play the room holds until its members are ready, from start_state when
@@ -190,17 +192,26 @@
   });
 
   const createRoomState = () => ({
+    roomAccess: { approval: false, unlisted: false },
+    joinRequests: [],
+    joinTarget: '',        // Last join sent; fences replies after cancellation or a different join
+    cancelledJoinRoomId: '', // A racing admission must be left before showing the room
+    createRoomPending: false,
+    pendingJoin: null,
+    joinOutcome: null,
     roomId: '',
     isHost: false,
     inRoom: false,
     roomName: '',
     participantCount: 0,
-    participants: [],      // [{ name, isHost, status }] from participant_list and participant_statuses
+    participants: [],      // [{ id, name, isHost, status, tracks }] from participant_list, participant_statuses and participant_tracks
+    pendingModerations: [], // Host remove/block requests awaiting client_left, by participant id
     lastParticipantCount: 0,
     statusesRoomId: '',    // The room whose server sent participant_statuses: it accepts participant_status
     statusCandidate: '',   // This client's status, and since when, until it holds long enough to send
     statusCandidateSince: 0,
     statusSentKey: '',     // room|client|status last sent, so a status is sent once per room and connection
+    tracksSentKey: '',     // room|client|tracks last sent (participant_tracks), the same way
     lastSyncServerTs: 0,
     lastSyncPosition: 0,
     lastSyncPlayState: '',
@@ -208,6 +219,8 @@
     roomHostId: '',
     roomMediaId: '',       // The room's item, from room_state: a change is a queue advance
     sharedPlaybackControl: false,
+    roomPermissions: { seek: false, change_media: false, edit_queue: false },
+    roomPermissionsReceived: false,
     readyRoomId: '',
     ...createQueueState(),
     ...createStartState(),
@@ -310,10 +323,12 @@
 
   const createRoomUIState = () => ({
     roomBarSection: '',    // Drop-down open under the room bar: 'people', 'chat', 'leave' or ''
+    moderationOpenParticipantId: '', // Participant whose remove/block choices are open
   });
 
   const createUIState = () => ({
     ...createRoomUIState(),
+    createAccess: { approval: false, unlisted: false },
     name: '',
     rooms: [],
     initialized: false,

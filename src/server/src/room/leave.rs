@@ -1,5 +1,8 @@
 use crate::messaging::{broadcast_room_list, collect_room_senders, send_to_senders, ClientSender};
-use crate::room::{close_room_parts, participant_list_message, participant_statuses_message};
+use crate::room::{
+    close_room_parts, participant_list_notification, participant_statuses_message,
+    participant_tracks_message, send_participant_list, ParticipantListNotification,
+};
 use crate::tasks::AppTasks;
 use crate::types::{Client, PendingHostReconnect, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
@@ -10,11 +13,17 @@ use std::time::Duration;
 
 const HOST_RECONNECT_GRACE: Duration = Duration::from_secs(10);
 
-/// Senders of the remaining room members, and the messages to send them in order.
-pub type LeaveNotification = (Vec<ClientSender>, Vec<WsMessage>);
+/// Messages for remaining room members, kept ordered around the tailored list.
+pub struct LeaveNotification {
+    senders: Vec<ClientSender>,
+    messages_before_list: Vec<WsMessage>,
+    participant_list: Option<ParticipantListNotification>,
+    statuses: Option<WsMessage>,
+    tracks: Option<WsMessage>,
+}
 
 enum LeaveOutcome {
-    Left(LeaveNotification),
+    Left(Box<LeaveNotification>),
     Close(String),
 }
 
@@ -63,7 +72,9 @@ fn promote_next_host(
         .unwrap_or_default();
     room.host_id = new_host_id.clone();
     room.pending_host_reconnect = None;
+    super::access::host_changed(room, clients);
     crate::room::send_room_capabilities(room, clients);
+    crate::room::reset_room_permissions_for_host(room, clients);
     Some(host_changed_message(room_id, &new_host_id, &host_name))
 }
 
@@ -80,7 +91,9 @@ fn detach_client_from_room(
     room.clients.retain(|id| id != client_id);
     room.ready_clients.remove(client_id);
     room.statuses.remove(client_id);
+    room.tracks.remove(client_id);
     room.not_ready.remove(client_id);
+    let availability_changed = room.queue.forget_availability(client_id);
     // The host's play waits no more; another member's goes on without the
     // one that left.
     let wait_ended = room.host_id == client_id && room.pending_play.take().is_some();
@@ -105,10 +118,17 @@ fn detach_client_from_room(
             };
             messages.push(host_changed);
         }
-        messages.push(participant_list_message(room, clients));
-        messages.push(participant_statuses_message(room));
+        if availability_changed {
+            crate::ws::send_queue_details(room, clients, None);
+        }
         let senders = collect_room_senders(room, clients, None);
-        Some(LeaveOutcome::Left((senders, messages)))
+        Some(LeaveOutcome::Left(Box::new(LeaveNotification {
+            senders,
+            messages_before_list: messages,
+            participant_list: Some(participant_list_notification(room, clients)),
+            statuses: Some(participant_statuses_message(room)),
+            tracks: Some(participant_tracks_message(room)),
+        })))
     }
 }
 
@@ -136,7 +156,9 @@ fn begin_host_reconnect_grace(
     room.clients.retain(|id| id != client_id);
     room.ready_clients.remove(client_id);
     room.statuses.remove(client_id);
+    room.tracks.remove(client_id);
     room.not_ready.remove(client_id);
+    let availability_changed = room.queue.forget_availability(client_id);
     if room.pending_play.take().is_some() {
         send_idle(room, clients);
     }
@@ -145,13 +167,22 @@ fn begin_host_reconnect_grace(
         generation,
     });
 
-    let messages = vec![
-        client_left_message(&room_id, client_id, room.clients.len()),
-        participant_list_message(room, clients),
-        participant_statuses_message(room),
-    ];
+    let messages = vec![client_left_message(&room_id, client_id, room.clients.len())];
     let senders = collect_room_senders(room, clients, None);
-    Some((room_id, generation, (senders, messages)))
+    if availability_changed {
+        crate::ws::send_queue_details(room, clients, None);
+    }
+    Some((
+        room_id,
+        generation,
+        LeaveNotification {
+            senders,
+            messages_before_list: messages,
+            participant_list: Some(participant_list_notification(room, clients)),
+            statuses: Some(participant_statuses_message(room)),
+            tracks: Some(participant_tracks_message(room)),
+        },
+    ))
 }
 
 async fn expire_host_reconnect(room_id: String, generation: u64, state: SharedState) {
@@ -169,16 +200,23 @@ async fn expire_host_reconnect(room_id: String, generation: u64, state: SharedSt
             room.pending_host_reconnect = None;
             if let Some(host_changed) = promote_next_host(&room_id, room, clients) {
                 info!("Host reconnect grace expired for room {room_id}; transferred host role");
-                let messages = vec![
-                    host_changed,
-                    participant_list_message(room, clients),
-                    participant_statuses_message(room),
-                ];
-                Some((collect_room_senders(room, clients, None), messages))
+                Some(LeaveNotification {
+                    senders: collect_room_senders(room, clients, None),
+                    messages_before_list: vec![host_changed],
+                    participant_list: Some(participant_list_notification(room, clients)),
+                    statuses: Some(participant_statuses_message(room)),
+                    tracks: Some(participant_tracks_message(room)),
+                })
             } else {
                 info!("Host reconnect grace expired for room {room_id}; closing room");
                 let (senders, message) = close_and_notify(&room_id, clients, rooms);
-                Some((senders, vec![message]))
+                Some(LeaveNotification {
+                    senders,
+                    messages_before_list: vec![message],
+                    participant_list: None,
+                    statuses: None,
+                    tracks: None,
+                })
             }
         }
     };
@@ -248,19 +286,33 @@ fn handle_leave_with_transfer(
     allow_host_transfer: bool,
 ) -> Option<LeaveNotification> {
     match detach_client_from_room(client_id, clients, rooms, allow_host_transfer) {
-        Some(LeaveOutcome::Left(notification)) => Some(notification),
+        Some(LeaveOutcome::Left(notification)) => Some(*notification),
         Some(LeaveOutcome::Close(room_id)) => {
             let (senders, msg) = close_and_notify(&room_id, clients, rooms);
-            Some((senders, vec![msg]))
+            Some(LeaveNotification {
+                senders,
+                messages_before_list: vec![msg],
+                participant_list: None,
+                statuses: None,
+                tracks: None,
+            })
         }
         None => None,
     }
 }
 
 pub fn send_leave_notification(notification: &LeaveNotification, context: &str) {
-    let (senders, messages) = notification;
-    for msg in messages {
-        send_to_senders(senders, msg, context);
+    for msg in &notification.messages_before_list {
+        send_to_senders(&notification.senders, msg, context);
+    }
+    if let Some(participant_list) = &notification.participant_list {
+        send_participant_list(participant_list);
+    }
+    if let Some(statuses) = &notification.statuses {
+        send_to_senders(&notification.senders, statuses, context);
+    }
+    if let Some(tracks) = &notification.tracks {
+        send_to_senders(&notification.senders, tracks, context);
     }
 }
 
@@ -302,6 +354,7 @@ pub(crate) async fn handle_disconnect_if(
             left_room = true;
             send_leave_notification(&notification, "leave notification");
         }
+        super::access::cancel(client_id, rooms, clients);
         let removed = clients.remove(client_id).is_some();
         (
             reconnect_grace.map(|(room_id, generation, _)| (room_id, generation)),
@@ -347,6 +400,43 @@ mod tests {
         let room = rooms.get("room-1").unwrap();
         assert!(!room.clients.contains(&"guest-1".to_string()));
         assert!(clients.get("guest-1").unwrap().room_id.is_none());
+    }
+
+    #[test]
+    fn explicit_leave_forgets_availability_and_sends_details() {
+        let mut clients = HashMap::new();
+        let mut rooms = HashMap::new();
+        let mut host_rx = test_helpers::setup_room_with_host(&mut clients, &mut rooms, "host-1");
+        clients
+            .get_mut("host-1")
+            .unwrap()
+            .supports_queue_suggestions = true;
+        let (mut guest, _guest_rx) = test_helpers::create_client_with_rx("ug", "Guest", true);
+        guest.room_id = Some("room-1".to_string());
+        clients.insert("guest-1".to_string(), guest);
+        let room = rooms.get_mut("room-1").unwrap();
+        room.clients.push("guest-1".to_string());
+        room.queue.add(
+            vec![crate::room::QueueItem {
+                id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+                title: "Pilot".to_string(),
+                series: None,
+            }],
+            None,
+        );
+        room.queue.report_availability(
+            "guest-1",
+            std::collections::HashSet::from(["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()]),
+        );
+
+        let notification = handle_leave("guest-1", &mut clients, &mut rooms).unwrap();
+
+        assert_eq!(
+            test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
+            ServerMessageType::QueueDetails
+        );
+        assert!(!rooms["room-1"].queue.availability.contains_key("guest-1"));
+        send_leave_notification(&notification, "test");
     }
 
     #[test]
@@ -416,14 +506,20 @@ mod tests {
         let state = test_helpers::create_state();
         let (mut host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
         let (mut guest, _guest_rx) = test_helpers::create_client_with_rx("u2", "Ana", true);
+        let (mut observer, mut observer_rx) =
+            test_helpers::create_client_with_rx("u3", "Bruno", true);
         host.room_id = Some("room".to_string());
+        host.supports_room_moderation = true;
         guest.room_id = Some("room".to_string());
+        observer.room_id = Some("room".to_string());
         {
             let mut locked = state.write().await;
             locked.clients.insert("host".to_string(), host);
             locked.clients.insert("guest".to_string(), guest);
+            locked.clients.insert("observer".to_string(), observer);
             let mut room = test_helpers::create_room("room", "host");
-            room.clients.push("guest".to_string());
+            room.clients
+                .extend(["guest".to_string(), "observer".to_string()]);
             for (id, status) in [("host", "playing"), ("guest", "blocked")] {
                 room.statuses.insert(id.to_string(), status);
             }
@@ -440,17 +536,126 @@ mod tests {
         assert_eq!(list.msg_type, ServerMessageType::ParticipantList);
         assert_eq!(
             list.payload.unwrap()["participants"],
-            serde_json::json!([{ "name": "Franco", "is_host": true }])
+            serde_json::json!([
+                { "id": "host", "name": "Franco", "is_host": true },
+                { "id": "observer", "name": "Bruno", "is_host": false }
+            ])
         );
         let statuses = test_helpers::recv_msg(&mut host_rx).unwrap();
         assert_eq!(statuses.msg_type, ServerMessageType::ParticipantStatuses);
         assert_eq!(
             statuses.payload.unwrap()["statuses"],
-            serde_json::json!(["playing"])
+            serde_json::json!(["playing", null])
+        );
+        assert_eq!(
+            test_helpers::recv_msg(&mut observer_rx).unwrap().msg_type,
+            ServerMessageType::ClientLeft
+        );
+        assert_eq!(
+            test_helpers::recv_msg(&mut observer_rx)
+                .unwrap()
+                .payload
+                .unwrap()["participants"],
+            serde_json::json!([
+                { "name": "Franco", "is_host": true },
+                { "name": "Bruno", "is_host": false }
+            ])
         );
         assert!(!state.read().await.rooms["room"]
             .statuses
             .contains_key("guest"));
+    }
+
+    #[tokio::test]
+    async fn disconnect_forgets_availability_and_sends_details_to_the_others() {
+        let state = test_helpers::create_state();
+        let (mut host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Host", true);
+        let (mut guest, _guest_rx) = test_helpers::create_client_with_rx("u2", "Ana", true);
+        host.room_id = Some("room".to_string());
+        host.supports_queue_suggestions = true;
+        guest.room_id = Some("room".to_string());
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("guest".to_string(), guest);
+            let mut room = test_helpers::create_room("room", "host");
+            room.clients.push("guest".to_string());
+            room.queue.add(
+                vec![crate::room::QueueItem {
+                    id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+                    title: "Pilot".to_string(),
+                    series: None,
+                }],
+                None,
+            );
+            room.queue.report_availability(
+                "guest",
+                std::collections::HashSet::from(["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()]),
+            );
+            locked.rooms.insert("room".to_string(), room);
+        }
+
+        handle_disconnect("guest", &state, &AppTasks::new()).await;
+
+        let details = test_helpers::recv_msg(&mut host_rx).unwrap();
+        assert_eq!(details.msg_type, ServerMessageType::QueueDetails);
+        assert!(details.payload.unwrap()["unavailable"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        assert!(!state.read().await.rooms["room"]
+            .queue
+            .availability
+            .contains_key("guest"));
+    }
+
+    #[tokio::test]
+    async fn host_reconnect_grace_forgets_availability_and_sends_details() {
+        const ITEM: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let state = test_helpers::create_state();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx("host-user", "Host", true);
+        let (mut guest, mut guest_rx) =
+            test_helpers::create_client_with_rx("guest-user", "Guest", true);
+        host.room_id = Some("room".to_string());
+        host.supports_host_transfer = true;
+        host.session_expires_at = Some(u64::MAX);
+        guest.room_id = Some("room".to_string());
+        guest.supports_queue_suggestions = true;
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("guest".to_string(), guest);
+            let mut room = test_helpers::create_room("room", "host");
+            room.clients.push("guest".to_string());
+            room.queue.add(
+                vec![crate::room::QueueItem {
+                    id: ITEM.to_string(),
+                    title: "Pilot".to_string(),
+                    series: None,
+                }],
+                None,
+            );
+            room.queue
+                .report_availability("host", std::collections::HashSet::from([ITEM.to_string()]));
+            locked.rooms.insert("room".to_string(), room);
+        }
+
+        let tasks = AppTasks::new();
+        handle_disconnect("host", &state, &tasks).await;
+
+        let details = test_helpers::recv_msg(&mut guest_rx).unwrap();
+        assert_eq!(details.msg_type, ServerMessageType::QueueDetails);
+        assert!(details.payload.unwrap()["unavailable"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        assert!(!state.read().await.rooms["room"]
+            .queue
+            .availability
+            .contains_key("host"));
+
+        tasks.cancel();
+        tasks.wait().await;
     }
 
     #[tokio::test]
@@ -511,7 +716,8 @@ mod tests {
                 "client_left",
                 "host_changed",
                 "participant_list",
-                "participant_statuses"
+                "participant_statuses",
+                "participant_tracks"
             ]
         );
         assert_eq!(messages[1].payload.as_ref().unwrap()["host_id"], "next");
@@ -524,6 +730,83 @@ mod tests {
                 { "name": "Later", "is_host": false }
             ])
         );
+    }
+
+    #[test]
+    fn transfer_keeps_permissions_for_a_capable_host() {
+        let mut clients = HashMap::new();
+        let mut rooms = HashMap::new();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (mut next, mut next_rx) = test_helpers::create_client_with_rx("next", "Next", true);
+        for client in [&mut host, &mut next] {
+            client.room_id = Some("room".to_string());
+            client.supports_room_permissions = true;
+        }
+        next.supports_host_transfer = true;
+        clients.insert("host".into(), host);
+        clients.insert("next".into(), next);
+        let mut room = test_helpers::create_room("room", "host");
+        room.clients.push("next".into());
+        room.permissions = crate::types::RoomPermissions {
+            seek: true,
+            change_media: true,
+            edit_queue: true,
+        };
+        rooms.insert("room".into(), room);
+
+        let notification = handle_leave("host", &mut clients, &mut rooms).unwrap();
+
+        assert_eq!(rooms["room"].host_id, "next");
+        assert_eq!(
+            rooms["room"].permissions,
+            crate::types::RoomPermissions {
+                seek: true,
+                change_media: true,
+                edit_queue: true,
+            }
+        );
+        assert!(test_helpers::recv_msg(&mut next_rx).is_none());
+        send_leave_notification(&notification, "test");
+    }
+
+    #[test]
+    fn transfer_to_a_legacy_host_resets_and_broadcasts_permissions() {
+        let mut clients = HashMap::new();
+        let mut rooms = HashMap::new();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (mut next, mut next_rx) = test_helpers::create_client_with_rx("next", "Next", true);
+        let (mut observer, mut observer_rx) =
+            test_helpers::create_client_with_rx("observer", "Observer", true);
+        for client in [&mut host, &mut next, &mut observer] {
+            client.room_id = Some("room".to_string());
+        }
+        next.supports_host_transfer = true;
+        observer.supports_room_permissions = true;
+        clients.insert("host".into(), host);
+        clients.insert("next".into(), next);
+        clients.insert("observer".into(), observer);
+        let mut room = test_helpers::create_room("room", "host");
+        room.clients = vec!["host".into(), "next".into(), "observer".into()];
+        room.permissions = crate::types::RoomPermissions {
+            seek: true,
+            change_media: true,
+            edit_queue: true,
+        };
+        rooms.insert("room".into(), room);
+
+        let notification = handle_leave("host", &mut clients, &mut rooms).unwrap();
+
+        assert_eq!(rooms["room"].permissions, Default::default());
+        assert!(test_helpers::recv_msg(&mut next_rx).is_none());
+        let permissions = test_helpers::recv_msg(&mut observer_rx).unwrap();
+        assert_eq!(permissions.msg_type, ServerMessageType::RoomPermissions);
+        assert_eq!(
+            permissions.payload.unwrap(),
+            serde_json::json!({
+                "seek": false, "change_media": false, "edit_queue": false
+            })
+        );
+        send_leave_notification(&notification, "test");
     }
 
     #[tokio::test(start_paused = true)]
@@ -542,6 +825,8 @@ mod tests {
             locked.clients.insert("guest".to_string(), guest);
             let mut room = test_helpers::create_room("room", "host");
             room.clients.push("guest".to_string());
+            room.tracks
+                .insert("host".to_string(), serde_json::json!({}));
             room.pending_play = Some(PendingPlay {
                 initiator_id: "host".to_string(),
                 position: 10.0,
@@ -563,6 +848,7 @@ mod tests {
             assert_eq!(locked.rooms["room"].host_id, "host");
             assert!(locked.rooms["room"].pending_host_reconnect.is_some());
             assert!(locked.rooms["room"].pending_play.is_none());
+            assert!(!locked.rooms["room"].tracks.contains_key("host"));
         }
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
@@ -575,6 +861,10 @@ mod tests {
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
             ServerMessageType::ParticipantStatuses
+        );
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+            ServerMessageType::ParticipantTracks
         );
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
@@ -592,10 +882,16 @@ mod tests {
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
             ServerMessageType::HostChanged
         );
-        assert_eq!(
-            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            ServerMessageType::ParticipantList
-        );
+        for expected in [
+            ServerMessageType::ParticipantList,
+            ServerMessageType::ParticipantStatuses,
+            ServerMessageType::ParticipantTracks,
+        ] {
+            assert_eq!(
+                test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+                expected
+            );
+        }
 
         tasks.cancel();
         tasks.wait().await;
@@ -645,9 +941,12 @@ mod tests {
         let mut rooms = HashMap::new();
         let _host_rx = test_helpers::setup_room_with_host(&mut clients, &mut rooms, "host");
 
-        let (_, messages) = handle_leave("host", &mut clients, &mut rooms).unwrap();
+        let notification = handle_leave("host", &mut clients, &mut rooms).unwrap();
 
-        assert_eq!(messages[0].msg_type, ServerMessageType::RoomClosed);
+        assert_eq!(
+            notification.messages_before_list[0].msg_type,
+            ServerMessageType::RoomClosed
+        );
         assert!(!rooms.contains_key("room-1"));
     }
 
@@ -667,8 +966,12 @@ mod tests {
 
         let notification = handle_leave("host", &mut clients, &mut rooms);
 
-        let (_, messages) = notification.expect("host leave closes the room");
-        let types: Vec<_> = messages.iter().map(|msg| msg.msg_type.as_str()).collect();
+        let notification = notification.expect("host leave closes the room");
+        let types: Vec<_> = notification
+            .messages_before_list
+            .iter()
+            .map(|msg| msg.msg_type.as_str())
+            .collect();
         assert_eq!(types, ["room_closed"]);
         assert!(!rooms.contains_key("room"));
         assert!(clients["host"].room_id.is_none());

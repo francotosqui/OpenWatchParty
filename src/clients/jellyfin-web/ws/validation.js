@@ -8,10 +8,15 @@
   const MAX_CHAT_LENGTH = 500;
   const MAX_ID_LENGTH = 128;
   const MAX_QUEUE_ITEMS = 20;
+  const MAX_SUGGESTIONS = 10;
+  const MAX_AVAILABILITY_ITEMS = 30;
   const PLAY_STATES = new Set(['playing', 'paused']);
   const PLAYER_ACTIONS = new Set(['play', 'pause', 'seek', 'buffering']);
   const PARTICIPANT_STATUSES = new Set(['playing', 'paused', 'in_sync', 'catching_up', 'buffering', 'loading', 'blocked', 'not_watching']);
   const NOT_READY_REASONS = new Set(['loading', 'transcoding', 'buffering', 'autoplay_blocked']);
+  const MAX_TRACK_TITLE_LENGTH = 100;
+  const TRACK_LANGUAGE = /^[A-Za-z0-9-]{1,16}$/;
+  const MEDIA_ID = /^[0-9a-f]{32}$/;
 
   const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
   const string = (value, max, allowEmpty = false) =>
@@ -27,6 +32,11 @@
   const optional = (value, validator) => value === undefined || validator(value);
   const nullable = (value, validator) => value === null || validator(value);
   const payloadObject = message => object(message.payload);
+  const roomPermissions = value => object(value)
+    && onlyKeys(value, ['seek', 'change_media', 'edit_queue'])
+    && typeof value.seek === 'boolean'
+    && typeof value.change_media === 'boolean'
+    && typeof value.edit_queue === 'boolean';
 
   const invalid = error => ({ valid: false, error });
   const valid = () => ({ valid: true, error: null });
@@ -36,7 +46,8 @@
     if (!Array.isArray(message.payload)) return 'payload must be an array';
     for (const room of message.payload) {
       if (!object(room)) return 'room_list entries must be objects';
-      if (!onlyKeys(room, ['id', 'name', 'count', 'media_id'])) return 'room_list entry has unknown fields';
+      if (!onlyKeys(room, ['id', 'name', 'count', 'media_id', 'approval'])) return 'room_list entry has unknown fields';
+      if (!optional(room.approval, value => typeof value === 'boolean')) return 'approval is invalid';
       if (!string(room.id, MAX_ID_LENGTH)) return 'room_list entry id is invalid';
       if (!string(room.name, MAX_ROOM_NAME_LENGTH)) return 'room_list entry name is invalid';
       if (!count(room.count)) return 'room_list entry count is invalid';
@@ -92,9 +103,10 @@
     if (!Array.isArray(participants) || participants.length > MAX_PARTICIPANTS) return 'participants is invalid';
     for (const participant of participants) {
       if (!object(participant)) return 'participant entries must be objects';
-      if (!onlyKeys(participant, ['name', 'is_host'])) return 'participant entry has unknown fields';
+      if (!onlyKeys(participant, ['name', 'is_host', 'id'])) return 'participant entry has unknown fields';
       if (!string(participant.name, MAX_NAME_LENGTH, true)) return 'participant name is invalid';
       if (typeof participant.is_host !== 'boolean') return 'participant is_host is invalid';
+      if (!optional(participant.id, value => string(value, MAX_ID_LENGTH))) return 'participant id is invalid';
     }
     return null;
   };
@@ -107,6 +119,26 @@
     const { statuses } = message.payload;
     if (!Array.isArray(statuses) || statuses.length > MAX_PARTICIPANTS) return 'statuses is invalid';
     return statuses.every(status => status === null || PARTICIPANT_STATUSES.has(status)) ? null : 'status is invalid';
+  };
+
+  // One entry per participant, in participant_list order: the tracks it
+  // reported for an item ({ title?, language?, forced? } each, or null for
+  // none), or null for someone who has not reported any.
+  const track = value => object(value)
+    && onlyKeys(value, ['title', 'language', 'forced'])
+    && optional(value.title, title => string(title, MAX_TRACK_TITLE_LENGTH))
+    && optional(value.language, language => typeof language === 'string' && TRACK_LANGUAGE.test(language))
+    && optional(value.forced, forced => typeof forced === 'boolean');
+  const tracksReport = value => object(value)
+    && onlyKeys(value, ['media_id', 'audio', 'subtitle'])
+    && typeof value.media_id === 'string' && MEDIA_ID.test(value.media_id)
+    && nullable(value.audio, track) && nullable(value.subtitle, track);
+  const validateParticipantTracks = (message) => {
+    if (!payloadObject(message)) return 'payload must be an object';
+    if (!onlyKeys(message.payload, ['tracks'])) return 'participant_tracks has unknown fields';
+    const { tracks } = message.payload;
+    if (!Array.isArray(tracks) || tracks.length > MAX_PARTICIPANTS) return 'tracks is invalid';
+    return tracks.every(entry => entry === null || tracksReport(entry)) ? null : 'tracks entry is invalid';
   };
 
   const validateRoomClosed = (message) => {
@@ -169,6 +201,29 @@
     return nullable(countdownUntil, timestamp) ? null : 'countdown_until is invalid';
   };
 
+  const jellyfinId = value => typeof value === 'string' && /^[0-9a-f]{32}$/i.test(value);
+  const validateQueueDetails = (message) => {
+    if (!payloadObject(message)) return 'payload must be an object';
+    const { suggestions, unavailable } = message.payload;
+    if (!onlyKeys(message.payload, ['suggestions', 'unavailable'])) return 'queue_details has unknown fields';
+    if (!Array.isArray(suggestions) || suggestions.length > MAX_SUGGESTIONS) return 'suggestions is invalid';
+    for (const suggestion of suggestions) {
+      if (!object(suggestion) || !onlyKeys(suggestion, ['id', 'title', 'series', 'by', 'mine'])) return 'suggestion is invalid';
+      if (!jellyfinId(suggestion.id) || !string(suggestion.title, MAX_NAME_LENGTH)
+          || !optional(suggestion.series, jellyfinId) || !string(suggestion.by, MAX_NAME_LENGTH)
+          || typeof suggestion.mine !== 'boolean') return 'suggestion is invalid';
+    }
+    if (!Array.isArray(unavailable) || unavailable.length > MAX_AVAILABILITY_ITEMS) return 'unavailable is invalid';
+    for (const entry of unavailable) {
+      if (!object(entry) || !onlyKeys(entry, ['id', 'names', 'you'])) return 'unavailable entry is invalid';
+      if (!jellyfinId(entry.id) || !Array.isArray(entry.names) || entry.names.length > MAX_PARTICIPANTS
+          || !entry.names.every(name => string(name, MAX_NAME_LENGTH)) || typeof entry.you !== 'boolean') {
+        return 'unavailable entry is invalid';
+      }
+    }
+    return null;
+  };
+
   // A play the room holds until its members are ready: who it waits for and
   // why, its start (and who it went without), or the end of the wait.
   const startMembers = value => Array.isArray(value) && value.length <= MAX_PARTICIPANTS && value.every(member =>
@@ -218,16 +273,29 @@
   };
 
   const validators = {
+    room_access: message => payloadObject(message) && onlyKeys(message.payload, ['approval', 'unlisted'])
+      && typeof message.payload.approval === 'boolean' && typeof message.payload.unlisted === 'boolean' ? null : 'room_access is invalid',
+    join_requests: message => payloadObject(message) && onlyKeys(message.payload, ['requests'])
+      && Array.isArray(message.payload.requests) && message.payload.requests.length <= 20
+      && message.payload.requests.every(request => object(request) && onlyKeys(request, ['id', 'name'])
+        && string(request.id, MAX_ID_LENGTH) && string(request.name, MAX_NAME_LENGTH, true)) ? null : 'join_requests is invalid',
+    join_pending: message => payloadObject(message) && onlyKeys(message.payload, ['host_name'])
+      && string(message.payload.host_name, MAX_NAME_LENGTH, true) ? null : 'join_pending is invalid',
+    join_rejected: message => payloadObject(message) && onlyKeys(message.payload, ['reason', 'host_name'])
+      && ['rejected', 'closed', 'unavailable'].includes(message.payload.reason)
+      && string(message.payload.host_name, MAX_NAME_LENGTH, true) ? null : 'join_rejected is invalid',
     room_list: validateRoomList,
     client_hello: validateClientHello,
     auth_success: validateAuthSuccess,
     room_capabilities: message => object(message.payload) && onlyKeys(message.payload, ['features']) && features(message.payload.features)
       ? null : 'room_capabilities is invalid',
+    room_permissions: message => roomPermissions(message.payload) ? null : 'room_permissions is invalid',
     room_state: validateRoomState,
     participants_update: validateParticipantCount,
     client_left: validateParticipantCount,
     participant_list: validateParticipantList,
     participant_statuses: validateParticipantStatuses,
+    participant_tracks: validateParticipantTracks,
     host_changed: validateHostChanged,
     room_closed: validateRoomClosed,
     player_event: validatePlayerEvent,
@@ -235,23 +303,28 @@
     pong: validatePong,
     chat_message: validateChat,
     queue_state: validateQueueState,
+    queue_details: validateQueueDetails,
     start_state: validateStartState,
     chat_history: validateChatHistory,
     error: validateError
   };
   const roomRequired = new Set([
+    'room_access', 'join_requests', 'join_pending', 'join_rejected',
     'room_state',
     'room_capabilities',
+    'room_permissions',
     'participants_update',
     'client_left',
     'participant_list',
     'participant_statuses',
+    'participant_tracks',
     'host_changed',
     'room_closed',
     'player_event',
     'state_update',
     'chat_message',
     'queue_state',
+    'queue_details',
     'start_state',
     'chat_history'
   ]);

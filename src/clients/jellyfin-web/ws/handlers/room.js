@@ -5,6 +5,38 @@
   const ui = OWP.ui;
   const t = OWP.i18n.t;
 
+  h.handleRoomAccess = (msg) => {
+    if (!state.serverFeatures.includes('room_access') || !state.inRoom || msg.room !== state.roomId) return;
+    state.roomAccess = { ...msg.payload };
+    ui.updateAccessUI?.();
+  };
+  h.handleJoinRequests = (msg) => {
+    if (!state.serverFeatures.includes('room_access') || !state.inRoom || msg.room !== state.roomId) return;
+    state.joinRequests = msg.payload.requests;
+    ui.updateParticipantList();
+    ui.updateAccessUI?.();
+  };
+  h.handleJoinPending = (msg) => {
+    if (!state.serverFeatures.includes('room_access') || state.joinTarget !== msg.room) return;
+    if (state.rejoinPending && state.desiredRoomId === msg.room) {
+      OWP.actions.completeRoomRejoin(msg.room);
+    }
+    const roomName = state.pendingJoin?.roomName || state.rooms.find(room => room.id === msg.room)?.name || t('roomName', { name: msg.payload.host_name });
+    state.pendingJoin = { roomId: msg.room, roomName, hostName: msg.payload.host_name };
+    state.joinOutcome = null;
+    ui.updateRoomListUI();
+  };
+  h.handleJoinRejected = (msg) => {
+    if (!state.serverFeatures.includes('room_access') || state.joinTarget !== msg.room) return;
+    const roomName = state.pendingJoin?.roomName || state.rooms.find(room => room.id === msg.room)?.name || t('roomName', { name: msg.payload.host_name });
+    state.joinTarget = '';
+    state.pendingJoin = null;
+    state.joinOutcome = { roomId: msg.room, roomName, reason: msg.payload.reason, hostName: msg.payload.host_name };
+    if (!state.inRoom) state.roomId = '';
+    state.desiredRoomId = '';
+    ui.updateRoomListUI();
+  };
+
   h.handleRoomList = (msg) => {
     state.rooms = msg.payload || [];
     if (!state.inRoom) ui.updateRoomListUI();
@@ -21,6 +53,11 @@
   h.handleAuthSuccess = (msg) => {
     state.serverFeatures = msg.payload?.features || [];
     if (!state.serverFeatures.includes('shared_playback_control')) state.sharedPlaybackControl = false;
+    if (state.inRoom && ui.updateParticipantList) ui.updateParticipantList();
+    if (!state.serverFeatures.includes('room_permissions')) {
+      state.roomPermissions = { seek: false, change_media: false, edit_queue: false };
+      state.roomPermissionsReceived = false;
+    }
     if (state.connectionPhase !== 'authenticated' && OWP.actions?.handleAuthenticatedConnection) {
       OWP.actions.handleAuthenticatedConnection();
     }
@@ -31,6 +68,28 @@
     state.sharedPlaybackControl = state.serverFeatures.includes('shared_playback_control')
       && msg.payload.features.includes('shared_playback_control');
     if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();
+  };
+
+  h.handleRoomPermissions = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId || !state.serverFeatures.includes('room_permissions')) return;
+    const previous = state.roomPermissions;
+    const first = !state.roomPermissionsReceived;
+    state.roomPermissions = { ...msg.payload };
+    state.roomPermissionsReceived = true;
+    if (!first && !state.isHost && ui.showToast) {
+      const changed = Object.keys(state.roomPermissions).filter(key => previous[key] !== state.roomPermissions[key]);
+      if (changed.length === 1) {
+        const key = changed[0];
+        const suffix = state.roomPermissions[key] ? 'On' : 'Off';
+        const names = { seek: 'Seek', change_media: 'ChangeMedia', edit_queue: 'EditQueue' };
+        ui.showToast(t(`guestPermission${names[key]}${suffix}`));
+      } else if (changed.length > 1) {
+        ui.showToast(t('guestPermissionsChanged'));
+      }
+    }
+    if (ui.updateGuestControls) ui.updateGuestControls();
+    if (ui.updateQueue) ui.updateQueue();
+    if (ui.updateRoomPermissions) ui.updateRoomPermissions();
   };
 
   h.handleParticipantsUpdate = (msg) => {
@@ -48,7 +107,11 @@
       state.participantCount = msg.payload.participant_count;
       if (state.inRoom) {
         ui.updateParticipantList();
-        ui.showToast(t('participantLeft'));
+        const moderation = state.pendingModerations.find(request => request.id === msg.client);
+        state.pendingModerations = state.pendingModerations.filter(request => request.id !== msg.client);
+        ui.showToast(moderation
+          ? t(moderation.block ? 'participantBlocked' : 'participantRemoved', { name: moderation.name })
+          : t('participantLeft'));
       }
       state.lastParticipantCount = state.participantCount;
     }
@@ -65,6 +128,15 @@
     if (OWP.queue?.onQueueState) OWP.queue.onQueueState();
   };
 
+  h.handleQueueDetails = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId) return;
+    const previous = state.queueSuggestions;
+    state.queueSuggestions = msg.payload.suggestions;
+    state.queueUnavailable = msg.payload.unavailable;
+    if (OWP.queue?.onQueueDetails) OWP.queue.onQueueDetails(previous);
+    if (ui.updateQueue) ui.updateQueue();
+  };
+
   h.handleStartState = (msg) => {
     if (!state.inRoom || msg.room !== state.roomId) return;
     if (OWP.start?.onStartState) OWP.start.onStartState(msg.payload);
@@ -77,11 +149,14 @@
 
   h.handleParticipantList = (msg) => {
     if (!state.inRoom || msg.room !== state.roomId) return;
-    // The statuses for this list follow in participant_statuses.
+    // The statuses and tracks for this list follow in participant_statuses
+    // and participant_tracks.
     state.participants = msg.payload.participants.map(participant => ({
+      ...(participant.id ? { id: participant.id } : {}),
       name: participant.name,
       isHost: participant.is_host,
-      status: null
+      status: null,
+      tracks: null
     }));
     ui.updateParticipantList();
   };
@@ -99,6 +174,15 @@
     ui.updateParticipantList();
   };
 
+  // Tracks in participant_list order, as for the statuses.
+  h.handleParticipantTracks = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId) return;
+    const { tracks } = msg.payload;
+    if (tracks.length !== state.participants.length) return;
+    state.participants = state.participants.map((participant, index) => ({ ...participant, tracks: tracks[index] }));
+    ui.updateParticipantList();
+  };
+
   h.handleHostChanged = (msg) => {
     if (!state.inRoom || msg.room !== state.roomId) return;
     state.hostControlAcks = [];
@@ -113,6 +197,7 @@
     }
     if (OWP.queue?.refresh) OWP.queue.refresh();
     ui.render();
+    if (ui.updateParticipantList) ui.updateParticipantList();
     if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();
     ui.showToast(becameHost ? t('youAreHost') : t('nowHost', { name: msg.payload.host_name }));
   };
@@ -124,14 +209,25 @@
       state.inRoom = false;
       state.roomId = '';
     }
-    const reason = OWP.i18n.localizeRoomClosedReason(msg.payload?.reason);
-    ui.showToast(reason);
+    const rawReason = msg.payload?.reason;
+    const reason = OWP.i18n.localizeRoomClosedReason(rawReason);
+    const moderationNotice = OWP.i18n.isModerationRoomClosedReason(rawReason);
+    if (moderationNotice) ui.showToast(reason, { duration: 6000 });
+    else ui.showToast(reason);
     ui.render();
   };
 
   h.handleError = (msg) => {
+    if (state.pendingJoin && (!msg.room || msg.room === state.pendingJoin.roomId)) {
+      state.joinTarget = '';
+      state.pendingJoin = null;
+      if (!state.inRoom) state.roomId = '';
+      state.desiredRoomId = '';
+      ui.updateRoomListUI();
+    }
     const message = OWP.i18n.localizeServerError(msg.payload?.code, msg.payload?.message);
     console.error('[OpenWatchParty] Server error:', msg.payload?.code, msg.payload?.message);
+    state.pendingModerations = [];
     if (state.inviteJoinPending) {
       // A bad or expired invite must fall back to the normal room list.
       state.inviteJoinPending = false;
@@ -142,6 +238,12 @@
     }
     if (state.rejoinPending && OWP.actions?.failRoomRejoin) {
       OWP.actions.failRoomRejoin(message);
+      return;
+    }
+    if (msg.payload?.code === 'BLOCKED_FROM_ROOM') {
+      if (OWP.actions?.resetRoomState) OWP.actions.resetRoomState();
+      ui.showToast(message);
+      ui.render();
       return;
     }
     ui.showToast(message);

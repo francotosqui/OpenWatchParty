@@ -138,6 +138,7 @@
     const inCooldown = state.syncCooldownUntil && now < state.syncCooldownUntil;
     if (abs > INITIAL_SYNC_MAX_DRIFT) {
       utils.log('SYNC', { type: 'initial_sync_critical_drift', drift, videoPos: video.currentTime, expected });
+      utils.suppress();
       video.currentTime = expected;
       state.lastSyncServerTs = serverNow;
       state.lastSyncPosition = expected;
@@ -150,6 +151,7 @@
         && abs >= DRIFT_SOFT_MAX_SEC
         && !inCooldown) {
       utils.log('SYNC', { type: 'post_buffer_seek', drift, videoPos: video.currentTime, expected });
+      utils.suppress();
       video.currentTime = expected;
       state.lastSyncServerTs = serverNow;
       state.lastSyncPosition = expected;
@@ -237,7 +239,9 @@
       if (video.playbackRate !== 1) video.playbackRate = 1;
       return;
     }
-    if (state.pendingMediaId) {
+    // Let an active seek or scheduled room command finish before correcting drift.
+    if (state.pendingMediaId || video.seeking
+        || (state.pendingPlayUntil && utils.getServerNow() < state.pendingPlayUntil)) {
       if (video.playbackRate !== 1) video.playbackRate = 1;
       return;
     }
@@ -377,10 +381,11 @@
     const video = state.currentVideoElement || utils.getVideo();
     const from = video.currentTime;
     const moved = current.drift > 0 ? current.step : -current.step;
+    utils.suppress();
     video.currentTime = from + moved;
     utils.log('SYNC', { type: 'manual_nudge', from, to: from + moved, drift: current.drift });
     return { ...current, moved };
   };
 
-  Object.assign(playback, { watchReady, syncLoop, ownStatus, reportStatus, nudgeState, trackDrift, nudge });
+  Object.assign(playback, { watchReady, syncLoop, ownStatus, reportStatus, nudgeState, trackDrift, nudge, expectedPosition });
 })();

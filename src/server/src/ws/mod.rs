@@ -7,6 +7,7 @@ mod validation;
 
 pub use connection::client_connection;
 pub(crate) use connection::SessionClock;
+pub(crate) use handlers::send_queue_details;
 
 #[cfg(test)]
 mod concurrency_tests {
@@ -123,7 +124,7 @@ mod concurrency_tests {
         let leave_state = state.clone();
         let leave = tokio::spawn(async move {
             for _ in 0..40 {
-                handle_leave_room("leaver", &leave_state).await;
+                handle_leave_room("leaver", None, &leave_state).await;
                 tokio::task::yield_now().await;
             }
         });
