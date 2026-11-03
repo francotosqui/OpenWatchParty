@@ -202,6 +202,7 @@
       case 'state_update': h.handleStateUpdate(msg, video); break;
       case 'pong': h.handlePong(msg); break;
       case 'chat_message': if (OWP.chat && msg.payload) OWP.chat.receive(msg); break;
+      case 'chat_typing': OWP.chatTyping?.onMessage(msg); break;
       case 'queue_state': h.handleQueueState(msg); break;
       case 'room_access': h.handleRoomAccess(msg); break;
       case 'join_requests': h.handleJoinRequests(msg); break;

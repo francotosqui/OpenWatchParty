@@ -164,6 +164,7 @@
     // and participant_tracks.
     state.participants = msg.payload.participants.map(participant => ({
       ...(participant.id ? { id: participant.id } : {}),
+      ...(participant.user_id ? { userId: participant.user_id } : {}),
       name: participant.name,
       isHost: participant.is_host,
       status: null,

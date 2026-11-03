@@ -301,8 +301,7 @@
     list.replaceChildren(...state.participants.map((participant, index) => {
       const name = participant.name || t('guest');
       const item = createElement('div', 'owp-participant');
-      const avatar = createElement('span', 'owp-participant-avatar', Array.from(name)[0].toUpperCase());
-      avatar.setAttribute('aria-hidden', 'true');
+      const avatar = OWP.avatars.create(name, participant.userId);
       const nameEl = createElement('span', 'owp-participant-name', name);
       const isOwner = state.roomHostId && participant.id ? participant.id === state.roomHostId : participant.isHost;
       const badge = isOwner ? createElement('span', 'owp-host-badge', t('owner'))

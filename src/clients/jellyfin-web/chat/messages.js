@@ -21,6 +21,7 @@
     const username = document.createElement('span');
     username.className = 'owp-chat-username';
     username.textContent = String(message.username);
+    if (!message.system && OWP.avatars) meta.appendChild(OWP.avatars.create(message.username, message.userId, 'owp-chat-avatar'));
     const time = document.createElement('span');
     time.className = 'owp-chat-time';
     time.textContent = formatTime(message.timestamp);
@@ -47,6 +48,7 @@
     const message = {
       clientId: msg.client,
       username: msg.payload?.username || 'Anonymous',
+      userId: msg.payload?.user_id,
       text: msg.payload?.text || '',
       timestamp: msg.server_ts || Date.now(),
       isOwn: msg.client === OWP.state.clientId
@@ -89,6 +91,7 @@
     chat.messages = entries.slice(-MAX_MESSAGES).map(entry => ({
       clientId: entry.client,
       username: entry.username || 'Anonymous',
+      userId: entry.user_id,
       text: entry.text,
       timestamp: entry.server_ts,
       isOwn: entry.own || entry.client === OWP.state.clientId

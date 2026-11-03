@@ -114,7 +114,7 @@
     },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'room_moderation', 'media_queue', 'queue_suggestions', 'start_when_ready', 'room_permissions', 'chat_history', 'room_access', 'room_administrator', 'persistent_rooms'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'room_moderation', 'media_queue', 'queue_suggestions', 'start_when_ready', 'room_permissions', 'chat_history', 'room_access', 'room_administrator', 'persistent_rooms', 'chat_typing', 'user_avatars'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,

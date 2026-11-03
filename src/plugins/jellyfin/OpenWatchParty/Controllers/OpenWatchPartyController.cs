@@ -47,6 +47,7 @@ public class OpenWatchPartyController : ControllerBase
         "ui/toasts.js",
         "ui/cards.js",
         "ui/panel-elements.js",
+        "ui/avatars.js",
         "ui/lobby.js",
         "ui/participants.js",
         "ui/leave-confirm.js",

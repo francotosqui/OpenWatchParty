@@ -144,6 +144,7 @@
       load('ui/toasts.js'),
       load('ui/cards.js'),
       load('ui/panel-elements.js'),
+      load('ui/avatars.js'),
     ]);
     await Promise.all([
       load('ui/lobby.js'),

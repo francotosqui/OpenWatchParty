@@ -25,6 +25,23 @@ describe('WebSocket message schema validation', () => {
     invalid(envelope('room_capabilities', { features: [] }));
   });
 
+  it('validates Jellyfin user ids and chat typing notices', () => {
+    const id = 'aaaaaaaabbbbccccddddeeeeeeeeeeee';
+    valid(envelope('participant_list', { participants: [{ name: 'Ana', is_host: true, id: 'c1', user_id: id }] }, { room: 'room-1' }));
+    valid(envelope('chat_message', { username: 'Ana', text: 'hola', user_id: 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE' }, { room: 'room-1', client: 'c1' }));
+    valid(envelope('chat_history', { messages: [{ client: 'c1', username: 'Ana', text: 'hola', server_ts: 1_700_000_000_000, own: false, user_id: id }] }, { room: 'room-1' }));
+    for (const userId of ['', 'x', '../Users', 42, `${id}00`]) {
+      invalid(envelope('chat_message', { username: 'Ana', text: 'hola', user_id: userId }, { room: 'room-1', client: 'c1' }));
+      invalid(envelope('participant_list', { participants: [{ name: 'Ana', is_host: true, user_id: userId }] }, { room: 'room-1' }));
+    }
+    valid(envelope('chat_typing', { username: 'Ana', active: true }, { room: 'room-1', client: 'c1' }));
+    valid(envelope('chat_typing', { username: 'Ana', active: false }, { room: 'room-1', client: 'c1' }));
+    invalid(envelope('chat_typing', { username: 'Ana', active: 'yes' }, { room: 'room-1', client: 'c1' }));
+    invalid(envelope('chat_typing', { username: 'Ana', active: true, extra: 1 }, { room: 'room-1', client: 'c1' }));
+    invalid(envelope('chat_typing', { username: 'Ana', active: true }, { room: 'room-1' }));
+    invalid(envelope('chat_typing', { username: 'Ana', active: true }, { client: 'c1' }));
+  });
+
   it('validates all three room permissions as strict booleans', () => {
     const permissions = payload => envelope('room_permissions', payload, { room: 'room-1' });
     valid(permissions({ seek: true, change_media: false, edit_queue: true }));

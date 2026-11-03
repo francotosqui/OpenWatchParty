@@ -404,6 +404,13 @@
     /* With a status: the name and the Host badge on top, the status below */
     .owp-participant.owp-has-status { align-items: flex-start; }
     .owp-participant.owp-has-status .owp-participant-avatar { margin-top: ${px(2)}; }
+    .owp-avatar-photo { overflow: hidden; }
+    .owp-avatar-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .owp-chat-avatar {
+      display: inline-flex; align-items: center; justify-content: center; vertical-align: -0.3em;
+      width: 1.35em; height: 1.35em; margin-right: ${px(5)}; border-radius: ${round(10)};
+      background: var(--owp-avatar-bg); color: var(--owp-avatar-text); font-size: 0.8em; font-weight: 600;
+    }
     .owp-participant-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
     .owp-participant-line { display: flex; align-items: center; gap: ${px(6)}; min-width: 0; }
     .owp-participant-status { display: flex; align-items: center; gap: ${px(5)}; margin-top: ${px(1)}; font-size: ${px(11)}; }

@@ -241,7 +241,7 @@ describe('host transfer client support', () => {
     socket.open();
 
     const auth = socket.sent.find(message => message.type === 'auth');
-    assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'room_moderation', 'media_queue', 'queue_suggestions', 'start_when_ready', 'room_permissions', 'chat_history', 'room_access', 'room_administrator', 'persistent_rooms']);
+    assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'room_moderation', 'media_queue', 'queue_suggestions', 'start_when_ready', 'room_permissions', 'chat_history', 'room_access', 'room_administrator', 'persistent_rooms', 'chat_typing', 'user_avatars']);
     socket.receive({
       type: 'auth_success',
       payload: { user_name: 'Guest', features: ['host_transfer'] }
@@ -262,7 +262,7 @@ describe('host transfer client support', () => {
       const socket = sockets[0];
       socket.open();
       const auth = socket.sent.find(message => message.type === 'auth');
-      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'room_moderation', 'media_queue', 'queue_suggestions', 'start_when_ready', 'room_permissions', 'chat_history', 'room_access', 'room_administrator', 'persistent_rooms']);
+      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'room_moderation', 'media_queue', 'queue_suggestions', 'start_when_ready', 'room_permissions', 'chat_history', 'room_access', 'room_administrator', 'persistent_rooms', 'chat_typing', 'user_avatars']);
       assert.equal(auth.payload.token, undefined);
     } finally {
       OWP.actions.fetchAuthToken = originalFetchAuthToken;
