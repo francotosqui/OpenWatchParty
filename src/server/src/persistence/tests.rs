@@ -238,3 +238,15 @@ async fn lowering_capacity_does_not_hide_existing_checkpoints() {
     assert_eq!(store.list("owner", 101).await.unwrap().len(), 2);
     store.shutdown().await.unwrap();
 }
+
+#[test]
+fn declared_schema_without_required_table_fails_startup() {
+    let dir = TestDir::new();
+    let connection = rusqlite::Connection::open(dir.0.join("saved-rooms.sqlite3")).unwrap();
+    connection.execute_batch("PRAGMA user_version=1;").unwrap();
+    drop(connection);
+    assert!(matches!(
+        SavedRoomStore::open(dir.config()),
+        Err(StorageError::CorruptData)
+    ));
+}

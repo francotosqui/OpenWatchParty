@@ -68,6 +68,16 @@ impl Database {
         connection
             .pragma_update(None, "synchronous", "FULL")
             .map_err(unavailable)?;
+        // A version marker alone does not prove the configured database is usable.
+        connection
+            .prepare("SELECT id, owner, saved_at, expires_at, data FROM saved_rooms LIMIT 0")
+            .map_err(|_| StorageError::CorruptData)?;
+        let integrity: String = connection
+            .query_row("PRAGMA quick_check", [], |row| row.get(0))
+            .map_err(|_| StorageError::CorruptData)?;
+        if integrity != "ok" {
+            return Err(StorageError::CorruptData);
+        }
         Ok(Self { connection, config })
     }
     fn decode(raw: String, owner: &str, id: Option<&str>) -> Result<SavedRoom, StorageError> {
