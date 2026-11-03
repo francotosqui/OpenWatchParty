@@ -344,6 +344,8 @@
     }
     .owp-room-item:hover { background: rgba(var(--owp-ink), 0.08); border-color: var(--owp-line); }
     .owp-room-title { font-weight: 500; }
+    /* The host's photo before the room name */
+    .owp-room-host { display: flex; align-items: center; gap: ${px(8)}; min-width: 0; }
     .owp-room-count { font-size: ${px(11)}; color: var(--owp-muted); }
     .owp-room-empty { padding: ${px(8)}; text-align: center; color: var(--owp-muted); }
     .owp-card-count {
@@ -352,6 +354,9 @@
       background: rgba(0,0,0,0.7); color: #fff; font-size: 0.8em; line-height: 1.3; white-space: nowrap;
     }
     .owp-card-count .material-icons { font-size: 1.25em; line-height: 1; }
+    /* The host's photo before the room name on the home card; none without an image */
+    .owp-card-avatar { display: inline-block; width: 1.35em; height: 1.35em; margin-inline-end: 0.4em; vertical-align: -0.3em; border-radius: 50%; }
+    .owp-card-avatar:not(.owp-avatar-photo) { display: none; }
     .owp-card-count-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .owp-btn {
       height: ${px(26)}; padding: 0 ${px(12)}; border: none; border-radius: ${round(13)}; cursor: pointer;
@@ -400,6 +405,8 @@
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
       width: ${px(20)}; height: ${px(20)}; border-radius: ${round(10)}; background: var(--owp-avatar-bg); color: var(--owp-avatar-text); font-size: ${px(11)};
     }
+    /* Larger for the host of a listed room */
+    .owp-room-host .owp-participant-avatar { width: ${px(28)}; height: ${px(28)}; border-radius: ${round(14)}; font-size: ${px(13)}; }
     .owp-participant-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     /* With a status: the name and the Host badge on top, the status below */
     .owp-participant.owp-has-status { align-items: flex-start; }

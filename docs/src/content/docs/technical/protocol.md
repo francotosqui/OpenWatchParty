@@ -606,6 +606,12 @@ List of active rooms.
 
 Rooms that block the receiving user's id are omitted.
 
+| Field | Type | Description |
+|-------|------|-------------|
+| `approval` | boolean | Whether joining needs the host's approval; only for clients that negotiated `room_access` |
+| `host_user_id` | string | The host's Jellyfin user id, for its avatar; only for clients that negotiated `user_avatars`, and only while the host is connected |
+| `host_name` | string | The host's name, under the same conditions as `host_user_id` |
+
 ### `room_state`
 
 Full room state. Sent after `create_room` or `join_room`, and to every member when the room moves to another [queue](#room-queue) item.

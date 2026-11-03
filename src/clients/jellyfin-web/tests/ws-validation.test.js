@@ -218,6 +218,15 @@ describe('WebSocket message schema validation', () => {
     invalid(envelope('error', { code: 'X'.repeat(65), message: 'Failure' }));
   });
 
+  it('accepts the host of a listed room for avatars, and only a Jellyfin user id', () => {
+    const entry = { id: 'room-1', name: 'Room', count: 1, media_id: null };
+    valid(envelope('room_list', [{ ...entry, host_user_id: '0123456789abcdef0123456789abcdef', host_name: 'Ana' }]));
+    valid(envelope('room_list', [{ ...entry, host_user_id: '01234567-89ab-cdef-0123-456789abcdef' }]));
+    invalid(envelope('room_list', [{ ...entry, host_user_id: '../Users' }]));
+    invalid(envelope('room_list', [{ ...entry, host_name: 'A'.repeat(101) }]));
+    invalid(envelope('room_list', [{ ...entry, host_name: 7 }]));
+  });
+
   it('counts Unicode names by code point and permits room names built from a full-length user name', () => {
     valid(envelope('auth_success', { user_name: '😀'.repeat(51) }, { client: 'client-1' }));
     valid(envelope('room_list', [{

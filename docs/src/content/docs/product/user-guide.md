@@ -25,7 +25,7 @@ Before using OpenWatchParty, ensure your Jellyfin administrator has:
 2. **Find the Watch Party button** - Move the pointer over the video to reveal the player header, then select the **Watch Party** icon (a screen with two viewers) next to **Cast**
 3. **Click to open the panel** - A slide-out panel appears
 4. **Click "Create Room"** - The room is created and named after you (`<you>'s room`)
-5. **Wait for participants** - The room appears in everyone's "Available rooms" list and on the Jellyfin home page
+5. **Wait for participants** - The room appears in everyone's "Available rooms" list and on the Jellyfin home page, with your profile picture
 
 The Watch Party button in the Jellyfin header opens the same panel, but **Create Room** stays disabled, with a hint, until something is playing: a room always starts from the video you are watching.
 

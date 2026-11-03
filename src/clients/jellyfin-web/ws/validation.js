@@ -46,7 +46,9 @@
     if (!Array.isArray(message.payload)) return 'payload must be an array';
     for (const room of message.payload) {
       if (!object(room)) return 'room_list entries must be objects';
-      if (!onlyKeys(room, ['id', 'name', 'count', 'media_id', 'approval'])) return 'room_list entry has unknown fields';
+      if (!onlyKeys(room, ['id', 'name', 'count', 'media_id', 'approval', 'host_user_id', 'host_name'])) return 'room_list entry has unknown fields';
+      if (!optional(room.host_user_id, jellyfinUserId)) return 'room_list entry host_user_id is invalid';
+      if (!optional(room.host_name, value => string(value, MAX_NAME_LENGTH))) return 'room_list entry host_name is invalid';
       if (!optional(room.approval, value => typeof value === 'boolean')) return 'approval is invalid';
       if (!string(room.id, MAX_ID_LENGTH)) return 'room_list entry id is invalid';
       if (!string(room.name, MAX_ROOM_NAME_LENGTH)) return 'room_list entry name is invalid';

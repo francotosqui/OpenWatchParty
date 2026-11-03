@@ -10,6 +10,7 @@ require('../chat/messages.js');
 OWP.chat.isChatVisible = () => true;
 OWP.chat.updateBadge = () => {};
 require('../ws/handlers/room.js');
+require('../ui/cards.js');
 
 const ID = 'aaaaaaaabbbbccccddddeeeeeeeeeeee';
 const image = element => element.children.find(child => child.tagName === 'IMG');
@@ -65,5 +66,42 @@ describe('Jellyfin avatars', () => {
     assert.ok(meta.children[0].classList.contains('owp-chat-avatar'));
     assert.ok(image(meta.children[0]));
     assert.ok(meta.children[1].classList.contains('owp-chat-username'));
+  });
+});
+
+// Clients that show avatars get each room's host in the room list.
+describe('the host photo on the room lists', () => {
+  const named = { id: 'room-1', name: "Ana's room", count: 1, media_id: null, host_user_id: ID, host_name: 'Ana' };
+  beforeEach(() => {
+    globalThis.document = new FakeDocument();
+    window.ApiClient = { getUrl: path => `https://jf.example/${path}` };
+    OWP.avatars.reset();
+    OWP.state.pendingJoin = null;
+    OWP.state.joinOutcome = null;
+  });
+
+  it('shows the host photo before the room name in the panel list', () => {
+    const list = document.createElement('div');
+    list.id = 'owp-room-list';
+    document.body.appendChild(list);
+    OWP.state.rooms = [named];
+    OWP.ui.updateRoomListUI();
+    const host = list.querySelector('.owp-room-host');
+    assert.ok(host.children[0].classList.contains('owp-participant-avatar'));
+    assert.equal(image(host.children[0]).src, `https://jf.example/Users/${ID}/Images/Primary`);
+    assert.equal(host.querySelector('.owp-room-title').textContent, "Ana's room");
+    // An older server names no host: the list stays as it was.
+    OWP.state.rooms = [{ ...named, host_user_id: undefined, host_name: undefined }];
+    OWP.ui.updateRoomListUI();
+    assert.equal(list.querySelector('.owp-participant-avatar'), null);
+  });
+
+  it('shows a small host photo before the name on the home card', () => {
+    const card = OWP.ui.createRoomCard(named, 0);
+    const avatar = card.querySelector('.owp-card-name .owp-card-avatar');
+    assert.equal(image(avatar).src, `https://jf.example/Users/${ID}/Images/Primary`);
+    assert.equal(card.querySelector('.owp-card-name').textContent, "Ana's room");
+    assert.equal(card.dataset.host, ID);
+    assert.equal(OWP.ui.createRoomCard({ ...named, host_user_id: undefined }, 0).querySelector('.owp-card-avatar'), null);
   });
 });

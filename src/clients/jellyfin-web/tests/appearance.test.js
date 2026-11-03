@@ -189,9 +189,10 @@ describe('appearance styles', () => {
     const panel = css.slice(css.indexOf('#owp-panel, .owp-toast-container'));
     const radii = panel.match(/border-radius: [^;]+/g);
     const others = radii.filter(radius => !/^border-radius: calc\(\d+px \* var\(--owp-scale\) \* var\(--owp-round\)\)$/.test(radius));
-    // The status and sync dots, switch thumb and spinner stay round; the poster count, outside the panel, keeps its own.
+    // The status and sync dots, switch thumb and spinner stay round, as does the
+    // host photo on the home card; the poster count, outside the panel, keeps its own.
     assert.deepEqual([...new Set(others)].sort(), ['border-radius: 0.4em', 'border-radius: 50%']);
-    assert.equal(others.filter(radius => radius === 'border-radius: 50%').length, 5);
+    assert.equal(others.filter(radius => radius === 'border-radius: 50%').length, 6);
     assert.match(css, /--owp-round: 1;/);
   });
 
