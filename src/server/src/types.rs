@@ -35,7 +35,11 @@ pub struct Client {
     pub supports_queue_suggestions: bool,
     pub supports_start_when_ready: bool,
     pub supports_chat_history: bool,
+    pub supports_chat_typing: bool,
+    pub supports_user_avatars: bool,
     pub supports_room_access: bool,
+    /// When this client's last `chat_typing` start was relayed, for its rate limit.
+    pub last_typing_ms: u64,
     pub message_count: u32,
     pub last_reset: Instant,
     pub last_seen: Instant, // For zombie connection detection

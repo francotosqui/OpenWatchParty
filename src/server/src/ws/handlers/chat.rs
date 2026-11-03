@@ -16,7 +16,9 @@ fn validate_chat(text: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
-type BroadcastData = (Vec<ClientSender>, WsMessage);
+/// One chat message per payload variant: avatar-aware members also get the
+/// sender's Jellyfin user id.
+type BroadcastData = Vec<(Vec<ClientSender>, WsMessage)>;
 
 /// Keeps the message for members who join later, the oldest going first.
 fn remember(room: &mut Room, message: &WsMessage, user_id: &str, username: &str, text: &str) {
@@ -53,13 +55,17 @@ pub(in crate::ws) fn send_chat_history(
         .chat_history
         .iter()
         .map(|entry| {
-            serde_json::json!({
+            let mut message = serde_json::json!({
                 "client": entry.client,
                 "username": entry.username,
                 "text": entry.text,
                 "server_ts": entry.server_ts,
                 "own": !entry.user_id.is_empty() && entry.user_id == client.user_id,
-            })
+            });
+            if client.supports_user_avatars && !entry.user_id.is_empty() {
+                message["user_id"] = serde_json::json!(entry.user_id);
+            }
+            message
         })
         .collect();
     let message = WsMessage {
@@ -85,23 +91,36 @@ fn collect_chat_senders(
     if !room.clients.contains(&client_id.to_string()) {
         return None;
     }
-    let msg = WsMessage {
-        msg_type: ServerMessageType::ChatMessage,
-        room: Some(room_id.to_string()),
-        client: Some(client_id.to_string()),
-        payload: Some(serde_json::json!({
-            "username": username,
-            "text": chat_text
-        })),
-        ts: now_ms(),
-        server_ts: Some(now_ms()),
+    let user_id = clients
+        .get(client_id)
+        .map(|c| c.user_id.as_str())
+        .unwrap_or_default();
+    let message = |with_user_id: bool| {
+        let mut payload = serde_json::json!({ "username": username, "text": chat_text });
+        if with_user_id && !user_id.is_empty() {
+            payload["user_id"] = serde_json::json!(user_id);
+        }
+        WsMessage {
+            msg_type: ServerMessageType::ChatMessage,
+            room: Some(room_id.to_string()),
+            client: Some(client_id.to_string()),
+            payload: Some(payload),
+            ts: now_ms(),
+            server_ts: Some(now_ms()),
+        }
     };
-    let senders: Vec<_> = room
+    let (avatars, legacy): (Vec<_>, Vec<_>) = room
         .clients
         .iter()
-        .filter_map(|id| clients.get(id).map(|c| c.sender.clone()))
-        .collect();
-    Some((senders, msg))
+        .filter_map(|id| clients.get(id))
+        .partition(|c| c.supports_user_avatars);
+    let senders = |group: Vec<&crate::types::Client>| -> Vec<ClientSender> {
+        group.into_iter().map(|c| c.sender.clone()).collect()
+    };
+    Some(vec![
+        (senders(legacy), message(false)),
+        (senders(avatars), message(true)),
+    ])
 }
 
 pub(in crate::ws) async fn handle_chat_message(
@@ -172,9 +191,11 @@ pub(in crate::ws) async fn handle_chat_message(
                     &locked.clients,
                 )
                 .expect("room membership checked");
-                crate::messaging::send_to_senders(&delivery.0, &delivery.1, "chat message");
+                for (senders, message) in &delivery {
+                    crate::messaging::send_to_senders(senders, message, "chat message");
+                }
                 let room = locked.rooms.get_mut(room_id).expect("room checked");
-                remember(room, &delivery.1, &user_id, &username, chat_text);
+                remember(room, &delivery[0].1, &user_id, &username, chat_text);
                 Ok(())
             } else {
                 Err((
@@ -258,6 +279,98 @@ mod tests {
         assert_eq!(last.user_id, "u1");
         assert_eq!(last.client, "host");
         assert!(last.server_ts > 0);
+    }
+
+    async fn avatar_room(
+        sender_user_id: &str,
+    ) -> (
+        SharedState,
+        tokio::sync::mpsc::Receiver<Result<warp::ws::Message, warp::Error>>,
+        tokio::sync::mpsc::Receiver<Result<warp::ws::Message, warp::Error>>,
+    ) {
+        let state = test_helpers::create_state();
+        let (mut host, host_rx) =
+            test_helpers::create_client_with_rx(sender_user_id, "Franco", true);
+        host.room_id = Some("room".to_string());
+        host.supports_user_avatars = true;
+        let (mut guest, guest_rx) = test_helpers::create_client_with_rx("u2", "Ana", true);
+        guest.room_id = Some("room".to_string());
+        let mut room = test_helpers::create_room("room", "host");
+        room.clients.push("guest".to_string());
+        let mut locked = state.write().await;
+        locked.clients.insert("host".to_string(), host);
+        locked.clients.insert("guest".to_string(), guest);
+        locked.rooms.insert("room".to_string(), room);
+        drop(locked);
+        (state, host_rx, guest_rx)
+    }
+
+    #[tokio::test]
+    async fn chat_message_includes_user_id_only_for_avatar_clients() {
+        let (state, mut host_rx, mut guest_rx) = avatar_room("u1").await;
+        handle_chat_message(
+            "host",
+            &chat_message(Some("room"), Some(serde_json::json!({ "text": "hola" }))),
+            &state,
+        )
+        .await;
+        let avatar = test_helpers::recv_msg(&mut host_rx).unwrap();
+        assert_eq!(avatar.msg_type, ServerMessageType::ChatMessage);
+        assert_eq!(
+            avatar.payload.unwrap(),
+            serde_json::json!({ "username": "Franco", "text": "hola", "user_id": "u1" })
+        );
+        let legacy = test_helpers::recv_msg(&mut guest_rx).unwrap();
+        assert_eq!(
+            legacy.payload.unwrap(),
+            serde_json::json!({ "username": "Franco", "text": "hola" })
+        );
+    }
+
+    #[tokio::test]
+    async fn empty_user_id_is_omitted() {
+        let (state, mut host_rx, _guest_rx) = avatar_room("").await;
+        handle_chat_message(
+            "host",
+            &chat_message(Some("room"), Some(serde_json::json!({ "text": "hola" }))),
+            &state,
+        )
+        .await;
+        let payload = test_helpers::recv_msg(&mut host_rx)
+            .unwrap()
+            .payload
+            .unwrap();
+        assert!(payload.get("user_id").is_none());
+    }
+
+    #[tokio::test]
+    async fn chat_history_includes_user_id_only_for_avatar_clients() {
+        let (state, mut host_rx, mut guest_rx) = avatar_room("u1").await;
+        handle_chat_message(
+            "host",
+            &chat_message(Some("room"), Some(serde_json::json!({ "text": "hola" }))),
+            &state,
+        )
+        .await;
+        test_helpers::recv_msg(&mut host_rx).unwrap();
+        test_helpers::recv_msg(&mut guest_rx).unwrap();
+        let mut locked = state.write().await;
+        for id in ["host", "guest"] {
+            locked.clients.get_mut(id).unwrap().supports_chat_history = true;
+        }
+        let room = locked.rooms["room"].clone();
+        send_chat_history(&room, &locked.clients, "host");
+        send_chat_history(&room, &locked.clients, "guest");
+        let avatar = test_helpers::recv_msg(&mut host_rx)
+            .unwrap()
+            .payload
+            .unwrap();
+        assert_eq!(avatar["messages"][0]["user_id"], "u1");
+        let legacy = test_helpers::recv_msg(&mut guest_rx)
+            .unwrap()
+            .payload
+            .unwrap();
+        assert!(legacy["messages"][0].get("user_id").is_none());
     }
 
     #[test]

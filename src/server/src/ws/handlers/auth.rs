@@ -21,6 +21,8 @@ const ROOM_ACCESS_FEATURE: &str = "room_access";
 const QUEUE_SUGGESTIONS_FEATURE: &str = "queue_suggestions";
 const START_WHEN_READY_FEATURE: &str = "start_when_ready";
 const CHAT_HISTORY_FEATURE: &str = "chat_history";
+const CHAT_TYPING_FEATURE: &str = "chat_typing";
+const USER_AVATARS_FEATURE: &str = "user_avatars";
 
 async fn refresh_room_capabilities(client_id: &str, state: &SharedState) {
     let state = state.read().await;
@@ -93,6 +95,12 @@ fn declared_features(payload: Option<&serde_json::Value>) -> Option<Vec<String>>
     }
     if declared.contains(&CHAT_HISTORY_FEATURE) {
         supported.push(CHAT_HISTORY_FEATURE.to_string());
+    }
+    if declared.contains(&CHAT_TYPING_FEATURE) {
+        supported.push(CHAT_TYPING_FEATURE.to_string());
+    }
+    if declared.contains(&USER_AVATARS_FEATURE) {
+        supported.push(USER_AVATARS_FEATURE.to_string());
     }
     if declared.contains(&ROOM_ACCESS_FEATURE) {
         supported.push(ROOM_ACCESS_FEATURE.to_string());
@@ -189,6 +197,10 @@ async fn handle_jwt_auth(
                     });
                     client.supports_chat_history = features
                         .is_some_and(|features| features.iter().any(|f| f == CHAT_HISTORY_FEATURE));
+                    client.supports_chat_typing = features
+                        .is_some_and(|features| features.iter().any(|f| f == CHAT_TYPING_FEATURE));
+                    client.supports_user_avatars = features
+                        .is_some_and(|features| features.iter().any(|f| f == USER_AVATARS_FEATURE));
                     info!("Client authenticated client_id={client_id} user={user_name:?}");
                 }
                 sender
@@ -254,6 +266,10 @@ async fn handle_identity(
                 .is_some_and(|features| features.iter().any(|f| f == START_WHEN_READY_FEATURE));
             client.supports_chat_history =
                 features.is_some_and(|features| features.iter().any(|f| f == CHAT_HISTORY_FEATURE));
+            client.supports_chat_typing =
+                features.is_some_and(|features| features.iter().any(|f| f == CHAT_TYPING_FEATURE));
+            client.supports_user_avatars =
+                features.is_some_and(|features| features.iter().any(|f| f == USER_AVATARS_FEATURE));
             (Some(client.sender.clone()), client.user_name.clone())
         } else {
             (None, String::new())
@@ -947,7 +963,7 @@ mod tests {
             "client",
             &auth_message(serde_json::json!({
                 "token": token,
-                "features": ["host_transfer", "shared_playback_control", "room_moderation", "room_permissions", "media_queue", "queue_suggestions", "start_when_ready", "chat_history", "future"]
+                "features": ["host_transfer", "shared_playback_control", "room_moderation", "room_permissions", "media_queue", "queue_suggestions", "start_when_ready", "chat_history", "chat_typing", "user_avatars", "future"]
             })),
             &state,
             &jwt_config,
@@ -962,6 +978,8 @@ mod tests {
         assert!(state.read().await.clients["client"].supports_queue_suggestions);
         assert!(state.read().await.clients["client"].supports_start_when_ready);
         assert!(state.read().await.clients["client"].supports_chat_history);
+        assert!(state.read().await.clients["client"].supports_chat_typing);
+        assert!(state.read().await.clients["client"].supports_user_avatars);
         assert_eq!(
             test_helpers::recv_msg(&mut rx).unwrap().payload.unwrap()["features"],
             serde_json::json!([
@@ -972,7 +990,9 @@ mod tests {
                 "media_queue",
                 "queue_suggestions",
                 "start_when_ready",
-                "chat_history"
+                "chat_history",
+                "chat_typing",
+                "user_avatars"
             ])
         );
     }
