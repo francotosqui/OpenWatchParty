@@ -329,6 +329,10 @@
     }
     .owp-panel-title { font-size: ${px(13)}; font-weight: 500; }
     .owp-header-actions { display: flex; align-items: center; gap: ${px(6)}; }
+    /* Too narrow for everything: the status keeps its dot, the title shortens */
+    .owp-header-compact .owp-ws-status { font-size: 0; gap: 0; }
+    .owp-header-compact .owp-panel-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .owp-header-compact .owp-header-actions { flex-shrink: 0; }
     .owp-ws-status { display: inline-flex; align-items: center; gap: ${px(5)}; font-size: ${px(11)}; color: var(--owp-muted); }
     .owp-ws-status::before { content: ''; width: ${px(7)}; height: ${px(7)}; border-radius: 50%; background: var(--owp-good); }
     .owp-ws-status.offline::before { background: var(--owp-bad); }

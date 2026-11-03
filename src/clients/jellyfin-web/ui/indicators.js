@@ -10,6 +10,8 @@
     const connected = state.ws && state.ws.readyState === 1;
     el.className = `owp-ws-status ${connected ? 'online' : 'offline'}`;
     el.textContent = connected ? t('online') : t('offline');
+    // A narrow lobby header shows only the dot: the words stay as its tooltip.
+    el.title = el.textContent;
   };
 
   // The sync state is a dot in the room bar (a spinner while a start is
