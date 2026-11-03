@@ -190,6 +190,7 @@ pub(in crate::ws) async fn handle_leave_room(
 ) {
     let left = {
         let mut state = state.write().await;
+        if crate::room::reject_saving(client_id, None, &state) { return; }
         let crate::types::ServerState { clients, rooms, .. } = &mut *state;
         let room_id = clients.get(client_id).and_then(|c| c.room_id.clone());
         // A cancelled admission can arrive after the client has moved to another room.
@@ -228,6 +229,7 @@ pub(in crate::ws) async fn handle_close_room(client_id: &str, state: &SharedStat
 
     let outcome = {
         let mut state = state.write().await;
+        if crate::room::reject_saving(client_id, None, &state) { return; }
         let room_id = state
             .clients
             .get(client_id)

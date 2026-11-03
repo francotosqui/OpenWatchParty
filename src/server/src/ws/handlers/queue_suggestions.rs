@@ -138,6 +138,7 @@ pub(in crate::ws) async fn handle_queue_suggestions(
     };
     let result = {
         let mut locked = state.write().await;
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &locked) { return; }
         let ServerState { clients, rooms, .. } = &mut *locked;
         let Some(client) = clients.get(client_id) else {
             return;

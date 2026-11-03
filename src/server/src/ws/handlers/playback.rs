@@ -321,6 +321,7 @@ pub(in crate::ws) async fn handle_playback(
 
     let outcome = {
         let mut state = state.write().await;
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) { return; }
         let crate::types::ServerState { clients, rooms, .. } = &mut *state;
 
         if let Some(room) = rooms.get_mut(&room_id) {

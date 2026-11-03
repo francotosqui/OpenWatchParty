@@ -91,6 +91,7 @@ pub(crate) async fn handle_access(
 ) {
     let (room_id, admissions) = {
         let mut locked = state.write().await;
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &locked) { return; }
         let Some(client) = locked.clients.get(client_id) else {
             return;
         };

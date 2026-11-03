@@ -70,6 +70,10 @@ pub struct Room {
     pub administrator_user_id: Option<String>,
     #[serde(skip)]
     pub saved_session_id: Option<String>,
+    #[serde(skip)]
+    pub saved_owner_user_id: Option<String>,
+    #[serde(skip)]
+    pub saving: Option<SaveReservation>,
     pub media_id: Option<String>,
     pub clients: Vec<String>,
     pub ready_clients: HashSet<String>,
@@ -670,4 +674,16 @@ mod tests {
         }
         assert_eq!(Unknown.as_str(), "unknown");
     }
+}
+
+
+#[derive(Debug, Clone)]
+pub struct SaveReservation {
+    pub generation: u64,
+    pub captured_at_ms: u64,
+    pub play_state: PlayState,
+    pub pending_play: Option<PendingPlay>,
+    pub countdown: Option<crate::room::Countdown>,
+    pub countdown_pending: bool,
+    pub deferred_disconnects: HashSet<String>,
 }

@@ -50,6 +50,8 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
         host_id: host_id.to_string(),
         administrator_user_id: None,
         saved_session_id: None,
+        saved_owner_user_id: None,
+        saving: None,
         media_id: None,
         clients: vec![host_id.to_string()],
         ready_clients: HashSet::from([host_id.to_string()]),

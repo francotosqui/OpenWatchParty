@@ -60,6 +60,8 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         host_id: client_id.to_string(),
         administrator_user_id: None,
         saved_session_id: None,
+        saved_owner_user_id: None,
+        saving: None,
         media_id,
         clients: vec![client_id.to_string()],
         ready_clients: HashSet::from([client_id.to_string()]),
@@ -184,6 +186,7 @@ pub(in crate::ws) async fn handle_create_room(
     let payload_ref = parsed.payload.as_ref();
     {
         let mut state = state.write().await;
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) { return; }
         let should_leave_guest_room = state
             .clients
             .get(client_id)

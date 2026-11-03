@@ -33,6 +33,7 @@ pub(in crate::ws) async fn handle_set_room_permissions(
 
     let error = {
         let mut state = state.write().await;
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) { return; }
         let ServerState { clients, rooms, .. } = &mut *state;
         let room = clients
             .get(client_id)

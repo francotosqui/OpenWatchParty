@@ -80,6 +80,7 @@ pub(super) enum ErrorCode {
     SavedSessionBusy,
     SavedSessionPermissionRequired,
     SavedSessionAlreadyInRoom,
+    RoomSaveInProgress,
 }
 
 pub(super) fn error_message(
@@ -321,7 +322,7 @@ pub(super) async fn client_msg(
         }
         ClientMessageType::ListSavedSessions | ClientMessageType::SaveRoomSession
         | ClientMessageType::ResumeSavedSession | ClientMessageType::DiscardSavedSession => {
-            super::handlers::saved_sessions::handle_saved_sessions(client_id, &parsed, state).await
+            super::handlers::saved_sessions::handle_saved_sessions(client_id, &parsed, state, tasks).await
         }
         ClientMessageType::SetRoomAdministrator => {
             handle_set_room_administrator(client_id, &parsed, state).await
@@ -570,6 +571,7 @@ mod tests {
             (ErrorCode::SavedSessionBusy, "SAVED_SESSION_BUSY"),
             (ErrorCode::SavedSessionPermissionRequired, "SAVED_SESSION_PERMISSION_REQUIRED"),
             (ErrorCode::SavedSessionAlreadyInRoom, "SAVED_SESSION_ALREADY_IN_ROOM"),
+            (ErrorCode::RoomSaveInProgress,"ROOM_SAVE_IN_PROGRESS"),
         ];
         for (code, expected) in cases {
             assert_eq!(serde_json::to_value(code).unwrap(), expected);

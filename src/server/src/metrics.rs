@@ -83,7 +83,7 @@ pub const SERVER_MESSAGE_TYPES: [&str; 29] = [
 ];
 
 /// Error codes the server sends, plus `other` for anything not listed.
-pub const ERROR_CODES: [&str; 39] = [
+pub const ERROR_CODES: [&str; 40] = [
     "AUTHENTICATION_REQUIRED",
     "AUTHENTICATION_FAILED",
     "AUTHENTICATION_EXPIRED",
@@ -122,6 +122,7 @@ pub const ERROR_CODES: [&str; 39] = [
     "SAVED_SESSION_BUSY",
     "SAVED_SESSION_PERMISSION_REQUIRED",
     "SAVED_SESSION_ALREADY_IN_ROOM",
+    "ROOM_SAVE_IN_PROGRESS",
     "other",
 ];
 
