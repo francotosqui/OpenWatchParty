@@ -26,6 +26,7 @@ pub struct Client {
     pub supports_host_transfer: bool,
     pub supports_shared_playback_control: bool,
     pub supports_room_moderation: bool,
+    pub supports_room_administrator: bool,
     pub supports_room_permissions: bool,
     pub supports_media_queue: bool,
     pub supports_queue_suggestions: bool,
@@ -62,6 +63,8 @@ pub struct Room {
     pub room_id: String,
     pub name: String,
     pub host_id: String,
+    #[serde(skip)]
+    pub administrator_user_id: Option<String>,
     pub media_id: Option<String>,
     pub clients: Vec<String>,
     pub ready_clients: HashSet<String>,
@@ -316,6 +319,7 @@ pub enum ServerMessageType {
 
     RoomCapabilities,
     RoomPermissions,
+    RoomAdministrator,
     ParticipantList,
     ParticipantStatuses,
     ParticipantTracks,
@@ -348,6 +352,7 @@ impl ServerMessageType {
             Self::JoinRejected => "join_rejected",
 
             Self::RoomPermissions => "room_permissions",
+            Self::RoomAdministrator => "room_administrator",
             Self::ClientHello => "client_hello",
             Self::AuthSuccess => "auth_success",
             Self::Error => "error",

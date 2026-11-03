@@ -58,6 +58,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         room_id,
         name: room_name,
         host_id: client_id.to_string(),
+        administrator_user_id: None,
         media_id,
         clients: vec![client_id.to_string()],
         ready_clients: HashSet::from([client_id.to_string()]),
