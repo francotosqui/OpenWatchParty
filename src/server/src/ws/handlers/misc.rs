@@ -1,6 +1,6 @@
 use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
 use super::super::pending_play::recheck_pending_play;
-use crate::messaging::{broadcast_room_list, send_to_client, send_to_senders};
+use crate::messaging::{broadcast_room_list, send_message, send_to_client, send_to_senders};
 use crate::room::{close_room_parts, handle_leave, send_leave_notification};
 use crate::types::{IncomingMessage, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
@@ -149,7 +149,7 @@ pub(in crate::ws) async fn handle_ready(
                 .get(room_id)
                 .is_some_and(|room| room.clients.iter().any(|id| id == client_id));
         if belongs_to_room {
-            let crate::types::ServerState { clients, rooms } = &mut *state;
+            let crate::types::ServerState { clients, rooms, .. } = &mut *state;
             let room = rooms
                 .get_mut(room_id)
                 .expect("membership check requires an existing room");
@@ -190,7 +190,10 @@ pub(in crate::ws) async fn handle_leave_room(
 ) {
     let left = {
         let mut state = state.write().await;
-        let crate::types::ServerState { clients, rooms } = &mut *state;
+        if crate::room::reject_saving(client_id, None, &state) {
+            return;
+        }
+        let crate::types::ServerState { clients, rooms, .. } = &mut *state;
         let room_id = clients.get(client_id).and_then(|c| c.room_id.clone());
         // A cancelled admission can arrive after the client has moved to another room.
         if expected_room.is_some() && room_id.as_deref() != expected_room {
@@ -202,6 +205,23 @@ pub(in crate::ws) async fn handle_leave_room(
         );
         if let Some(notification) = handle_leave(client_id, clients, rooms) {
             send_leave_notification(&notification, "leave notification");
+            if let Some(client) = clients
+                .get(client_id)
+                .filter(|c| c.supports_persistent_rooms)
+            {
+                send_message(
+                    Some(client.sender.clone()),
+                    &WsMessage {
+                        msg_type: ServerMessageType::RoomLeft,
+                        room: room_id,
+                        client: Some(client_id.into()),
+                        payload: Some(serde_json::json!({})),
+                        ts: now_ms(),
+                        server_ts: Some(now_ms()),
+                    },
+                    Some(client_id),
+                );
+            }
             true
         } else {
             false
@@ -228,6 +248,9 @@ pub(in crate::ws) async fn handle_close_room(client_id: &str, state: &SharedStat
 
     let outcome = {
         let mut state = state.write().await;
+        if crate::room::reject_saving(client_id, None, &state) {
+            return;
+        }
         let room_id = state
             .clients
             .get(client_id)
@@ -241,7 +264,7 @@ pub(in crate::ws) async fn handle_close_room(client_id: &str, state: &SharedStat
                     "Only the room host can close the room",
                 ),
                 Some(_) => {
-                    let crate::types::ServerState { clients, rooms } = &mut *state;
+                    let crate::types::ServerState { clients, rooms, .. } = &mut *state;
                     let senders = close_room_parts(&room_id, clients, rooms).unwrap_or_default();
                     let message = WsMessage {
                         msg_type: ServerMessageType::RoomClosed,

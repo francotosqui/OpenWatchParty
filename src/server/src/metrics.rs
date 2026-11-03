@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::types::ServerState;
 
 /// Message types a client can send, as named on the wire.
-pub const CLIENT_MESSAGE_TYPES: [&str; 31] = [
+pub const CLIENT_MESSAGE_TYPES: [&str; 35] = [
     "set_room_access",
     "cancel_join",
     "answer_join",
@@ -23,6 +23,10 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 31] = [
     "leave_room",
     "remove_participant",
     "set_room_administrator",
+    "list_saved_sessions",
+    "save_room_session",
+    "resume_saved_session",
+    "discard_saved_session",
     "close_room",
     "player_event",
     "state_update",
@@ -46,7 +50,7 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 31] = [
 ];
 
 /// Message types the server sends, plus `other` for anything not listed.
-pub const SERVER_MESSAGE_TYPES: [&str; 26] = [
+pub const SERVER_MESSAGE_TYPES: [&str; 30] = [
     "room_access",
     "join_requests",
     "join_pending",
@@ -57,6 +61,9 @@ pub const SERVER_MESSAGE_TYPES: [&str; 26] = [
     "room_list",
     "room_state",
     "room_administrator",
+    "saved_sessions",
+    "saved_session_result",
+    "saved_session_error",
     "participants_update",
     "participant_list",
     "participant_statuses",
@@ -67,6 +74,7 @@ pub const SERVER_MESSAGE_TYPES: [&str; 26] = [
     "pong",
     "client_left",
     "room_closed",
+    "room_left",
     "chat_message",
     "queue_state",
     "queue_details",
@@ -76,7 +84,7 @@ pub const SERVER_MESSAGE_TYPES: [&str; 26] = [
 ];
 
 /// Error codes the server sends, plus `other` for anything not listed.
-pub const ERROR_CODES: [&str; 32] = [
+pub const ERROR_CODES: [&str; 40] = [
     "AUTHENTICATION_REQUIRED",
     "AUTHENTICATION_FAILED",
     "AUTHENTICATION_EXPIRED",
@@ -108,6 +116,14 @@ pub const ERROR_CODES: [&str; 32] = [
     "INVALID_PERMISSIONS_PAYLOAD",
     "INVALID_ADMINISTRATOR_PAYLOAD",
     "ADMINISTRATOR_ALREADY_ASSIGNED",
+    "INVALID_SAVED_SESSION_PAYLOAD",
+    "SAVED_SESSION_UNAVAILABLE",
+    "SAVED_SESSION_NOT_FOUND",
+    "SAVED_SESSION_CAPACITY",
+    "SAVED_SESSION_BUSY",
+    "SAVED_SESSION_PERMISSION_REQUIRED",
+    "SAVED_SESSION_ALREADY_IN_ROOM",
+    "ROOM_SAVE_IN_PROGRESS",
     "other",
 ];
 
@@ -311,7 +327,11 @@ impl Metrics {
     /// for an `error` message.
     pub fn message_delivered(&self, msg: &crate::types::WsMessage) {
         self.messages_sent.inc(msg.msg_type.as_str());
-        if msg.msg_type == crate::types::ServerMessageType::Error {
+        if matches!(
+            msg.msg_type,
+            crate::types::ServerMessageType::Error
+                | crate::types::ServerMessageType::SavedSessionError
+        ) {
             if let Some(code) = msg
                 .payload
                 .as_ref()
@@ -661,5 +681,25 @@ mod room_administrator_tests {
         ] {
             assert!(ERROR_CODES.contains(&code));
         }
+    }
+}
+
+#[cfg(test)]
+mod saved_session_metric_tests {
+    use super::*;
+    #[test]
+    fn saved_session_errors_are_counted() {
+        let metrics = Metrics::new();
+        metrics.message_delivered(&crate::types::WsMessage {
+            msg_type: crate::types::ServerMessageType::SavedSessionError,
+            room: None,
+            client: None,
+            payload: Some(
+                serde_json::json!({"request_id":"r","code":"SAVED_SESSION_BUSY","message":"Busy"}),
+            ),
+            ts: 0,
+            server_ts: Some(0),
+        });
+        assert_eq!(metrics.errors_sent.get("SAVED_SESSION_BUSY"), 1);
     }
 }

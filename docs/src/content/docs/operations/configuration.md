@@ -262,3 +262,24 @@ Expected response:
 - [Security](/operations/security/) - Security hardening
 - [Deployment](/operations/deployment/) - Production deployment
 - [Troubleshooting](/operations/troubleshooting/) - Common issues
+
+### Saved room sessions (#178)
+
+Saved sessions are opt-in. Set `PERSISTENT_ROOMS_DIR` to a writable persistent
+server directory and keep JWT authentication enabled. The SQLite database
+`saved-rooms.sqlite3` belongs to this server instance and must be included in
+backups; mount the directory outside the container's disposable filesystem.
+A configured database that cannot be opened, is corrupt, or has a newer schema
+must be repaired/restored before startup; it is never silently replaced.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PERSISTENT_ROOMS_DIR` | unset (disabled) | Private persistent database directory |
+| `MAX_SAVED_ROOMS_PER_USER` | `20` | Maximum checkpoints per authenticated account (1–1000) |
+| `MAX_SAVED_ROOMS` | `1000` | Maximum checkpoints server-wide (1–100000) |
+| `SAVED_ROOMS_RETENTION_DAYS` | `0` | `0` keeps saves until explicitly discarded; positive days set expiry |
+
+Capacity limits reject new checkpoints without evicting existing ones. Lowering
+a limit does not hide earlier saves: an Owner can still list and discard them.
+Saving over an existing checkpoint remains permitted at capacity. Optional
+retention is applied when a checkpoint is saved or replaced.

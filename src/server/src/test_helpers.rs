@@ -29,6 +29,7 @@ pub fn create_client_with_rx(
         supports_shared_playback_control: false,
         supports_room_moderation: false,
         supports_room_administrator: false,
+        supports_persistent_rooms: false,
         supports_room_permissions: false,
         supports_media_queue: false,
         supports_room_access: false,
@@ -48,6 +49,9 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
         name: format!("{host_id}'s room"),
         host_id: host_id.to_string(),
         administrator_user_id: None,
+        saved_session_id: None,
+        saved_owner_user_id: None,
+        saving: None,
         media_id: None,
         clients: vec![host_id.to_string()],
         ready_clients: HashSet::from([host_id.to_string()]),
@@ -103,4 +107,15 @@ pub fn setup_room_with_host(
     clients.insert(host_id.to_string(), client);
     rooms.insert("room-1".to_string(), room);
     rx
+}
+
+pub fn saved_room(owner: &str) -> crate::persistence::SavedRoom {
+    serde_json::from_value(serde_json::json!({
+        "schema_version":1,"id":uuid::Uuid::new_v4().to_string(),"owner_user_id":owner,
+        "name":"Saved night","saved_at_ms":100,"expires_at_ms":null,
+        "media_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","media_title":"Pilot","position":123.5,
+        "items":[{"id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","title":"Pilot","series":null}],
+        "last_added":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","permissions":{"seek":false,"change_media":false,"edit_queue":false},
+        "access":{"approval":false,"unlisted":false},"blocked_users":[],"admitted_users":[],"administrator_user_id":null
+    })).unwrap()
 }

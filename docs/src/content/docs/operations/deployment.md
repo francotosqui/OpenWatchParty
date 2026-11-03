@@ -484,3 +484,20 @@ See [Monitoring Guide](/operations/monitoring/) for observability setup.
 - [Security](/operations/security/) - Security best practices
 - [Monitoring](/operations/monitoring/) - Set up monitoring
 - [Troubleshooting](/operations/troubleshooting/) - Common issues
+
+## Durable saved-session storage
+
+Saved sessions require a writable persistent directory and JWT authentication.
+For the server image, mount a named volume or a private bind directory at
+`/data/openwatchparty`, owned by container user 1000, and set
+`PERSISTENT_ROOMS_DIR=/data/openwatchparty`. The feature is disabled by default.
+The development compose includes a named `saved-rooms` volume but still requires
+the environment opt-in.
+
+Back up the directory together with configuration before upgrades. Stop the
+session server for a filesystem copy, or use a proper SQLite backup procedure
+if it is running. Keep that backup on rollback; an older server can run with
+persistence disabled while the new database is preserved for a later upgrade.
+Never overwrite an unsupported newer schema with an empty database. Ordinary
+room closure/departure does not create a checkpoint; the Owner must explicitly
+choose Save and close.

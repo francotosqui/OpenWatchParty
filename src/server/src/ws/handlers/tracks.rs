@@ -75,7 +75,7 @@ fn valid_tracks(payload: Option<&serde_json::Value>) -> Option<serde_json::Value
 /// unless they did not change. Runs under the state's write lock, as every
 /// sender of participant messages does.
 fn record_tracks(state: &mut ServerState, client_id: &str, tracks: serde_json::Value) {
-    let ServerState { clients, rooms } = state;
+    let ServerState { clients, rooms, .. } = state;
     let Some(room) = clients
         .get(client_id)
         .and_then(|client| client.room_id.as_ref())
@@ -148,7 +148,7 @@ mod tests {
         tokio::sync::mpsc::Receiver<Result<warp::ws::Message, warp::Error>>,
     ) {
         let mut locked = state.write().await;
-        let crate::types::ServerState { clients, rooms } = &mut *locked;
+        let crate::types::ServerState { clients, rooms, .. } = &mut *locked;
         let host_rx = test_helpers::setup_room_with_host(clients, rooms, "host");
         let (mut guest, guest_rx) = test_helpers::create_client_with_rx("guest", "Ana", true);
         guest.room_id = Some("room-1".to_string());
@@ -300,7 +300,7 @@ mod tests {
 
         let notification = {
             let mut locked = state.write().await;
-            let ServerState { clients, rooms } = &mut *locked;
+            let ServerState { clients, rooms, .. } = &mut *locked;
             crate::room::handle_leave("guest", clients, rooms).unwrap()
         };
         crate::room::send_leave_notification(&notification, "test");

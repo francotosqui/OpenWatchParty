@@ -119,6 +119,7 @@
   };
 
   const resetConnectionSession = () => {
+    OWP.savedSessions?.reset();
     Object.assign(state, OWP.stateFactories.createConnectionSessionState());
   };
 
@@ -185,6 +186,10 @@
       case 'room_capabilities': h.handleRoomCapabilities(msg); break;
       case 'room_permissions': h.handleRoomPermissions(msg); break;
       case 'room_administrator': h.handleRoomAdministrator(msg); break;
+      case 'saved_sessions': OWP.savedSessions.onList(msg); break;
+      case 'saved_session_result': OWP.savedSessions.onResult(msg); break;
+      case 'saved_session_error': OWP.savedSessions.onError(msg); break;
+      case 'room_left': OWP.savedSessions.onRoomLeft(msg); break;
       case 'room_state': h.handleRoomState(msg, video); break;
       case 'participants_update': h.handleParticipantsUpdate(msg); break;
       case 'client_left': h.handleClientLeft(msg); break;

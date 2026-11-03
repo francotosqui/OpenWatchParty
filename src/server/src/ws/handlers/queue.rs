@@ -320,7 +320,7 @@ async fn arm_pending_play(
 
 /// Moves the room to the next item when its countdown ends, unless the
 /// countdown was cancelled or replaced first.
-fn schedule_countdown(
+pub(super) fn schedule_countdown(
     room_id: String,
     generation: u64,
     delay: Duration,
@@ -340,10 +340,13 @@ fn schedule_countdown(
             if cancellation.is_cancelled() {
                 return;
             }
-            let ServerState { clients, rooms } = &mut *state;
+            let ServerState { clients, rooms, .. } = &mut *state;
             let Some(room) = rooms.get_mut(&room_id) else {
                 return;
             };
+            if crate::room::is_saving(room) {
+                return;
+            }
             if room.queue.countdown.map(|countdown| countdown.generation) != Some(generation) {
                 return;
             }
@@ -400,7 +403,10 @@ pub(in crate::ws) async fn handle_queue(
     };
     let result = {
         let mut state = state.write().await;
-        let ServerState { clients, rooms } = &mut *state;
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) {
+            return;
+        }
+        let ServerState { clients, rooms, .. } = &mut *state;
         let room = clients
             .get(client_id)
             .and_then(|client| client.room_id.as_ref())

@@ -114,7 +114,7 @@
     },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'room_moderation', 'media_queue', 'queue_suggestions', 'start_when_ready', 'room_permissions', 'chat_history', 'room_access', 'room_administrator'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'room_moderation', 'media_queue', 'queue_suggestions', 'start_when_ready', 'room_permissions', 'chat_history', 'room_access', 'room_administrator', 'persistent_rooms'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -265,7 +265,14 @@
     pendingPlayUntil: 0,   // Server-clock deadline for pending playback; sync correction waits until it passes
   });
 
+  const createSavedSessionState = () => ({
+    savedSessions: [], savedSessionsReceived: false, savedSessionsError: '', savedListRequest: null,
+    savedSessionPending: null, savedSessionConfirmation: null, savedSessionsOpen: false,
+    savedResumeRoomId: '', savedResumeAfterLeave: null,
+  });
+
   const createConnectionSessionState = () => ({
+    ...createSavedSessionState(),
     clientId: '',
     isConnecting: false,
     connectionPhase: 'disconnected', // disconnected | connecting | authenticating | authenticated
@@ -374,7 +381,7 @@
   });
 
   OWP.stateFactories = {
-    createState, createRoomState, createQueueState, createStartState, createRoomPlaybackState, createConnectionSessionState,
+    createState, createSavedSessionState, createRoomState, createQueueState, createStartState, createRoomPlaybackState, createConnectionSessionState,
     createRoomUIState, createInviteWorkState
   };
   // A loader retry can encounter state from an already loaded module. Install

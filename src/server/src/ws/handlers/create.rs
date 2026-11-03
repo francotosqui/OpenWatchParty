@@ -6,13 +6,11 @@ use crate::room::{
     handle_leave, participant_statuses_message, participant_tracks_message,
     send_leave_notification, send_room_participant_list,
 };
-use crate::types::{
-    IncomingMessage, PlayState, PlaybackState, Room, ServerMessageType, SharedState, WsMessage,
-};
+#[cfg(test)]
+use crate::types::PlayState;
+use crate::types::{IncomingMessage, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
-use std::collections::{HashMap, HashSet};
-use tokio::time::Instant;
 
 fn resolve_host_name(
     payload: Option<&serde_json::Value>,
@@ -53,44 +51,17 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
 
     info!("Creating room room_id={room_id} client_id={client_id} name={room_name:?}");
 
-    let state_server_ts = now_ms();
-    Room {
+    Room::new(
         room_id,
-        name: room_name,
-        host_id: client_id.to_string(),
-        administrator_user_id: None,
+        client_id.to_string(),
+        room_name,
         media_id,
-        clients: vec![client_id.to_string()],
-        ready_clients: HashSet::from([client_id.to_string()]),
-        pending_play: None,
-        access: Default::default(),
-        join_requests: Vec::new(),
-        admitted_users: HashSet::new(),
-        pending_host_reconnect: None,
-        blocked_users: HashSet::new(),
-        permissions: Default::default(),
-        state: PlaybackState {
-            position: start_pos,
-            play_state: PlayState::Paused,
-        },
-        state_server_ts,
-        target_server_ts: None,
-        target_at: None,
-        last_state_at: Some(Instant::now()),
-        command_cooldown_until: None,
-        statuses: HashMap::new(),
-        status_broadcast: Default::default(),
-        tracks: HashMap::new(),
-        guest_command_until: None,
-        queue: Default::default(),
-        not_ready: HashMap::new(),
-        // Created paused: its first play counts down.
-        countdown_pending: true,
-        chat_history: Default::default(),
-    }
+        start_pos,
+        now_ms(),
+    )
 }
 
-fn insert_and_notify(
+pub(super) fn insert_and_notify(
     client_id: &str,
     mut room: Room,
     payload_name: &Option<String>,
@@ -183,6 +154,9 @@ pub(in crate::ws) async fn handle_create_room(
     let payload_ref = parsed.payload.as_ref();
     {
         let mut state = state.write().await;
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) {
+            return;
+        }
         let should_leave_guest_room = state
             .clients
             .get(client_id)
@@ -190,7 +164,7 @@ pub(in crate::ws) async fn handle_create_room(
             .and_then(|room_id| state.rooms.get(room_id))
             .is_some_and(|room| room.host_id != client_id);
         let previous_leave = if should_leave_guest_room {
-            let crate::types::ServerState { clients, rooms } = &mut *state;
+            let crate::types::ServerState { clients, rooms, .. } = &mut *state;
             handle_leave(client_id, clients, rooms)
         } else {
             None
@@ -204,13 +178,13 @@ pub(in crate::ws) async fn handle_create_room(
             close_room_in_state(&room_id, &mut state).map(|senders| (room_id, senders))
         });
         {
-            let crate::types::ServerState { clients, rooms } = &mut *state;
+            let crate::types::ServerState { clients, rooms, .. } = &mut *state;
             crate::room::access::cancel(client_id, rooms, clients);
         }
         let (host_name, payload_name) = resolve_host_name(payload_ref, &state.clients, client_id);
         let mut room = build_room(client_id, &host_name, payload_ref);
         room.access = access;
-        let crate::types::ServerState { clients, rooms } = &mut *state;
+        let crate::types::ServerState { clients, rooms, .. } = &mut *state;
         let (sender, room_msg) = insert_and_notify(client_id, room, &payload_name, clients, rooms);
         let participant_statuses = room_msg
             .room

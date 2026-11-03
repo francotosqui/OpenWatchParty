@@ -90,6 +90,7 @@
     { name: 'chat', sectionId: 'owp-chat-section', buttonId: 'owp-btn-chat' },
     { name: 'sync', sectionId: 'owp-sync-section', buttonId: 'owp-btn-sync' },
     { name: 'queue', sectionId: 'owp-queue-section', buttonId: 'owp-btn-queue' },
+    { name: 'saved', sectionId: 'owp-saved-section', buttonId: 'owp-btn-saved' },
     { name: 'leave', sectionId: 'owp-leave-confirm', buttonId: 'owp-btn-leave' }
   ];
 

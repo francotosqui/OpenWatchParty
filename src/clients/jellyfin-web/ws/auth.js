@@ -237,6 +237,7 @@
     if (data.auth_enabled === true && typeof data.token === 'string' && data.token) {
       state.authBlocked = false;
       state.authError = '';
+      if (state.userId !== (data.user_id || '')) OWP.savedSessions?.reset();
       state.userId = data.user_id || '';
       state.userName = data.user_name || getJellyfinUsername() || '';
       state.wsUrl = sessionServerUrl.url;
@@ -255,6 +256,7 @@
     if (data.auth_enabled === false && data.insecure_mode === true) {
       state.authBlocked = false;
       state.authError = '';
+      if (state.userId !== (data.user_id || '')) OWP.savedSessions?.reset();
       state.userId = data.user_id || '';
       state.userName = data.user_name || getJellyfinUsername() || '';
       state.wsUrl = sessionServerUrl.url;

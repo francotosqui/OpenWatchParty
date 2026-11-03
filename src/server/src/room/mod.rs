@@ -50,6 +50,43 @@ pub(crate) fn role_of(room: &Room, client_id: &str, client: &Client) -> RoomRole
     }
 }
 
+pub(crate) fn is_saving(room: &Room) -> bool {
+    room.saving.is_some()
+}
+
+/// Called while holding the shared state lock, before a room mutation.
+pub(crate) fn reject_saving(
+    client_id: &str,
+    target: Option<&str>,
+    state: &crate::types::ServerState,
+) -> bool {
+    let current = state
+        .clients
+        .get(client_id)
+        .and_then(|c| c.room_id.as_deref());
+    let busy = [current, target]
+        .into_iter()
+        .flatten()
+        .any(|id| state.rooms.get(id).is_some_and(is_saving));
+    if busy {
+        crate::messaging::send_message(
+            state.clients.get(client_id).map(|c| c.sender.clone()),
+            &crate::types::WsMessage {
+                msg_type: crate::types::ServerMessageType::Error,
+                room: current.map(str::to_owned),
+                client: Some(client_id.into()),
+                payload: Some(
+                    serde_json::json!({"code":"ROOM_SAVE_IN_PROGRESS","message":"The room is being saved; try again when it finishes"}),
+                ),
+                ts: crate::utils::now_ms(),
+                server_ts: Some(crate::utils::now_ms()),
+            },
+            Some(client_id),
+        );
+    }
+    busy
+}
+
 #[cfg(test)]
 mod administrator_tests {
     use super::*;

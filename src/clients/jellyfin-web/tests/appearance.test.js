@@ -153,7 +153,7 @@ describe('appearance styles', () => {
   });
 
   it('starts at 14 px and 55 %, and turns opaque when less transparency is asked for', () => {
-    assert.match(css, /#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float, #owp-emoji-panel, #owp-emoji-autocomplete \{\s*--owp-scale: 1\.1666/);
+    assert.match(css, /#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float, \.owp-saved-overlay, #owp-emoji-panel, #owp-emoji-autocomplete \{\s*--owp-scale: 1\.1666/);
     assert.match(css, /--owp-surface-alpha: 0\.55/);
     assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{\s*#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float \{ --owp-surface-alpha: 1 !important; \}/);
   });

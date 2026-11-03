@@ -66,7 +66,7 @@ fn record_status(
     client_id: &str,
     status: &'static str,
 ) -> Option<(String, Instant, u64)> {
-    let ServerState { clients, rooms } = state;
+    let ServerState { clients, rooms, .. } = state;
     let room_id = clients.get(client_id)?.room_id.clone()?;
     let room = rooms.get_mut(&room_id)?;
     if !room.clients.iter().any(|id| id == client_id)
@@ -117,7 +117,7 @@ pub(in crate::ws) async fn handle_participant_status(
     tokio::spawn(async move {
         tokio::time::sleep_until(flush_at).await;
         let mut locked = state.write().await;
-        let ServerState { clients, rooms } = &mut *locked;
+        let ServerState { clients, rooms, .. } = &mut *locked;
         // Sent meanwhile, or another room under the same id: nothing to do.
         if let Some(room) = rooms
             .get_mut(&room_id)
@@ -161,7 +161,7 @@ mod tests {
         tokio::sync::mpsc::Receiver<Result<warp::ws::Message, warp::Error>>,
     ) {
         let mut locked = state.write().await;
-        let crate::types::ServerState { clients, rooms } = &mut *locked;
+        let crate::types::ServerState { clients, rooms, .. } = &mut *locked;
         let host_rx = test_helpers::setup_room_with_host(clients, rooms, "host");
         let (mut guest, guest_rx) = test_helpers::create_client_with_rx("guest", "Ana", true);
         guest.room_id = Some("room-1".to_string());

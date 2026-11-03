@@ -10,6 +10,8 @@ pub type SharedState = Arc<RwLock<ServerState>>;
 pub struct ServerState {
     pub clients: HashMap<String, Client>,
     pub rooms: HashMap<String, Room>,
+    pub saved_room_store: Option<crate::persistence::SavedRoomStore>,
+    pub saved_session_operations: HashMap<String, u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -27,6 +29,7 @@ pub struct Client {
     pub supports_shared_playback_control: bool,
     pub supports_room_moderation: bool,
     pub supports_room_administrator: bool,
+    pub supports_persistent_rooms: bool,
     pub supports_room_permissions: bool,
     pub supports_media_queue: bool,
     pub supports_queue_suggestions: bool,
@@ -65,6 +68,12 @@ pub struct Room {
     pub host_id: String,
     #[serde(skip)]
     pub administrator_user_id: Option<String>,
+    #[serde(skip)]
+    pub saved_session_id: Option<String>,
+    #[serde(skip)]
+    pub saved_owner_user_id: Option<String>,
+    #[serde(skip)]
+    pub saving: Option<SaveReservation>,
     pub media_id: Option<String>,
     pub clients: Vec<String>,
     pub ready_clients: HashSet<String>,
@@ -261,6 +270,10 @@ pub enum ClientMessageType {
     QueueCountdown,
     SetRoomPermissions,
     SetRoomAdministrator,
+    ListSavedSessions,
+    SaveRoomSession,
+    ResumeSavedSession,
+    DiscardSavedSession,
     QueueSuggest,
     QueueDismiss,
     QueueAvailability,
@@ -300,6 +313,10 @@ impl ClientMessageType {
             Self::QueueCountdown => "queue_countdown",
             Self::SetRoomPermissions => "set_room_permissions",
             Self::SetRoomAdministrator => "set_room_administrator",
+            Self::ListSavedSessions => "list_saved_sessions",
+            Self::SaveRoomSession => "save_room_session",
+            Self::ResumeSavedSession => "resume_saved_session",
+            Self::DiscardSavedSession => "discard_saved_session",
             Self::QueueSuggest => "queue_suggest",
             Self::QueueDismiss => "queue_dismiss",
             Self::QueueAvailability => "queue_availability",
@@ -322,6 +339,9 @@ pub enum ServerMessageType {
     RoomCapabilities,
     RoomPermissions,
     RoomAdministrator,
+    SavedSessions,
+    SavedSessionResult,
+    SavedSessionError,
     ParticipantList,
     ParticipantStatuses,
     ParticipantTracks,
@@ -337,6 +357,7 @@ pub enum ServerMessageType {
     ClientLeft,
     HostChanged,
     RoomClosed,
+    RoomLeft,
     ChatMessage,
     QueueState,
     QueueDetails,
@@ -355,6 +376,9 @@ impl ServerMessageType {
 
             Self::RoomPermissions => "room_permissions",
             Self::RoomAdministrator => "room_administrator",
+            Self::SavedSessions => "saved_sessions",
+            Self::SavedSessionResult => "saved_session_result",
+            Self::SavedSessionError => "saved_session_error",
             Self::ClientHello => "client_hello",
             Self::AuthSuccess => "auth_success",
             Self::Error => "error",
@@ -367,6 +391,7 @@ impl ServerMessageType {
             Self::ClientLeft => "client_left",
             Self::HostChanged => "host_changed",
             Self::RoomClosed => "room_closed",
+            Self::RoomLeft => "room_left",
             Self::ChatMessage => "chat_message",
             Self::ParticipantList => "participant_list",
             Self::ParticipantStatuses => "participant_statuses",
@@ -650,5 +675,64 @@ mod tests {
             );
         }
         assert_eq!(Unknown.as_str(), "unknown");
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SaveReservation {
+    pub generation: u64,
+    pub captured_at_ms: u64,
+    pub play_state: PlayState,
+    pub pending_play: Option<PendingPlay>,
+    pub countdown: Option<crate::room::Countdown>,
+    pub countdown_pending: bool,
+    pub deferred_disconnects: HashSet<String>,
+}
+
+impl Room {
+    pub(crate) fn new(
+        room_id: String,
+        host_id: String,
+        name: String,
+        media_id: Option<String>,
+        position: f64,
+        now: u64,
+    ) -> Self {
+        Self {
+            room_id,
+            name,
+            clients: vec![host_id.clone()],
+            ready_clients: HashSet::from([host_id.clone()]),
+            host_id,
+            administrator_user_id: None,
+            saved_session_id: None,
+            saved_owner_user_id: None,
+            saving: None,
+            media_id,
+            pending_play: None,
+            access: Default::default(),
+            join_requests: Vec::new(),
+            admitted_users: HashSet::new(),
+            pending_host_reconnect: None,
+            blocked_users: HashSet::new(),
+            permissions: Default::default(),
+            state: PlaybackState {
+                position,
+                play_state: PlayState::Paused,
+            },
+            state_server_ts: now,
+            target_server_ts: None,
+            target_at: None,
+            last_state_at: Some(Instant::now()),
+            command_cooldown_until: None,
+            statuses: HashMap::new(),
+            status_broadcast: Default::default(),
+            tracks: HashMap::new(),
+            guest_command_until: None,
+            queue: Default::default(),
+            not_ready: HashMap::new(),
+            countdown_pending: true,
+            chat_history: Default::default(),
+        }
     }
 }

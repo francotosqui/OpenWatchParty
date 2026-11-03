@@ -241,6 +241,9 @@ pub(super) async fn join_room(
 
     let joined = {
         let mut state = state.write().await;
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) {
+            return;
+        }
         let (notifications, previous_leave, participants) = if !state.rooms.contains_key(room_id) {
             let sender = state.clients.get(client_id).map(|c| c.sender.clone());
             let error = error_message(
@@ -323,12 +326,12 @@ pub(super) async fn join_room(
                     .get(client_id)
                     .and_then(|client| client.room_id.as_deref());
                 let previous_leave = if previous_room.is_some_and(|previous| previous != room_id) {
-                    let crate::types::ServerState { clients, rooms } = &mut *state;
+                    let crate::types::ServerState { clients, rooms, .. } = &mut *state;
                     handle_leave_without_transfer(client_id, clients, rooms)
                 } else {
                     None
                 };
-                let crate::types::ServerState { clients, rooms } = &mut *state;
+                let crate::types::ServerState { clients, rooms, .. } = &mut *state;
                 crate::room::access::cancel(client_id, rooms, clients);
                 let room = rooms.get_mut(room_id).expect("room existence checked");
                 let reclaimed_host = add_client_to_room(client_id, room, clients, &payload_name);

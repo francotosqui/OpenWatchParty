@@ -1250,3 +1250,45 @@ room can still be joined by id. Lists are built per negotiated recipient group:
 feature clients receive an extra boolean `approval` on each entry; legacy
 clients receive exactly the previous schema. Only authenticated clients receive
 lists. Changes to room access rebroadcast lists, including appearance/removal.
+
+## Persistent room sessions (#178)
+
+The optional `persistent_rooms` feature is advertised only when the server has
+configured storage and JWT authentication is enabled. Every operation is private
+to the verified Jellyfin account, independent of socket IDs. Insecure identities
+and clients that did not negotiate the feature cannot use it. Legacy room,
+participant and error messages retain their existing payloads.
+
+Client requests have strict payloads and a nonempty `request_id` of at most 64
+bytes. Listing and saving accept only `request_id`; resuming and discarding also
+require `id`, an opaque saved-session UUID:
+
+```json
+{"type":"list_saved_sessions","payload":{"request_id":"request-1"},"ts":0}
+{"type":"save_room_session","payload":{"request_id":"request-2"},"ts":0}
+{"type":"resume_saved_session","payload":{"request_id":"request-3","id":"saved-session-uuid"},"ts":0}
+{"type":"discard_saved_session","payload":{"request_id":"request-4","id":"saved-session-uuid"},"ts":0}
+```
+
+`saved_sessions` returns `{request_id, sessions}`. Each entry contains `id`,
+`name`, `media_id`, `media_title`, `position`, `queue_count`, `saved_at_ms`,
+`expires_at_ms` (nullable) and `active`. It never includes account IDs, admission
+lists or signing material. An active entry cannot be resumed or discarded.
+
+`saved_session_result` confirms `{request_id, action, id}` after a mutation
+completes; a successful resume additionally includes `room_id`. The saved-session
+ID is stable, while a resumed room has a fresh live room ID and fresh invites.
+
+`saved_session_error` contains `{request_id, code, message}`. Codes include
+`INVALID_SAVED_SESSION_PAYLOAD`, `SAVED_SESSION_UNAVAILABLE`,
+`SAVED_SESSION_NOT_FOUND`, `SAVED_SESSION_CAPACITY`, `SAVED_SESSION_BUSY`,
+`SAVED_SESSION_PERMISSION_REQUIRED` and `SAVED_SESSION_ALREADY_IN_ROOM`.
+Clients must correlate request IDs and discard responses belonging to previous
+connection/account generations. A transport loss after a committed mutation is
+resolved by listing again, not by assuming that an unacknowledged save failed.
+
+For clients negotiating `persistent_rooms`, a successful explicit `leave_room`
+also returns `room_left` with the departed live room in the envelope and an empty
+payload. This acknowledgement lets the client leave an existing room before
+requesting resume without treating local UI reset as proof of server departure.
+Legacy clients receive no new departure acknowledgement.

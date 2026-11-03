@@ -50,7 +50,10 @@ RUN apk upgrade --no-cache && \
     adduser -D -u 1000 appuser
 
 COPY --from=builder /usr/local/bin/session-server /usr/local/bin/session-server
-RUN chown appuser:appuser /usr/local/bin/session-server
+RUN chown appuser:appuser /usr/local/bin/session-server && \
+    mkdir -p /data/openwatchparty && \
+    chown appuser:appuser /data/openwatchparty && \
+    chmod 700 /data/openwatchparty
 
 # Switch to non-root user
 USER appuser

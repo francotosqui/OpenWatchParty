@@ -224,6 +224,9 @@ pub(super) fn prepare_scheduled_play(
 /// Starts the pending play now: everyone is ready, the wait ran out, or a
 /// member asked to start (`start_now`). Members still not ready are named.
 pub(crate) fn start_pending_play(room: &mut Room, clients: &HashMap<String, Client>) {
+    if crate::room::is_saving(room) {
+        return;
+    }
     let Some(pending) = room.pending_play.clone() else {
         return;
     };
@@ -245,6 +248,9 @@ pub(crate) fn start_pending_play(room: &mut Room, clients: &HashMap<String, Clie
 /// After the members or their readiness changed: starts the pending play once
 /// everyone is ready, or tells who the room still waits for.
 pub(crate) fn recheck_pending_play(room: &mut Room, clients: &HashMap<String, Client>) {
+    if crate::room::is_saving(room) {
+        return;
+    }
     if room.pending_play.is_none() {
         return;
     }
@@ -276,7 +282,7 @@ pub(super) fn schedule_pending_play(
         if cancellation.is_cancelled() {
             return;
         }
-        let crate::types::ServerState { clients, rooms } = &mut *state;
+        let crate::types::ServerState { clients, rooms, .. } = &mut *state;
         let Some(room) = rooms.get_mut(&room_id) else {
             return;
         };

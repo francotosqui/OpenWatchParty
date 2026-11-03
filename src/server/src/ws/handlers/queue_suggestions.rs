@@ -138,7 +138,10 @@ pub(in crate::ws) async fn handle_queue_suggestions(
     };
     let result = {
         let mut locked = state.write().await;
-        let ServerState { clients, rooms } = &mut *locked;
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &locked) {
+            return;
+        }
+        let ServerState { clients, rooms, .. } = &mut *locked;
         let Some(client) = clients.get(client_id) else {
             return;
         };
@@ -305,7 +308,7 @@ mod tests {
                 .get_mut("guest")
                 .unwrap()
                 .supports_media_queue = true;
-            let ServerState { clients, rooms } = &mut *locked;
+            let ServerState { clients, rooms, .. } = &mut *locked;
             super::super::queue::send_queue_state(&rooms["room"], clients, Some("guest"));
         }
         assert!(test_helpers::recv_msg(&mut host_rx).is_none());
@@ -334,7 +337,7 @@ mod tests {
                 .get_mut("guest")
                 .unwrap()
                 .supports_media_queue = true;
-            let ServerState { clients, rooms } = &mut *locked;
+            let ServerState { clients, rooms, .. } = &mut *locked;
             super::super::queue::send_queue_state(&rooms["room"], clients, Some("guest"));
         }
 

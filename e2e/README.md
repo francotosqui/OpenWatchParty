@@ -89,3 +89,14 @@ client, server, plugin, stack or this directory. The job creates an ephemeral JW
 key and starts both components in authenticated mode. When the job fails, it
 uploads the Playwright report and traces and prints the session server
 container's status and last 200 log lines.
+
+`persistent-rooms.spec.js` exercises private explicit checkpoints, lost save
+acknowledgement, an actual session-server restart, paused media/queue restore,
+guest rejoin and confirmed deletion. It requires the opt-in environment
+`PERSISTENT_ROOMS_DIR=/data/openwatchparty` for the dev stack and
+`OWP_E2E_PERSISTENCE_RESTART=1` for the test runner. The dev compose mounts a
+named saved-rooms volume; never use `down --volumes` when retaining checkpoints.
+The restart hook addresses only `owp-session-server`, verifies the dev Compose
+service/file, port 3000, persistent mount and the paired `jellyfin-dev` web port,
+and accepts no browser-provided container name or shell command. Run it only in
+a disposable lab with Docker access; it skips without the explicit opt-in.

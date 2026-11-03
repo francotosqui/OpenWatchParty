@@ -24,6 +24,7 @@ log = "0.4"
 jsonwebtoken = { version = "11", features = ["aws_lc_rs"] }
 base64 = "0.23"
 ipnet = "2"
+rusqlite = { version = "=0.37.0", features = ["bundled"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }

@@ -147,6 +147,34 @@
     return string(message.payload.reason, 500) ? null : 'reason is invalid';
   };
 
+  const savedRequestId = value => string(value, 64, true);
+  const savedId = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  const validateSavedSessions = message => {
+    const payload = message.payload;
+    if (!object(payload) || !onlyKeys(payload, ['request_id', 'sessions']) || !savedRequestId(payload.request_id)
+      || !Array.isArray(payload.sessions) || payload.sessions.length > 1000) return 'saved_sessions is invalid';
+    for (const session of payload.sessions) {
+      if (!object(session) || !onlyKeys(session, ['id', 'name', 'media_id', 'media_title', 'position', 'queue_count', 'saved_at_ms', 'expires_at_ms', 'active'])
+        || !savedId(session.id) || !string(session.name, 128) || !MEDIA_ID.test(session.media_id)
+        || !string(session.media_title, 256) || !position(session.position)
+        || !Number.isInteger(session.queue_count) || session.queue_count < 0 || session.queue_count > 20
+        || !timestamp(session.saved_at_ms) || !nullable(session.expires_at_ms, timestamp)
+        || typeof session.active !== 'boolean') return 'saved session is invalid';
+    }
+    return null;
+  };
+  const validateSavedResult = message => {
+    const payload = message.payload;
+    return object(payload) && onlyKeys(payload, ['request_id', 'action', 'id', 'room_id']) && savedRequestId(payload.request_id)
+      && savedId(payload.id) && ['save', 'resume', 'discard'].includes(payload.action)
+      && (payload.action === 'resume' ? savedId(payload.room_id) : payload.room_id === undefined) ? null : 'saved_session_result is invalid';
+  };
+  const validateSavedError = message => {
+    const payload = message.payload;
+    return object(payload) && onlyKeys(payload, ['request_id', 'code', 'message']) && savedRequestId(payload.request_id)
+      && string(payload.code, 64) && string(payload.message, 500) ? null : 'saved_session_error is invalid';
+  };
+
   const validateHostChanged = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
     if (!onlyKeys(message.payload, ['host_id', 'host_name'])) return 'host_changed has unknown fields';
@@ -303,6 +331,10 @@
     participant_statuses: validateParticipantStatuses,
     participant_tracks: validateParticipantTracks,
     host_changed: validateHostChanged,
+    saved_sessions: validateSavedSessions,
+    saved_session_result: validateSavedResult,
+    saved_session_error: validateSavedError,
+    room_left: message => object(message.payload) && onlyKeys(message.payload, []) ? null : 'room_left is invalid',
     room_closed: validateRoomClosed,
     player_event: validatePlayerEvent,
     state_update: validateStateUpdate,
@@ -326,6 +358,7 @@
     'participant_statuses',
     'participant_tracks',
     'host_changed',
+    'room_left',
     'room_closed',
     'player_event',
     'state_update',

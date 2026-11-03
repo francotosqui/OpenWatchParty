@@ -61,6 +61,7 @@
     if (state.connectionPhase !== 'authenticated' && OWP.actions?.handleAuthenticatedConnection) {
       OWP.actions.handleAuthenticatedConnection();
     }
+    OWP.savedSessions?.onAuthenticated();
   };
 
   h.handleRoomCapabilities = (msg) => {
@@ -229,6 +230,7 @@
   };
 
   h.handleError = (msg) => {
+    if (OWP.savedSessions?.onGenericError(msg)) return;
     if (state.pendingJoin && (!msg.room || msg.room === state.pendingJoin.roomId)) {
       state.joinTarget = '';
       state.pendingJoin = null;
