@@ -12,6 +12,11 @@ test('typing, a picked mention and the toast mode reach the other member', async
     await helpers.waitForSettled(host);
     await helpers.createRoom(host);
     const { roomId } = await helpers.owpState(host);
+
+    // Before joining, the room's card names its host for the avatar.
+    const hostUserId = await host.evaluate(() => window.ApiClient.getCurrentUserId().replace(/-/g, '').toLowerCase());
+    await guest.goto('/#/home');
+    await expect(guest.locator(`.owp-room-card[data-room-id="${roomId}"]`)).toHaveAttribute('data-host', hostUserId);
     await helpers.joinRoomFromHeader(guest, roomId);
 
     // Both features are negotiated, and members carry their Jellyfin user ids.
@@ -23,6 +28,17 @@ test('typing, a picked mention and the toast mode reach the other member', async
     await helpers.clickRoomBar(host, '#owp-btn-chat');
     await helpers.clickRoomBar(guest, '#owp-btn-chat');
     const input = guest.locator('#owp-chat-input');
+
+    // With no messages yet, the bell's menu is still in sight, not cut by the chat.
+    await host.locator('#owp-chat-bell').click();
+    await expect(host.locator('#owp-chat-bell-menu')).toBeVisible();
+    expect(await host.evaluate(() => {
+      const menu = document.getElementById('owp-chat-bell-menu');
+      const box = menu.getBoundingClientRect();
+      return menu.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2));
+    })).toBe(true);
+    await host.locator('#owp-chat-bell').click();
+    await expect(host.locator('#owp-chat-bell-menu')).toHaveCount(0);
 
     // Typing shows on the other member and goes away when the field empties.
     await input.fill('ho');
@@ -54,6 +70,17 @@ test('typing, a picked mention and the toast mode reach the other member', async
     await guest.evaluate(() => window.OpenWatchParty.chat.send('mensaje común'));
     await expect.poll(() => host.evaluate(() => window.OpenWatchParty.chat.unreadCount)).toBe(unread + 1);
     expect(await plainToasts()).toBe(before);
+
+    // With the chat open but out of sight while the player's controls are
+    // hidden, a message still toasts, low in the corner.
+    await host.evaluate(() => window.OpenWatchParty.chatAlerts.setMode('all'));
+    await helpers.clickRoomBar(host, '#owp-btn-chat');
+    await expect(host.locator('#owp-chat-section')).toBeVisible();
+    await host.evaluate(() => document.activeElement?.blur());
+    await host.mouse.move(640, 400);
+    await host.waitForFunction(() => document.documentElement.classList.contains('owp-player-controls-hidden'), null, { timeout: 30_000 });
+    await guest.evaluate(() => window.OpenWatchParty.chat.send('con los controles ocultos'));
+    await expect(host.locator('.owp-toast:not(.owp-toast-out)', { hasText: 'con los controles ocultos' })).toBeVisible();
   } finally {
     await helpers.leaveIfInRoom(guest);
     await helpers.leaveIfInRoom(host);
