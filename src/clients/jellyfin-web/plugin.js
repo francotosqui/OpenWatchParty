@@ -169,6 +169,8 @@
     await Promise.all([
       load('chat/messages.js'),
       load('chat/typing.js'),
+      load('chat/mentions.js'),
+      load('chat/alerts.js'),
       load('chat/emoji-picker.js'),
       load('chat/input.js'),
     ]);

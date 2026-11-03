@@ -63,6 +63,8 @@ public class OpenWatchPartyController : ControllerBase
         "playback/sync.js",
         "chat/messages.js",
         "chat/typing.js",
+        "chat/mentions.js",
+        "chat/alerts.js",
         "chat/emoji-data.js",
         "chat/emoji-picker.js",
         "chat/input.js",

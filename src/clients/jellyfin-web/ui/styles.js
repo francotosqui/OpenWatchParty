@@ -530,8 +530,9 @@
     #owp-chat-input:focus { border-color: var(--owp-accent); outline: none; }
     #owp-chat-send {
       display: inline-flex; align-items: center; height: ${px(24)}; padding: 0 ${px(8)};
-      border: none; border-radius: ${round(12)}; background: var(--owp-accent-bg); color: var(--owp-accent); cursor: pointer;
+      justify-content: center; border: none; border-radius: ${round(12)}; background: var(--owp-accent-bg); color: var(--owp-accent); cursor: pointer;
     }
+    #owp-chat-send .owp-icon { display: block; }
     #owp-chat-send:hover { background: var(--owp-accent-bg-hover); color: var(--owp-on-accent); }
     .owp-chat-badge { display: none; padding: 0 ${px(5)}; border-radius: ${round(8)}; background: var(--owp-bad-bg); color: var(--owp-bad); font-size: ${px(11)}; line-height: 1.45; }
     /* Emoji button */
@@ -542,6 +543,41 @@
     }
     #owp-emoji-btn:hover { background: rgba(var(--owp-ink), 0.08); }
     #owp-emoji-btn[aria-expanded="true"] { background: var(--owp-accent-bg); }
+    /* Chat toast mode: a bell next to the emoji button, and its small menu */
+    #owp-chat-input-container { position: relative; }
+    .owp-chat-bell-wrap { position: relative; flex-shrink: 0; display: flex; }
+    .owp-chat-bell {
+      display: inline-flex; align-items: center; justify-content: center; height: ${px(24)}; width: ${px(24)}; padding: 0;
+      border: none; border-radius: ${round(12)}; background: transparent; color: rgba(var(--owp-ink), 0.6); cursor: pointer;
+    }
+    .owp-chat-bell .owp-icon { width: ${px(14)}; height: ${px(14)}; }
+    .owp-chat-bell:hover { background: rgba(var(--owp-ink), 0.08); }
+    .owp-chat-bell.owp-chat-bell-on { color: var(--owp-accent); }
+    .owp-chat-bell[aria-expanded="true"] { background: var(--owp-accent-bg); color: var(--owp-accent); }
+    .owp-chat-bell-menu {
+      position: absolute; right: 0; bottom: calc(100% + ${px(4)}); z-index: 5; padding: ${px(3)}; font-size: ${px(11)};
+      background: rgb(var(--owp-surface)); border: 1px solid rgba(var(--owp-ink), 0.12); border-radius: ${round(6)}; box-shadow: 0 ${px(4)} ${px(12)} rgba(0, 0, 0, 0.35);
+    }
+    .owp-chat-bell-menu[hidden] { display: none; }
+    .owp-chat-bell-title { padding: ${px(3)} ${px(7)} ${px(2)}; color: rgba(var(--owp-ink), 0.5); font-size: ${px(10)}; }
+    .owp-chat-bell-option {
+      display: flex; align-items: center; justify-content: space-between; gap: ${px(14)}; width: 100%; padding: ${px(4)} ${px(7)};
+      border: none; border-radius: ${round(4)}; background: none; color: rgba(var(--owp-ink), 0.8); font: inherit; white-space: nowrap; cursor: pointer; text-align: left;
+    }
+    .owp-chat-bell-option:hover { background: rgba(var(--owp-ink), 0.06); }
+    .owp-chat-bell-option[aria-checked="true"] { color: var(--owp-accent); }
+    .owp-chat-bell-option[aria-checked="true"]::after { content: '✓'; }
+    /* @-mention suggestions above the chat input */
+    .owp-mention-list {
+      position: absolute; left: 0; right: ${px(64)}; bottom: calc(100% + ${px(4)}); z-index: 5; padding: ${px(3)};
+      background: rgb(var(--owp-surface)); border: 1px solid rgba(var(--owp-ink), 0.15); border-radius: ${round(6)}; box-shadow: 0 ${px(4)} ${px(12)} rgba(0, 0, 0, 0.45);
+    }
+    .owp-mention-option { display: flex; align-items: center; gap: ${px(2)}; padding: ${px(4)} ${px(6)}; border-radius: ${round(4)}; color: var(--owp-text); cursor: pointer; }
+    .owp-mention-option.owp-mention-active { background: var(--owp-accent-bg); color: var(--owp-accent); }
+    .owp-mention-hint { margin-top: ${px(2)}; padding: ${px(3)} ${px(6)} 0; border-top: 1px solid rgba(var(--owp-ink), 0.1); color: rgba(var(--owp-ink), 0.5); font-size: ${px(10)}; }
+    .owp-chat-mention { color: var(--owp-accent); font-weight: 600; background: var(--owp-accent-bg); border-radius: ${round(3)}; padding: 0 ${px(2)}; }
+    .owp-chat-message.owp-chat-mentioned { margin-left: ${px(-6)}; padding-left: ${px(5)}; border-left: ${px(2)} solid var(--owp-accent); background: rgba(var(--owp-ink), 0.06); }
+    .owp-chat-badge.owp-chat-badge-mention { background: var(--owp-accent-bg); color: var(--owp-accent); }
     /* Autocomplete dropdown */
     #owp-emoji-autocomplete {
       position: fixed; z-index: 21000;
@@ -616,6 +652,8 @@
       animation: owp-toast-out 0.3s ease-in forwards;
     }
     .owp-toast-username { font-weight: 500; color: var(--owp-accent); margin-right: ${px(4)}; }
+    .owp-toast.owp-toast-mention { border-left: ${px(3)} solid var(--owp-accent); }
+    .owp-toast-label { display: block; margin-bottom: ${px(2)}; font-size: ${px(10)}; font-weight: 600; color: var(--owp-accent); }
     .owp-toast-text { color: var(--owp-text); word-wrap: break-word; }
     .owp-toast-system {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);

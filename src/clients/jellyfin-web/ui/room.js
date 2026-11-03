@@ -445,7 +445,8 @@
     emojiBtn.setAttribute('aria-controls', 'owp-emoji-panel');
     emojiBtn.textContent = '😊';
     emojiBtn.onclick = () => OWP.emoji?.togglePicker(input);
-    inputContainer.append(input, emojiBtn, send);
+    const bell = OWP.chatAlerts?.createBell();
+    inputContainer.append(input, ...(bell ? [bell] : []), emojiBtn, send);
     const typing = createElement('div', 'owp-chat-typing');
     typing.id = 'owp-chat-typing';
     typing.hidden = true;
@@ -476,6 +477,7 @@
     chatInput.addEventListener('keydown', (e) => {
       // The input stops key events from bubbling (so the player ignores
       // typing), so the drop-down's Escape handler is called from here.
+      if (OWP.mentions?.handleKeydown(e)) return;
       if (OWP.emoji?.handleKeydown?.(e)) return;
       if (closeRoomSectionFromKeyboard(e)) return;
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -500,6 +502,7 @@
       else OWP.chat.updateBadge();
     }
     if (OWP.emoji?.setupAutocomplete) OWP.emoji.setupAutocomplete(chatInput);
+    OWP.mentions?.attach(chatInput);
   };
 
   Object.assign(views, { renderRoom, setupChatInput, toggleRoomSection, applyRoomSection });

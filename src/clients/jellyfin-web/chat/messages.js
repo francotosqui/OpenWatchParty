@@ -8,12 +8,34 @@
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // The message text, with "@name" of anyone known to the chat highlighted.
+  const appendText = (element, message) => {
+    const value = String(message.text);
+    if (message.system || !OWP.mentions) {
+      element.textContent = value;
+      return;
+    }
+    const names = [OWP.state.userName, ...(OWP.state.participants || []).map(p => p.name), ...chat.messages.map(m => m.username)];
+    for (const part of OWP.mentions.segments(value, names, OWP.state.userName)) {
+      if (!part.mention) {
+        element.appendChild(document.createTextNode(part.text));
+        continue;
+      }
+      const mention = document.createElement('span');
+      mention.className = 'owp-chat-mention';
+      mention.textContent = part.text;
+      element.appendChild(mention);
+    }
+  };
+  const mentionsMe = message => !message.isOwn && Boolean(OWP.mentions?.mentionsMe(String(message.text), OWP.state.userName));
+
   const renderMessage = (message) => {
     const container = document.getElementById('owp-chat-messages');
     if (!container) return;
     const msgEl = document.createElement('div');
     msgEl.className = 'owp-chat-message' + (message.isOwn ? ' owp-chat-own' : '')
-      + (message.system ? ' owp-chat-system' : '') + (message.isError ? ' owp-chat-error' : '');
+      + (message.system ? ' owp-chat-system' : '') + (message.isError ? ' owp-chat-error' : '')
+      + (message.mentionsMe ? ' owp-chat-mentioned' : '');
     // One line per message in the room bar: the time is in the tooltip.
     msgEl.title = formatTime(message.timestamp);
     const meta = document.createElement('div');
@@ -28,7 +50,7 @@
     meta.append(username, time);
     const text = document.createElement('div');
     text.className = 'owp-chat-text';
-    text.textContent = String(message.text);
+    appendText(text, message);
     msgEl.append(meta, text);
     container.appendChild(msgEl);
     // The rendered chat keeps the same messages as chat.messages, which gains
@@ -53,6 +75,7 @@
       timestamp: msg.server_ts || Date.now(),
       isOwn: msg.client === OWP.state.clientId
     };
+    message.mentionsMe = mentionsMe(message);
     chat.messages.push(message);
     if (chat.messages.length > MAX_MESSAGES) {
       chat.messages.shift();
@@ -63,9 +86,9 @@
     if (!chat.isChatVisible() && !message.isOwn) {
       chat.unreadCount++;
       chat.updateBadge();
-      if (OWP.ui && OWP.ui.showChatToast) {
-        OWP.ui.showChatToast(message.username, message.text);
-      }
+      if (OWP.chatAlerts) OWP.chatAlerts.notify(message);
+      else if (OWP.ui && OWP.ui.showChatToast) OWP.ui.showChatToast(message.username, message.text);
+      chat.updateBadge();
     }
     renderMessage(message);
   };
@@ -97,6 +120,7 @@
       timestamp: entry.server_ts,
       isOwn: entry.own || entry.client === OWP.state.clientId
     }));
+    chat.messages.forEach(message => { message.mentionsMe = mentionsMe(message); });
     chat.unreadCount = 0;
     chat.updateBadge();
     renderAllMessages();
