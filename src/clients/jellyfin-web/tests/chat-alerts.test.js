@@ -47,6 +47,14 @@ describe('chat alerts', () => {
     assert.equal(document.getElementById('owp-chat-badge').classList.contains('owp-chat-badge-mention'), false);
   });
 
+  it('forgets an unread mention when the chat is cleared on leaving the room', () => {
+    OWP.chat.receive(message('@testhost hola'));
+    OWP.chat.clear();
+    OWP.chat.receive(message('mensaje común'));
+    assert.equal(OWP.chatAlerts.hasUnreadMention(), false);
+    assert.equal(document.getElementById('owp-chat-badge').classList.contains('owp-chat-badge-mention'), false);
+  });
+
   it('renders the mention toast with its label', () => {
     realShowChatToast('testclient2', 'hola', { mention: true });
     const toast = document.querySelector('.owp-toast');

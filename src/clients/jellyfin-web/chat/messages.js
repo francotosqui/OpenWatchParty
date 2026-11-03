@@ -129,6 +129,7 @@
   const clear = () => {
     chat.messages = [];
     chat.unreadCount = 0;
+    OWP.chatAlerts?.markRead();
     chat.updateBadge();
     const container = document.getElementById('owp-chat-messages');
     if (container) container.replaceChildren();
