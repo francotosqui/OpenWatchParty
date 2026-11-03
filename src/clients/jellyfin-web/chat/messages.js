@@ -57,6 +57,7 @@
     if (chat.messages.length > MAX_MESSAGES) {
       chat.messages.shift();
     }
+    OWP.chatTyping?.clear(message.clientId);
     // Your own messages are never unread, even if the chat closed before the
     // server echoed them back.
     if (!chat.isChatVisible() && !message.isOwn) {

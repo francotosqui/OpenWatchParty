@@ -170,6 +170,9 @@
       status: null,
       tracks: null
     }));
+    if (state.participants.every(participant => participant.id)) {
+      OWP.chatTyping?.prune(state.participants.map(participant => participant.id));
+    }
     ui.updateParticipantList();
   };
 

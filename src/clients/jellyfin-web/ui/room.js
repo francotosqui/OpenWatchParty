@@ -446,7 +446,15 @@
     emojiBtn.textContent = '😊';
     emojiBtn.onclick = () => OWP.emoji?.togglePicker(input);
     inputContainer.append(input, emojiBtn, send);
-    chatSection.append(messages, inputContainer);
+    const typing = createElement('div', 'owp-chat-typing');
+    typing.id = 'owp-chat-typing';
+    typing.hidden = true;
+    typing.setAttribute('aria-live', 'polite');
+    const dots = createElement('span', 'owp-chat-typing-dots');
+    dots.setAttribute('aria-hidden', 'true');
+    dots.append(createElement('i'), createElement('i'), createElement('i'));
+    typing.append(dots, createElement('span', 'owp-chat-typing-text'));
+    chatSection.append(messages, typing, inputContainer);
 
     const confirm = createElement('div', 'owp-leave-confirm');
     confirm.id = 'owp-leave-confirm';
@@ -474,14 +482,18 @@
         e.preventDefault();
         if (OWP.chat && OWP.chat.send(chatInput.value)) {
           chatInput.value = '';
+          OWP.chatTyping?.stop();
         }
       }
     });
     chatSend.addEventListener('click', () => {
       if (OWP.chat && OWP.chat.send(chatInput.value)) {
         chatInput.value = '';
+        OWP.chatTyping?.stop();
       }
     });
+    chatInput.addEventListener('input', () => OWP.chatTyping?.inputChanged(chatInput.value));
+    OWP.chatTyping?.render();
     if (OWP.chat) {
       OWP.chat.renderAllMessages();
       if (OWP.chat.isChatVisible()) OWP.chat.markRead();

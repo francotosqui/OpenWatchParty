@@ -65,6 +65,7 @@
     Object.assign(state, OWP.stateFactories.createInviteWorkState());
     if (OWP.ui?.updateGuestControls) OWP.ui.updateGuestControls();
     if (OWP.chat) OWP.chat.clear();
+    OWP.chatTyping?.reset();
   };
 
   const createRoom = () => {

@@ -514,6 +514,12 @@
     }
     .owp-chat-message.owp-chat-system .owp-chat-text { color: var(--owp-system); font-style: italic; }
     .owp-chat-message.owp-chat-error .owp-chat-text { color: var(--owp-bad); }
+    .owp-chat-typing { display: flex; align-items: center; gap: ${px(6)}; padding-top: ${px(4)}; font-size: ${px(12)}; font-style: italic; color: rgba(var(--owp-ink), 0.6); }
+    .owp-chat-typing[hidden] { display: none; }
+    .owp-chat-typing-dots { display: inline-flex; gap: ${px(2)}; }
+    .owp-chat-typing-dots i { width: ${px(4)}; height: ${px(4)}; border-radius: ${round(2)}; background: currentColor; opacity: 0.5; }
+    .owp-chat-typing-dots i:nth-child(2) { opacity: 0.75; }
+    .owp-chat-typing-dots i:nth-child(3) { opacity: 1; }
     #owp-chat-input-container { display: flex; gap: ${px(6)}; }
     #owp-chat-messages:not(:empty) + #owp-chat-input-container { margin-top: ${px(6)}; padding-top: ${px(6)}; border-top: 1px solid rgba(var(--owp-ink), 0.1); }
     #owp-chat-input {

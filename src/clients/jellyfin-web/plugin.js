@@ -168,6 +168,7 @@
     await load('chat/emoji-data.js');
     await Promise.all([
       load('chat/messages.js'),
+      load('chat/typing.js'),
       load('chat/emoji-picker.js'),
       load('chat/input.js'),
     ]);
