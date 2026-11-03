@@ -244,6 +244,10 @@ The chat feature allows you to communicate with other watch party participants i
 - **Earlier messages** - Joining a room shows its last 50 messages, without counting them as unread
 - **Message limit** - Messages are limited to 500 characters
 - **Emoji picker** - Choose from categorized emojis or type shortcodes like `:smile:` with autocomplete suggestions
+- **Profile pictures** - Messages and the participant list show each member's Jellyfin profile picture, or their initial when they have none
+- **Typing indicator** - "Alice is typing…" shows above the input while someone writes
+- **Mentions** - Type `@` to pick a participant; a message that mentions you is highlighted, and while the chat is closed its toast says "Mentioned you" and the badge turns to the accent color
+- **Notifications** - The bell next to the emoji button chooses which messages show a toast while the chat is closed: all messages (default) or mentions only. Every message still counts in the badge. The choice is kept per Jellyfin user in this browser
 
 ### Notes
 - The room keeps its last 50 messages in memory for late joiners; they disappear when the room closes or the server restarts. SERVER lines are local to each client and are not part of this history.
