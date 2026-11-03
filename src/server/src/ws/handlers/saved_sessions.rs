@@ -1,4 +1,5 @@
 mod save;
+mod resume;
 // Private durable sessions. Storage awaits never hold the shared room lock.
 use crate::{persistence::{SavedRoomStore, StorageError}, types::{Client, ClientMessageType, IncomingMessage, ServerMessageType, SharedState, WsMessage}, utils::now_ms};
 use super::super::dispatch::{send_error,ErrorCode};
@@ -58,6 +59,7 @@ pub(in crate::ws) async fn handle_saved_sessions(client_id:&str,parsed:&Incoming
         failure(client_id,&context,state,id,ErrorCode::InvalidSavedSessionPayload).await;return;
     };
     match parsed.msg_type {
+        ClientMessageType::ResumeSavedSession=>resume::handle_resume(client_id,&context,&request,state).await,
         ClientMessageType::SaveRoomSession=>save::handle_save(client_id,&context,&request,state,tasks).await,
         ClientMessageType::ListSavedSessions=>{
             match context.store.list(&context.user_id,now_ms()).await {

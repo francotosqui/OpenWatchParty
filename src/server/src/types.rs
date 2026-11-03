@@ -687,3 +687,15 @@ pub struct SaveReservation {
     pub countdown_pending: bool,
     pub deferred_disconnects: HashSet<String>,
 }
+
+impl Room {
+    pub(crate) fn new(room_id:String, host_id:String, name:String, media_id:Option<String>, position:f64, now:u64) -> Self {
+        Self {
+            room_id, name, clients:vec![host_id.clone()], ready_clients:HashSet::from([host_id.clone()]), host_id,
+            administrator_user_id:None, saved_session_id:None, saved_owner_user_id:None, saving:None, media_id,
+            pending_play:None, access:Default::default(),join_requests:Vec::new(),admitted_users:HashSet::new(),pending_host_reconnect:None,blocked_users:HashSet::new(),permissions:Default::default(),
+            state:PlaybackState{position,play_state:PlayState::Paused},state_server_ts:now,target_server_ts:None,target_at:None,last_state_at:Some(Instant::now()),command_cooldown_until:None,
+            statuses:HashMap::new(),status_broadcast:Default::default(),tracks:HashMap::new(),guest_command_until:None,queue:Default::default(),not_ready:HashMap::new(),countdown_pending:true,chat_history:Default::default(),
+        }
+    }
+}

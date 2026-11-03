@@ -7,12 +7,12 @@ use crate::room::{
     send_leave_notification, send_room_participant_list,
 };
 use crate::types::{
-    IncomingMessage, PlayState, PlaybackState, Room, ServerMessageType, SharedState, WsMessage,
+    IncomingMessage, Room, ServerMessageType, SharedState, WsMessage,
 };
 use crate::utils::now_ms;
 use log::info;
-use std::collections::{HashMap, HashSet};
-use tokio::time::Instant;
+#[cfg(test)]
+use crate::types::PlayState;
 
 fn resolve_host_name(
     payload: Option<&serde_json::Value>,
@@ -53,47 +53,10 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
 
     info!("Creating room room_id={room_id} client_id={client_id} name={room_name:?}");
 
-    let state_server_ts = now_ms();
-    Room {
-        room_id,
-        name: room_name,
-        host_id: client_id.to_string(),
-        administrator_user_id: None,
-        saved_session_id: None,
-        saved_owner_user_id: None,
-        saving: None,
-        media_id,
-        clients: vec![client_id.to_string()],
-        ready_clients: HashSet::from([client_id.to_string()]),
-        pending_play: None,
-        access: Default::default(),
-        join_requests: Vec::new(),
-        admitted_users: HashSet::new(),
-        pending_host_reconnect: None,
-        blocked_users: HashSet::new(),
-        permissions: Default::default(),
-        state: PlaybackState {
-            position: start_pos,
-            play_state: PlayState::Paused,
-        },
-        state_server_ts,
-        target_server_ts: None,
-        target_at: None,
-        last_state_at: Some(Instant::now()),
-        command_cooldown_until: None,
-        statuses: HashMap::new(),
-        status_broadcast: Default::default(),
-        tracks: HashMap::new(),
-        guest_command_until: None,
-        queue: Default::default(),
-        not_ready: HashMap::new(),
-        // Created paused: its first play counts down.
-        countdown_pending: true,
-        chat_history: Default::default(),
-    }
+    Room::new(room_id, client_id.to_string(), room_name, media_id, start_pos, now_ms())
 }
 
-fn insert_and_notify(
+pub(super) fn insert_and_notify(
     client_id: &str,
     mut room: Room,
     payload_name: &Option<String>,
