@@ -33,7 +33,7 @@ pub(in crate::ws) async fn handle_set_room_permissions(
 
     let error = {
         let mut state = state.write().await;
-        let ServerState { clients, rooms } = &mut *state;
+        let ServerState { clients, rooms, .. } = &mut *state;
         let room = clients
             .get(client_id)
             .and_then(|client| client.room_id.as_ref())

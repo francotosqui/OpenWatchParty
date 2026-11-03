@@ -73,6 +73,13 @@ pub(super) enum ErrorCode {
     InvalidPermissionsPayload,
     InvalidAdministratorPayload,
     AdministratorAlreadyAssigned,
+    InvalidSavedSessionPayload,
+    SavedSessionUnavailable,
+    SavedSessionNotFound,
+    SavedSessionCapacity,
+    SavedSessionBusy,
+    SavedSessionPermissionRequired,
+    SavedSessionAlreadyInRoom,
 }
 
 pub(super) fn error_message(
@@ -311,6 +318,10 @@ pub(super) async fn client_msg(
         | ClientMessageType::QueueCountdown => handle_queue(client_id, &parsed, state, tasks).await,
         ClientMessageType::SetRoomPermissions => {
             handle_set_room_permissions(client_id, &parsed, state).await
+        }
+        ClientMessageType::ListSavedSessions | ClientMessageType::SaveRoomSession
+        | ClientMessageType::ResumeSavedSession | ClientMessageType::DiscardSavedSession => {
+            super::handlers::saved_sessions::handle_saved_sessions(client_id, &parsed, state).await
         }
         ClientMessageType::SetRoomAdministrator => {
             handle_set_room_administrator(client_id, &parsed, state).await
@@ -552,6 +563,13 @@ mod tests {
                 ErrorCode::AdministratorAlreadyAssigned,
                 "ADMINISTRATOR_ALREADY_ASSIGNED",
             ),
+            (ErrorCode::InvalidSavedSessionPayload, "INVALID_SAVED_SESSION_PAYLOAD"),
+            (ErrorCode::SavedSessionUnavailable, "SAVED_SESSION_UNAVAILABLE"),
+            (ErrorCode::SavedSessionNotFound, "SAVED_SESSION_NOT_FOUND"),
+            (ErrorCode::SavedSessionCapacity, "SAVED_SESSION_CAPACITY"),
+            (ErrorCode::SavedSessionBusy, "SAVED_SESSION_BUSY"),
+            (ErrorCode::SavedSessionPermissionRequired, "SAVED_SESSION_PERMISSION_REQUIRED"),
+            (ErrorCode::SavedSessionAlreadyInRoom, "SAVED_SESSION_ALREADY_IN_ROOM"),
         ];
         for (code, expected) in cases {
             assert_eq!(serde_json::to_value(code).unwrap(), expected);

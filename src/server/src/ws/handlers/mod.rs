@@ -1,3 +1,4 @@
+pub(in crate::ws) mod saved_sessions;
 pub(crate) mod access;
 mod administrator;
 mod auth;

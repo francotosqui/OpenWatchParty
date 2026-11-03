@@ -199,7 +199,7 @@ fn begin_host_reconnect_grace(
 async fn expire_host_reconnect(room_id: String, generation: u64, state: SharedState) {
     let notification = {
         let mut state = state.write().await;
-        let crate::types::ServerState { clients, rooms } = &mut *state;
+        let crate::types::ServerState { clients, rooms, .. } = &mut *state;
         let matches_pending = rooms
             .get(&room_id)
             .and_then(|room| room.pending_host_reconnect.as_ref())
@@ -344,7 +344,7 @@ pub(crate) async fn handle_disconnect_if(
 ) -> bool {
     let (reconnect_grace, removed, left_room) = {
         let mut state = state.write().await;
-        let crate::types::ServerState { clients, rooms } = &mut *state;
+        let crate::types::ServerState { clients, rooms, .. } = &mut *state;
         if clients
             .get(client_id)
             .is_some_and(|client| !should_remove(client))

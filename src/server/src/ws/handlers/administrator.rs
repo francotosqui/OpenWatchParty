@@ -50,7 +50,7 @@ pub(in crate::ws) async fn handle_set_room_administrator(
     };
     let error = {
         let mut locked = state.write().await;
-        let ServerState { clients, rooms } = &mut *locked;
+        let ServerState { clients, rooms, .. } = &mut *locked;
         let room_id = clients
             .get(client_id)
             .and_then(|client| client.room_id.as_ref());

@@ -159,3 +159,14 @@ impl SavedRoomStore {
 }
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+impl SavedRoomStore {
+    pub async fn pause_for_test(&self) -> std::sync::mpsc::Sender<()> {
+        let (started, ready)=oneshot::channel();
+        let (release,wait)=std::sync::mpsc::channel();
+        self.sender.send(Job::Run(Box::new(move |_| { let _=started.send(()); let _=wait.recv(); }))).await.unwrap();
+        ready.await.unwrap(); release
+    }
+    pub fn pending_for_test(&self)->usize { 32-self.sender.capacity() }
+}

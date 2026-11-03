@@ -99,7 +99,7 @@ pub(crate) async fn handle_access(
         }
         let sender = client.sender.clone();
         if parsed.msg_type == ClientMessageType::CancelJoin {
-            let ServerState { clients, rooms } = &mut *locked;
+            let ServerState { clients, rooms, .. } = &mut *locked;
             cancel(client_id, rooms, clients);
             return;
         }
@@ -122,7 +122,7 @@ pub(crate) async fn handle_access(
         }
         let room_id = room_id.expect("membership checked");
         let payload = parsed.payload.clone().unwrap_or(serde_json::Value::Null);
-        let ServerState { rooms, clients } = &mut *locked;
+        let ServerState { rooms, clients, .. } = &mut *locked;
         let room = rooms.get_mut(&room_id).expect("membership checked");
         let mut admissions = Vec::new();
         if parsed.msg_type == ClientMessageType::SetRoomAccess {

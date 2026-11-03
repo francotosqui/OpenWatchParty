@@ -59,6 +59,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         name: room_name,
         host_id: client_id.to_string(),
         administrator_user_id: None,
+        saved_session_id: None,
         media_id,
         clients: vec![client_id.to_string()],
         ready_clients: HashSet::from([client_id.to_string()]),
@@ -190,7 +191,7 @@ pub(in crate::ws) async fn handle_create_room(
             .and_then(|room_id| state.rooms.get(room_id))
             .is_some_and(|room| room.host_id != client_id);
         let previous_leave = if should_leave_guest_room {
-            let crate::types::ServerState { clients, rooms } = &mut *state;
+            let crate::types::ServerState { clients, rooms, .. } = &mut *state;
             handle_leave(client_id, clients, rooms)
         } else {
             None
@@ -204,13 +205,13 @@ pub(in crate::ws) async fn handle_create_room(
             close_room_in_state(&room_id, &mut state).map(|senders| (room_id, senders))
         });
         {
-            let crate::types::ServerState { clients, rooms } = &mut *state;
+            let crate::types::ServerState { clients, rooms, .. } = &mut *state;
             crate::room::access::cancel(client_id, rooms, clients);
         }
         let (host_name, payload_name) = resolve_host_name(payload_ref, &state.clients, client_id);
         let mut room = build_room(client_id, &host_name, payload_ref);
         room.access = access;
-        let crate::types::ServerState { clients, rooms } = &mut *state;
+        let crate::types::ServerState { clients, rooms, .. } = &mut *state;
         let (sender, room_msg) = insert_and_notify(client_id, room, &payload_name, clients, rooms);
         let participant_statuses = room_msg
             .room

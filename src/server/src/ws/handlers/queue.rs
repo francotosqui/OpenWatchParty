@@ -340,7 +340,7 @@ fn schedule_countdown(
             if cancellation.is_cancelled() {
                 return;
             }
-            let ServerState { clients, rooms } = &mut *state;
+            let ServerState { clients, rooms, .. } = &mut *state;
             let Some(room) = rooms.get_mut(&room_id) else {
                 return;
             };
@@ -400,7 +400,7 @@ pub(in crate::ws) async fn handle_queue(
     };
     let result = {
         let mut state = state.write().await;
-        let ServerState { clients, rooms } = &mut *state;
+        let ServerState { clients, rooms, .. } = &mut *state;
         let room = clients
             .get(client_id)
             .and_then(|client| client.room_id.as_ref())

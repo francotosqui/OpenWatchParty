@@ -276,7 +276,7 @@ pub(super) fn schedule_pending_play(
         if cancellation.is_cancelled() {
             return;
         }
-        let crate::types::ServerState { clients, rooms } = &mut *state;
+        let crate::types::ServerState { clients, rooms, .. } = &mut *state;
         let Some(room) = rooms.get_mut(&room_id) else {
             return;
         };

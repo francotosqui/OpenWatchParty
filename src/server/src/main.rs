@@ -45,7 +45,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     );
 
-    let state: SharedState = Arc::new(RwLock::new(ServerState::default()));
+    let saved_room_store = if jwt_config.enabled {
+        match persistence::StorageConfig::from_env()? {
+            Some(config) => Some(tokio::task::spawn_blocking(move || persistence::SavedRoomStore::open(config)).await??),
+            None => None,
+        }
+    } else { None };
+    let shutdown_store = saved_room_store.clone();
+    let state: SharedState = Arc::new(RwLock::new(ServerState { saved_room_store, ..Default::default() }));
     let app_tasks = tasks::AppTasks::new();
     metrics::metrics().record_start(utils::now_ms() / 1000);
 
@@ -104,6 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+    if let Some(store) = shutdown_store { store.shutdown().await?; }
     info!("Server shutdown complete");
     Ok(())
 }

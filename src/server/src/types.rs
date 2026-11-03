@@ -10,6 +10,8 @@ pub type SharedState = Arc<RwLock<ServerState>>;
 pub struct ServerState {
     pub clients: HashMap<String, Client>,
     pub rooms: HashMap<String, Room>,
+    pub saved_room_store: Option<crate::persistence::SavedRoomStore>,
+    pub saved_session_operations: HashMap<String, u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -27,6 +29,7 @@ pub struct Client {
     pub supports_shared_playback_control: bool,
     pub supports_room_moderation: bool,
     pub supports_room_administrator: bool,
+    pub supports_persistent_rooms: bool,
     pub supports_room_permissions: bool,
     pub supports_media_queue: bool,
     pub supports_queue_suggestions: bool,
@@ -65,6 +68,8 @@ pub struct Room {
     pub host_id: String,
     #[serde(skip)]
     pub administrator_user_id: Option<String>,
+    #[serde(skip)]
+    pub saved_session_id: Option<String>,
     pub media_id: Option<String>,
     pub clients: Vec<String>,
     pub ready_clients: HashSet<String>,
@@ -261,6 +266,10 @@ pub enum ClientMessageType {
     QueueCountdown,
     SetRoomPermissions,
     SetRoomAdministrator,
+    ListSavedSessions,
+    SaveRoomSession,
+    ResumeSavedSession,
+    DiscardSavedSession,
     QueueSuggest,
     QueueDismiss,
     QueueAvailability,
@@ -300,6 +309,10 @@ impl ClientMessageType {
             Self::QueueCountdown => "queue_countdown",
             Self::SetRoomPermissions => "set_room_permissions",
             Self::SetRoomAdministrator => "set_room_administrator",
+            Self::ListSavedSessions => "list_saved_sessions",
+            Self::SaveRoomSession => "save_room_session",
+            Self::ResumeSavedSession => "resume_saved_session",
+            Self::DiscardSavedSession => "discard_saved_session",
             Self::QueueSuggest => "queue_suggest",
             Self::QueueDismiss => "queue_dismiss",
             Self::QueueAvailability => "queue_availability",
@@ -322,6 +335,9 @@ pub enum ServerMessageType {
     RoomCapabilities,
     RoomPermissions,
     RoomAdministrator,
+    SavedSessions,
+    SavedSessionResult,
+    SavedSessionError,
     ParticipantList,
     ParticipantStatuses,
     ParticipantTracks,
@@ -355,6 +371,9 @@ impl ServerMessageType {
 
             Self::RoomPermissions => "room_permissions",
             Self::RoomAdministrator => "room_administrator",
+            Self::SavedSessions => "saved_sessions",
+            Self::SavedSessionResult => "saved_session_result",
+            Self::SavedSessionError => "saved_session_error",
             Self::ClientHello => "client_hello",
             Self::AuthSuccess => "auth_success",
             Self::Error => "error",

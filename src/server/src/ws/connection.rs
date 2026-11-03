@@ -47,6 +47,7 @@ fn register_client(
         supports_shared_playback_control: false,
         supports_room_moderation: false,
         supports_room_administrator: false,
+        supports_persistent_rooms: false,
         supports_room_permissions: false,
         supports_media_queue: false,
         supports_room_access: false,

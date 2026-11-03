@@ -149,7 +149,7 @@ pub(in crate::ws) async fn handle_ready(
                 .get(room_id)
                 .is_some_and(|room| room.clients.iter().any(|id| id == client_id));
         if belongs_to_room {
-            let crate::types::ServerState { clients, rooms } = &mut *state;
+            let crate::types::ServerState { clients, rooms, .. } = &mut *state;
             let room = rooms
                 .get_mut(room_id)
                 .expect("membership check requires an existing room");
@@ -190,7 +190,7 @@ pub(in crate::ws) async fn handle_leave_room(
 ) {
     let left = {
         let mut state = state.write().await;
-        let crate::types::ServerState { clients, rooms } = &mut *state;
+        let crate::types::ServerState { clients, rooms, .. } = &mut *state;
         let room_id = clients.get(client_id).and_then(|c| c.room_id.clone());
         // A cancelled admission can arrive after the client has moved to another room.
         if expected_room.is_some() && room_id.as_deref() != expected_room {
@@ -241,7 +241,7 @@ pub(in crate::ws) async fn handle_close_room(client_id: &str, state: &SharedStat
                     "Only the room host can close the room",
                 ),
                 Some(_) => {
-                    let crate::types::ServerState { clients, rooms } = &mut *state;
+                    let crate::types::ServerState { clients, rooms, .. } = &mut *state;
                     let senders = close_room_parts(&room_id, clients, rooms).unwrap_or_default();
                     let message = WsMessage {
                         msg_type: ServerMessageType::RoomClosed,

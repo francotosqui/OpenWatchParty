@@ -139,7 +139,7 @@ fn remove_from_room(
         room.administrator_user_id = None;
         crate::room::send_room_administrator(room, &state.clients, None);
     }
-    let ServerState { clients, rooms } = state;
+    let ServerState { clients, rooms, .. } = state;
     let mut removed = Vec::new();
     for target_id in target_ids {
         let sender = clients.get(&target_id).map(|client| client.sender.clone());
@@ -718,7 +718,7 @@ mod tests {
 
         let notification = {
             let mut locked = state.write().await;
-            let crate::types::ServerState { clients, rooms } = &mut *locked;
+            let crate::types::ServerState { clients, rooms, .. } = &mut *locked;
             crate::room::handle_leave("host", clients, rooms).unwrap()
         };
         crate::room::send_leave_notification(&notification, "test host change");

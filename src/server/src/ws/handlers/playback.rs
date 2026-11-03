@@ -321,7 +321,7 @@ pub(in crate::ws) async fn handle_playback(
 
     let outcome = {
         let mut state = state.write().await;
-        let crate::types::ServerState { clients, rooms } = &mut *state;
+        let crate::types::ServerState { clients, rooms, .. } = &mut *state;
 
         if let Some(room) = rooms.get_mut(&room_id) {
             if !room.clients.iter().any(|id| id == client_id) {
@@ -1211,7 +1211,7 @@ mod tests {
                 .get_mut("guest")
                 .unwrap()
                 .supports_host_transfer = true;
-            let crate::types::ServerState { clients, rooms } = &mut *locked;
+            let crate::types::ServerState { clients, rooms, .. } = &mut *locked;
             let notification = crate::room::handle_leave("host", clients, rooms).unwrap();
             crate::room::send_leave_notification(&notification, "test transfer");
             clients.get_mut("host").unwrap().room_id = Some("r1".to_string());
@@ -1505,7 +1505,7 @@ mod tests {
 
         assert!(test_helpers::recv_msg(&mut host_rx).is_none());
         let mut locked = state.write().await;
-        let crate::types::ServerState { clients, rooms } = &mut *locked;
+        let crate::types::ServerState { clients, rooms, .. } = &mut *locked;
         let room = rooms.get_mut("r1").unwrap();
         assert!(room.pending_play.is_some());
         let hold = room.guest_command_until.expect("hold while the play waits");
