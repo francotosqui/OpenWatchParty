@@ -50,7 +50,7 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 35] = [
 ];
 
 /// Message types the server sends, plus `other` for anything not listed.
-pub const SERVER_MESSAGE_TYPES: [&str; 29] = [
+pub const SERVER_MESSAGE_TYPES: [&str; 30] = [
     "room_access",
     "join_requests",
     "join_pending",
@@ -74,6 +74,7 @@ pub const SERVER_MESSAGE_TYPES: [&str; 29] = [
     "pong",
     "client_left",
     "room_closed",
+    "room_left",
     "chat_message",
     "queue_state",
     "queue_details",
@@ -326,7 +327,11 @@ impl Metrics {
     /// for an `error` message.
     pub fn message_delivered(&self, msg: &crate::types::WsMessage) {
         self.messages_sent.inc(msg.msg_type.as_str());
-        if matches!(msg.msg_type, crate::types::ServerMessageType::Error | crate::types::ServerMessageType::SavedSessionError) {
+        if matches!(
+            msg.msg_type,
+            crate::types::ServerMessageType::Error
+                | crate::types::ServerMessageType::SavedSessionError
+        ) {
             if let Some(code) = msg
                 .payload
                 .as_ref()
@@ -683,9 +688,18 @@ mod room_administrator_tests {
 mod saved_session_metric_tests {
     use super::*;
     #[test]
-    fn saved_session_errors_are_counted(){
-        let metrics=Metrics::new();
-        metrics.message_delivered(&crate::types::WsMessage{msg_type:crate::types::ServerMessageType::SavedSessionError,room:None,client:None,payload:Some(serde_json::json!({"request_id":"r","code":"SAVED_SESSION_BUSY","message":"Busy"})),ts:0,server_ts:Some(0)});
-        assert_eq!(metrics.errors_sent.get("SAVED_SESSION_BUSY"),1);
+    fn saved_session_errors_are_counted() {
+        let metrics = Metrics::new();
+        metrics.message_delivered(&crate::types::WsMessage {
+            msg_type: crate::types::ServerMessageType::SavedSessionError,
+            room: None,
+            client: None,
+            payload: Some(
+                serde_json::json!({"request_id":"r","code":"SAVED_SESSION_BUSY","message":"Busy"}),
+            ),
+            ts: 0,
+            server_ts: Some(0),
+        });
+        assert_eq!(metrics.errors_sent.get("SAVED_SESSION_BUSY"), 1);
     }
 }

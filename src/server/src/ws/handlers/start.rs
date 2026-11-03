@@ -59,7 +59,9 @@ pub(in crate::ws) async fn handle_readiness(
 
     let in_room = {
         let mut state = state.write().await;
-        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) { return; }
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) {
+            return;
+        }
         let crate::types::ServerState { clients, rooms, .. } = &mut *state;
         let room = clients
             .get(client_id)
@@ -113,7 +115,9 @@ pub(in crate::ws) async fn handle_start_now(
     }
     let outcome = {
         let mut state = state.write().await;
-        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) { return; }
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) {
+            return;
+        }
         let crate::types::ServerState { clients, rooms, .. } = &mut *state;
         let room = parsed
             .room

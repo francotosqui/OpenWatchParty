@@ -18,6 +18,7 @@
       updateCreateRoomButton();
       updateServerLabel();
       ui.renderHomeWatchParties();
+      ui.updateSavedSessions?.();
       return;
     }
     const redrawingRoom = state.inRoom
@@ -55,6 +56,7 @@
         if (input) input.value = chatDraft;
       }
     }
+    ui.updateSavedSessions?.();
     // Leaving the room also takes its "up next" strip off the page.
     if (!state.inRoom && ui.updateQueue) ui.updateQueue();
     if (!state.inRoom && ui.updateStartLabel) ui.updateStartLabel();

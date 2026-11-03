@@ -93,8 +93,10 @@ fn detach_client_from_room(
     rooms: &mut HashMap<String, Room>,
     allow_host_transfer: bool,
 ) -> Option<LeaveOutcome> {
-    let current=clients.get(client_id)?.room_id.as_deref()?;
-    if rooms.get(current).is_some_and(crate::room::is_saving) { return None; }
+    let current = clients.get(client_id)?.room_id.as_deref()?;
+    if rooms.get(current).is_some_and(crate::room::is_saving) {
+        return None;
+    }
     let client = clients.get_mut(client_id)?;
     let room_id = client.room_id.take()?;
     let room = rooms.get_mut(&room_id)?;
@@ -354,7 +356,11 @@ pub(crate) async fn handle_disconnect_if(
             return false;
         }
         let room_id = clients.get(client_id).and_then(|c| c.room_id.clone());
-        if let Some(saving) = room_id.as_ref().and_then(|id| rooms.get_mut(id)).and_then(|room|room.saving.as_mut()) {
+        if let Some(saving) = room_id
+            .as_ref()
+            .and_then(|id| rooms.get_mut(id))
+            .and_then(|room| room.saving.as_mut())
+        {
             saving.deferred_disconnects.insert(client_id.into());
             return false;
         }

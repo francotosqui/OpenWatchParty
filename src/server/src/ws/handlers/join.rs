@@ -241,7 +241,9 @@ pub(super) async fn join_room(
 
     let joined = {
         let mut state = state.write().await;
-        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) { return; }
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) {
+            return;
+        }
         let (notifications, previous_leave, participants) = if !state.rooms.contains_key(room_id) {
             let sender = state.clients.get(client_id).map(|c| c.sender.clone());
             let error = error_message(

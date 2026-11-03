@@ -6,13 +6,11 @@ use crate::room::{
     handle_leave, participant_statuses_message, participant_tracks_message,
     send_leave_notification, send_room_participant_list,
 };
-use crate::types::{
-    IncomingMessage, Room, ServerMessageType, SharedState, WsMessage,
-};
-use crate::utils::now_ms;
-use log::info;
 #[cfg(test)]
 use crate::types::PlayState;
+use crate::types::{IncomingMessage, Room, ServerMessageType, SharedState, WsMessage};
+use crate::utils::now_ms;
+use log::info;
 
 fn resolve_host_name(
     payload: Option<&serde_json::Value>,
@@ -53,7 +51,14 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
 
     info!("Creating room room_id={room_id} client_id={client_id} name={room_name:?}");
 
-    Room::new(room_id, client_id.to_string(), room_name, media_id, start_pos, now_ms())
+    Room::new(
+        room_id,
+        client_id.to_string(),
+        room_name,
+        media_id,
+        start_pos,
+        now_ms(),
+    )
 }
 
 pub(super) fn insert_and_notify(
@@ -149,7 +154,9 @@ pub(in crate::ws) async fn handle_create_room(
     let payload_ref = parsed.payload.as_ref();
     {
         let mut state = state.write().await;
-        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) { return; }
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &state) {
+            return;
+        }
         let should_leave_guest_room = state
             .clients
             .get(client_id)

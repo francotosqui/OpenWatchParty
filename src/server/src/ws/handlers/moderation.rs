@@ -53,7 +53,12 @@ fn remove_from_room(
     let Some(room) = state.rooms.get(&room_id) else {
         return Outcome::Error(ErrorCode::NotInRoom, "Client is not in a room");
     };
-    if crate::room::is_saving(room) { return Outcome::Error(ErrorCode::RoomSaveInProgress,"The room is being saved; try again when it finishes"); }
+    if crate::room::is_saving(room) {
+        return Outcome::Error(
+            ErrorCode::RoomSaveInProgress,
+            "The room is being saved; try again when it finishes",
+        );
+    }
     let actor = &state.clients[client_id];
     if !crate::room::can_control(room, client_id, actor) {
         return Outcome::Error(

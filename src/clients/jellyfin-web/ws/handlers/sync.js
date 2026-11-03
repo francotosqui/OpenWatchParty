@@ -193,7 +193,9 @@
       && Boolean(msg.payload?.media_id) && msg.payload.media_id !== state.roomMediaId;
     applyRoomState(msg);
     if (advanced) state.readyRoomId = '';
-    const acceptedAsGuest = !state.isHost || advanced;
+    const resumed = state.savedResumeRoomId === msg.room;
+    const acceptedAsGuest = !state.isHost || advanced || resumed;
+    if (resumed) state.savedResumeRoomId = '';
     state.inviteJoinPending = false;
     if (OWP.actions?.completeRoomRejoin) OWP.actions.completeRoomRejoin(msg.room);
     ui.render();

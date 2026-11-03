@@ -3,5 +3,6 @@ require('../ui/panel-elements.js');
 require('../ui/lobby.js');
 require('../ui/participants.js');
 require('../ui/leave-confirm.js');
+require('../ui/saved-sessions.js');
 require('../ui/room.js');
 require('../ui/render.js');

@@ -97,7 +97,9 @@ fn declared_features(payload: Option<&serde_json::Value>) -> Option<Vec<String>>
     if declared.contains(&ROOM_ACCESS_FEATURE) {
         supported.push(ROOM_ACCESS_FEATURE.to_string());
     }
-    if declared.contains(&PERSISTENT_ROOMS_FEATURE) { supported.push(PERSISTENT_ROOMS_FEATURE.to_string()); }
+    if declared.contains(&PERSISTENT_ROOMS_FEATURE) {
+        supported.push(PERSISTENT_ROOMS_FEATURE.to_string());
+    }
     Some(supported)
 }
 
@@ -167,7 +169,8 @@ async fn handle_jwt_auth(
                     client.supports_room_moderation = features.is_some_and(|features| {
                         features.iter().any(|f| f == ROOM_MODERATION_FEATURE)
                     });
-                    client.supports_persistent_rooms = features.is_some_and(|f| f.iter().any(|v| v == PERSISTENT_ROOMS_FEATURE));
+                    client.supports_persistent_rooms =
+                        features.is_some_and(|f| f.iter().any(|v| v == PERSISTENT_ROOMS_FEATURE));
                     client.supports_room_administrator = features.is_some_and(|features| {
                         features.iter().any(|f| f == ROOM_ADMINISTRATOR_FEATURE)
                     });
@@ -308,7 +311,9 @@ pub(in crate::ws) async fn handle_auth(
     }
     let mut features = declared_features(parsed.payload.as_ref());
     if !jwt_config.enabled || state.read().await.saved_room_store.is_none() {
-        if let Some(features) = features.as_mut() { features.retain(|f| f != PERSISTENT_ROOMS_FEATURE); }
+        if let Some(features) = features.as_mut() {
+            features.retain(|f| f != PERSISTENT_ROOMS_FEATURE);
+        }
     }
 
     if let Some(payload) = &parsed.payload {

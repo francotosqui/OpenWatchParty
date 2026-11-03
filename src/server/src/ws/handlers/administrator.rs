@@ -50,7 +50,9 @@ pub(in crate::ws) async fn handle_set_room_administrator(
     };
     let error = {
         let mut locked = state.write().await;
-        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &locked) { return; }
+        if crate::room::reject_saving(client_id, parsed.room.as_deref(), &locked) {
+            return;
+        }
         let ServerState { clients, rooms, .. } = &mut *locked;
         let room_id = clients
             .get(client_id)

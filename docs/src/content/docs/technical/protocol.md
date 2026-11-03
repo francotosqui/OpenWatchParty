@@ -1286,3 +1286,9 @@ ID is stable, while a resumed room has a fresh live room ID and fresh invites.
 Clients must correlate request IDs and discard responses belonging to previous
 connection/account generations. A transport loss after a committed mutation is
 resolved by listing again, not by assuming that an unacknowledged save failed.
+
+For clients negotiating `persistent_rooms`, a successful explicit `leave_room`
+also returns `room_left` with the departed live room in the envelope and an empty
+payload. This acknowledgement lets the client leave an existing room before
+requesting resume without treating local UI reset as proof of server departure.
+Legacy clients receive no new departure acknowledgement.

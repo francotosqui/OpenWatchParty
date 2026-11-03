@@ -1,4 +1,3 @@
-pub(in crate::ws) mod saved_sessions;
 pub(crate) mod access;
 mod administrator;
 mod auth;
@@ -11,6 +10,7 @@ mod permissions;
 mod playback;
 mod queue;
 mod queue_suggestions;
+pub(in crate::ws) mod saved_sessions;
 mod start;
 mod status;
 mod tracks;

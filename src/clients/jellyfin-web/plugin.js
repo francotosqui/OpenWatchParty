@@ -149,6 +149,7 @@
       load('ui/lobby.js'),
       load('ui/participants.js'),
       load('ui/leave-confirm.js'),
+      load('ui/saved-sessions.js'),
     ]);
     await load('ui/room.js');
     await Promise.all([
@@ -170,6 +171,7 @@
       load('chat/input.js'),
     ]);
     await load('ws/send.js');
+    await load('app/saved-sessions.js');
     await load('ws/auth.js');
     await load('ws/validation.js');
     await Promise.all([

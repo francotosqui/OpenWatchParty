@@ -16,6 +16,7 @@
     const confirm = document.getElementById('owp-leave-confirm');
     const leaveBtn = document.getElementById('owp-btn-leave');
     if (!confirm || !leaveBtn) return;
+    const resuming = Boolean(state.savedResumeAfterLeave);
     const nextHost = nextHostParticipant();
     const canTransfer = Boolean(nextHost);
     const label = state.isHost && !canTransfer ? t('closeRoom') : t('leaveRoom');
@@ -31,16 +32,17 @@
     cancel.dataset.action = 'cancel';
     cancel.type = 'button';
     cancel.onclick = () => {
+      state.savedResumeAfterLeave = null;
       views.toggleRoomSection('leave');
       leaveBtn.focus();
     };
     const question = createElement(
       'span',
       'owp-leave-question',
-      state.isHost && !canTransfer ? t('closeRoomQuestion') : t('leaveRoomQuestion')
+      resuming ? t('savedLeaveQuestion') : state.isHost && !canTransfer ? t('closeRoomQuestion') : t('leaveRoomQuestion')
     );
     const buttons = [question, cancel];
-    if (canTransfer) {
+    if (canTransfer && !resuming) {
       const leave = createElement('button', 'owp-pill-btn secondary', t('leave'));
       leave.id = 'owp-btn-leave-room';
       leave.dataset.action = 'leave';
@@ -51,12 +53,13 @@
     const confirmLeave = createElement(
       'button',
       'owp-pill-btn danger',
-      state.isHost ? (canTransfer ? t('closeForEveryone') : t('closeRoom')) : t('leave')
+      resuming ? t('savedLeaveAndResume') : state.isHost ? (canTransfer ? t('closeForEveryone') : t('closeRoom')) : t('leave')
     );
     confirmLeave.id = 'owp-btn-confirm-leave';
     confirmLeave.dataset.action = state.isHost ? 'close' : 'leave';
     confirmLeave.type = 'button';
     confirmLeave.onclick = () => {
+      if (resuming) { OWP.savedSessions.leaveAndResume(); return; }
       const action = state.isHost ? OWP.actions?.closeRoom : OWP.actions?.leaveRoom;
       if (action) action();
     };

@@ -109,7 +109,6 @@ pub fn setup_room_with_host(
     rx
 }
 
-
 pub fn saved_room(owner: &str) -> crate::persistence::SavedRoom {
     serde_json::from_value(serde_json::json!({
         "schema_version":1,"id":uuid::Uuid::new_v4().to_string(),"owner_user_id":owner,
