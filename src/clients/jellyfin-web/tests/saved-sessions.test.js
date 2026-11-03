@@ -31,7 +31,8 @@ describe('saved room sessions', () => {
     OWP.state.serverFeatures = []; OWP.ui.render(true); assert.equal(element('owp-btn-saved'), null);
   });
   it('lists private sessions and ignores stale responses after account changes', () => {
-    OWP.actions.listSavedSessions(); const old = sent.at(-1).payload.request_id; OWP.state.userId = 'other';
+    OWP.actions.listSavedSessions(); const old = sent.at(-1).payload.request_id;
+    OWP.state.userId = 'other'; window.ApiClient.getCurrentUserId = () => 'other';
     OWP.savedSessions.onList({ payload: { request_id: old, sessions: [snapshot()] } }); assert.deepEqual(OWP.state.savedSessions, []);
     receiveList([snapshot()]); assert.equal(OWP.state.savedSessions.length, 1); OWP.savedSessions.reset(); assert.deepEqual(OWP.state.savedSessions, []);
   });
@@ -74,6 +75,26 @@ describe('saved room sessions', () => {
     assert.equal(sent.some(message => message.type === 'resume_saved_session'), false);
     await OWP.savedSessions.onRoomLeft({ room: 'room', payload: {} });
     assert.equal(sent.at(-1).type, 'resume_saved_session');
+  });
+  it('hides and ignores private sessions once Jellyfin switches to another account', () => {
+    OWP.actions.listSavedSessions(); const old = sent.at(-1).payload.request_id;
+    window.ApiClient.getCurrentUserId = () => 'other';
+    OWP.savedSessions.onList({ payload: { request_id: old, sessions: [snapshot()] } }); assert.deepEqual(OWP.state.savedSessions, []);
+    OWP.ui.render(true); assert.equal(element('owp-btn-saved'), null);
+    const count = sent.length; OWP.actions.discardSavedSession(snapshot().id); assert.equal(sent.length, count);
+  });
+  it('matches the Jellyfin account regardless of GUID formatting', () => {
+    OWP.state.userId = 'AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE';
+    window.ApiClient.getCurrentUserId = () => 'aaaaaaaabbbbccccddddeeeeeeeeeeee';
+    receiveList([snapshot()]); assert.equal(OWP.state.savedSessions.length, 1);
+  });
+  it('drops a Save and close confirmation when the room changes before accepting', () => {
+    Object.assign(OWP.state, { inRoom: true, isHost: true, roomId: 'room-A', roomName: 'Room A', roomBarSection: 'saved' });
+    OWP.ui.render(true); element('owp-saved-save-current').click(); assert.ok(element('owp-saved-confirm'));
+    Object.assign(OWP.state, { roomId: 'room-B', roomName: 'Room B' }); OWP.ui.render(true);
+    assert.equal(element('owp-saved-confirm'), null);
+    OWP.actions.saveRoomSession('room-A');
+    assert.equal(sent.some(message => message.type === 'save_room_session'), false);
   });
 
 });

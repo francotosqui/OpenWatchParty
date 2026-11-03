@@ -5,7 +5,8 @@
   const state = OWP.state;
   const t = OWP.i18n.t;
   const { createElement, createIcon } = views;
-  const supported = () => state.serverFeatures.includes('persistent_rooms') && state.connectionPhase === 'authenticated';
+  const supported = () => state.serverFeatures.includes('persistent_rooms') && state.connectionPhase === 'authenticated'
+    && OWP.savedSessions?.sameAccount?.() !== false;
   const open = () => state.inRoom ? state.roomBarSection === 'saved' : state.savedSessionsOpen;
   const time = value => {
     const seconds = Math.max(0, Math.floor(value));
@@ -26,13 +27,15 @@
     returnFocus(confirm?.returnId || 'owp-btn-saved');
   };
   const ask = (action, session, returnId) => {
-    state.savedSessionConfirmation = { action, id: session?.id, name: session?.name || state.roomName, returnId };
+    state.savedSessionConfirmation = { action, id: session?.id, name: session?.name || state.roomName, returnId, roomId: action === 'save' ? state.roomId : undefined };
     updateSavedSessions();
   };
   const renderConfirmation = () => {
     const existing = document.getElementById('owp-saved-confirm');
     const confirmation = state.savedSessionConfirmation;
-    if (!confirmation || !supported()) { existing?.remove(); return; }
+    const stale = confirmation?.action === 'save' && (!state.inRoom || !state.isHost || confirmation.roomId !== state.roomId);
+    if (stale) state.savedSessionConfirmation = null;
+    if (!confirmation || stale || !supported()) { existing?.remove(); return; }
     const key = JSON.stringify(confirmation);
     if (existing?.dataset.confirmKey === key) return;
     existing?.remove();
@@ -50,7 +53,7 @@
     const cancel = button(t('cancel'), 'owp-pill-btn secondary', cancelConfirmation, 'owp-saved-confirm-cancel');
     const accept = button(t(confirmation.action === 'save' ? 'savedSaveClose' : 'savedDiscard'), `owp-pill-btn ${confirmation.action === 'save' ? 'primary' : 'danger'}`, () => {
       state.savedSessionConfirmation = null;
-      if (confirmation.action === 'save') OWP.actions.saveRoomSession();
+      if (confirmation.action === 'save') OWP.actions.saveRoomSession(confirmation.roomId);
       else OWP.actions.discardSavedSession(confirmation.id);
       updateSavedSessions(); returnFocus(confirmation.returnId);
     }, 'owp-saved-confirm-accept');

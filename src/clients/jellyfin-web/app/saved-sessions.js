@@ -4,8 +4,14 @@
   const actions = OWP.actions;
   const t = OWP.i18n.t;
   let sequence = 0;
+  const accountId = value => String(value || '').replace(/-/g, '').toLowerCase();
+  // The socket keeps the previous account until re-authentication; private lists must not leak to the next Jellyfin user.
+  const sameAccount = () => {
+    const jellyfinUser = window.ApiClient?.getCurrentUserId?.();
+    return !jellyfinUser || !state.userId || accountId(jellyfinUser) === accountId(state.userId);
+  };
   const supported = () => state.serverFeatures.includes('persistent_rooms')
-    && state.connectionPhase === 'authenticated' && state.ws?.readyState === 1;
+    && state.connectionPhase === 'authenticated' && state.ws?.readyState === 1 && sameAccount();
   const update = () => OWP.ui.updateSavedSessions?.();
   const identity = () => ({ ws: state.ws, userId: state.userId });
   const current = request => request && request.ws === state.ws && request.userId === state.userId && supported();
@@ -36,15 +42,15 @@
     }, 15000, 'saved-sessions');
     update();
   };
-  const mutate = (action, id) => {
+  const mutate = (action, id, roomId) => {
     if (!supported() || state.savedSessionPending) return;
-    if (action === 'save' && (!state.inRoom || !state.isHost)) return;
+    if (action === 'save' && (!state.inRoom || !state.isHost || roomId !== state.roomId)) return;
     if (id && !state.savedSessions.some(session => session.id === id && !session.active)) return;
     const pending = request(action, id);
     state.savedSessionPending = pending; state.savedSessionsError = '';
     actions.send({ save: 'save_room_session', discard: 'discard_saved_session', resume: 'resume_saved_session' }[action], {
       request_id: pending.requestId, ...(id ? { id } : {})
-    });
+    }, roomId);
     watchTimeout(pending); update();
   };
   const resumeSavedSession = async id => {
@@ -127,8 +133,8 @@
     state.savedSessionsError = t(errorKey(msg.payload.code)); state.roomBarSection = 'saved';
     update(); return true;
   };
-  Object.assign(actions, { listSavedSessions, saveRoomSession: () => mutate('save'), resumeSavedSession, discardSavedSession: id => mutate('discard', id) });
-  OWP.savedSessions = { supported, reset, onList, onResult, onError, onRoomLeft, onGenericError, leaveAndResume, onAuthenticated: () => {
+  Object.assign(actions, { listSavedSessions, saveRoomSession: roomId => mutate('save', undefined, roomId), resumeSavedSession, discardSavedSession: id => mutate('discard', id) });
+  OWP.savedSessions = { supported, sameAccount, reset, onList, onResult, onError, onRoomLeft, onGenericError, leaveAndResume, onAuthenticated: () => {
     if (supported()) listSavedSessions(); else reset();
   } };
 })();
