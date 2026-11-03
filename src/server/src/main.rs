@@ -1,6 +1,7 @@
 mod auth;
 mod messaging;
 mod metrics;
+mod persistence;
 mod room;
 mod routes;
 mod tasks;
