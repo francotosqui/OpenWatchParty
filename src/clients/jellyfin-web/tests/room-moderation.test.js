@@ -83,6 +83,55 @@ describe('room moderation client', () => {
     assert.equal(list().querySelector('.owp-mod-more'), null);
   });
 
+  it('confirms one administrator, shows the badge, and offers revocation to Owner', () => {
+    const sent = [];
+    renderPeople({
+      serverFeatures: ['room_moderation', 'room_administrator'],
+      ws: { readyState: 1, send: data => sent.push(JSON.parse(data)) }
+    });
+    moreFor('guest-id').click();
+    assert.equal(list().querySelector('.owp-mod-role').textContent, 'Make administrator');
+    list().querySelector('.owp-mod-role').click();
+    assert.match(list().querySelector('.owp-mod-confirm').textContent, /Make Ana administrator/);
+    list().querySelector('[data-moderation-action="confirm-role"]').click();
+    assert.equal(focused, moreFor('guest-id'));
+    assert.deepEqual(sent.map(message => ({ type: message.type, payload: message.payload })), [
+      { type: 'set_room_administrator', payload: { participant_id: 'guest-id', enabled: true } }
+    ]);
+    OWP._wsHandlers.handleRoomAdministrator({ room: 'room-1', payload: { user_id: 'ana', participant_ids: ['guest-id'] } });
+    assert.equal(list().querySelectorAll('.owp-host-badge')[1].textContent, 'Administrator');
+    moreFor('guest-id').click();
+    assert.equal(list().querySelector('.owp-mod-role').textContent, 'Remove administrator role');
+    moreFor('other-id').click();
+    assert.equal(list().querySelector('.owp-mod-role'), null);
+  });
+
+  it('lets an administrator moderate guests but not Owner or another administrator tab', () => {
+    renderPeople({
+      clientId: 'guest-id', isHost: false, isAdministrator: true,
+      administratorParticipantIds: ['guest-id', 'ana-tab'],
+      participants: [...participants, { id: 'ana-tab', name: 'Ana', isHost: false }]
+    });
+    assert.deepEqual(list().querySelectorAll('.owp-mod-more').map(button => button.dataset.participantId), ['other-id']);
+    moreFor('other-id').click();
+    assert.equal(list().querySelector('.owp-mod-role'), null);
+  });
+
+  it('lets Owner revoke an administrator who disconnected', () => {
+    const sent = [];
+    renderPeople({
+      serverFeatures: ['room_moderation', 'room_administrator'],
+      administratorUserId: 'ana-account', administratorParticipantIds: [],
+      ws: { readyState: 1, send: data => sent.push(JSON.parse(data)) }
+    });
+    assert.equal(list().querySelector('.owp-offline-admin').textContent.includes('Administrator disconnected'), true);
+    list().querySelector('[data-moderation-action="revoke-offline"]').click();
+    list().querySelector('[data-moderation-action="confirm-offline"]').click();
+    assert.deepEqual(sent.map(message => ({ type: message.type, payload: message.payload })), [
+      { type: 'set_room_administrator', payload: { user_id: 'ana-account', enabled: false } }
+    ]);
+  });
+
   it('opens one action block, and Cancel or Escape closes it and restores focus', () => {
     renderPeople();
     moreFor('guest-id').focus();

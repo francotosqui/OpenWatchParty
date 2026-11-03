@@ -13,6 +13,7 @@
   // the queue and says when the credits start. Nothing here runs for a guest,
   // outside a room or with a server without media_queue.
   const isQueueHost = () => state.inRoom && state.isHost && state.serverFeatures.includes('media_queue');
+  const canEditQueue = () => state.inRoom && (state.isHost || state.isAdministrator) && state.serverFeatures.includes('media_queue');
   const send = (type, payload) => {
     if (OWP.actions?.send) OWP.actions.send(type, payload);
   };
@@ -132,13 +133,13 @@
   };
 
   const add = async (item) => {
-    if (!isQueueHost()) return;
+    if (!canEditQueue()) return;
     const roomId = state.roomId;
     const clientId = state.clientId;
     const mediaId = state.roomMediaId;
     const userId = window.ApiClient.getCurrentUserId();
     const generation = roomGeneration;
-    const isCurrentContext = () => generation === roomGeneration && isQueueHost()
+    const isCurrentContext = () => generation === roomGeneration && canEditQueue()
       && state.roomId === roomId && state.clientId === clientId
       && state.roomMediaId === mediaId && window.ApiClient.getCurrentUserId() === userId;
     let selected;

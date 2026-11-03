@@ -1,4 +1,5 @@
 pub(crate) mod access;
+mod administrator;
 mod auth;
 mod chat;
 mod create;
@@ -13,6 +14,7 @@ mod start;
 mod status;
 mod tracks;
 
+pub(in crate::ws) use administrator::handle_set_room_administrator;
 pub(in crate::ws) use auth::handle_auth;
 pub(in crate::ws) use chat::handle_chat_message;
 pub(in crate::ws) use create::handle_create_room;

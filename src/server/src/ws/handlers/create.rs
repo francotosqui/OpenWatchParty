@@ -58,6 +58,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         room_id,
         name: room_name,
         host_id: client_id.to_string(),
+        administrator_user_id: None,
         media_id,
         clients: vec![client_id.to_string()],
         ready_clients: HashSet::from([client_id.to_string()]),
@@ -244,6 +245,7 @@ pub(in crate::ws) async fn handle_create_room(
             crate::room::access::send_access(room, clients);
             crate::room::send_room_capabilities(room, clients);
             crate::room::send_room_permissions(room, clients, Some(client_id));
+            crate::room::send_room_administrator(room, clients, Some(client_id));
             send_room_participant_list(room, clients);
         }
         if let Some((statuses, tracks)) = participant_statuses {

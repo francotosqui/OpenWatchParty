@@ -432,6 +432,8 @@
     .owp-mod-actions { flex-basis: 100%; margin: ${px(6)} 0 ${px(2)}; padding: ${px(8)}; border-radius: ${round(8)}; background: rgba(var(--owp-ink),0.06); }
     .owp-mod-hint { font-size: ${px(11)}; color: var(--owp-muted); margin-bottom: ${px(8)}; }
     .owp-mod-buttons { display: flex; justify-content: flex-end; gap: ${px(6)}; }
+    .owp-mod-confirm { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: ${px(6)}; margin-bottom: ${px(8)}; font-size: ${px(12)}; }
+    .owp-mod-confirm > span { flex-basis: 100%; }
     .owp-host-badge {
       flex-shrink: 0; padding: 0 ${px(4)}; border-radius: ${round(5)};
       background: var(--owp-good-bg); color: var(--owp-good); font-size: ${px(11)};

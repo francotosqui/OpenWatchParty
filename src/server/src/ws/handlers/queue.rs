@@ -408,7 +408,10 @@ pub(in crate::ws) async fn handle_queue(
         match room {
             None => Err((ErrorCode::NotInRoom, "Client is not in a room")),
             Some(room)
-                if room.host_id != client_id && !command.is_allowed_for_guest(room.permissions) =>
+                if !clients
+                    .get(client_id)
+                    .is_some_and(|client| crate::room::can_control(room, client_id, client))
+                    && !command.is_allowed_for_guest(room.permissions) =>
             {
                 Err((
                     ErrorCode::HostPermissionRequired,

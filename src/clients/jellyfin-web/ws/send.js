@@ -181,6 +181,17 @@
     send('set_room_permissions', { seek, change_media, edit_queue });
   };
 
+  const setRoomAdministrator = (participantId, enabled) => {
+    if (state.isHost && state.serverFeatures.includes('room_administrator')) {
+      send('set_room_administrator', { participant_id: participantId, enabled });
+    }
+  };
+  const revokeOfflineAdministrator = userId => {
+    if (state.isHost && state.serverFeatures.includes('room_administrator') && userId === state.administratorUserId) {
+      send('set_room_administrator', { user_id: userId, enabled: false });
+    }
+  };
+
   Object.assign(actions, {
     setRoomAccess(approval, unlisted) {
       if (state.serverFeatures.includes('room_access')) send('set_room_access', { approval, unlisted });
@@ -202,6 +213,8 @@
     normalizePlaybackRate,
     resetDriftCorrection,
     resetRoomState,
+    setRoomAdministrator,
+    revokeOfflineAdministrator,
     resetRoomPlayback,
     resetRoomMembership,
     resetRoomUI,

@@ -2,6 +2,70 @@ use crate::types::{Client, Room, RoomPermissions, ServerMessageType, WsMessage};
 use crate::utils::now_ms;
 use std::collections::HashMap;
 
+pub(crate) fn send_room_administrator(
+    room: &Room,
+    clients: &HashMap<String, Client>,
+    only: Option<&str>,
+) {
+    let participant_ids = room
+        .clients
+        .iter()
+        .filter(|id| {
+            clients.get(*id).is_some_and(|client| {
+                !client.user_id.is_empty()
+                    && room.administrator_user_id.as_deref() == Some(client.user_id.as_str())
+            })
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    let senders = room
+        .clients
+        .iter()
+        .filter(|id| only.is_none_or(|only| only == id.as_str()))
+        .filter_map(|id| clients.get(id))
+        .filter(|client| client.supports_room_administrator)
+        .map(|client| client.sender.clone())
+        .collect::<Vec<_>>();
+    crate::messaging::send_to_senders(
+        &senders,
+        &WsMessage {
+            msg_type: ServerMessageType::RoomAdministrator,
+            room: Some(room.room_id.clone()),
+            client: None,
+            payload: Some(
+                serde_json::json!({"user_id": room.administrator_user_id, "participant_ids": participant_ids}),
+            ),
+            ts: now_ms(),
+            server_ts: Some(now_ms()),
+        },
+        "room administrator",
+    );
+}
+
+#[cfg(test)]
+mod administrator_notification_tests {
+    use super::*;
+    use crate::test_helpers::{create_client_with_rx, create_room, recv_msg};
+
+    #[test]
+    fn administrator_state_reaches_only_feature_aware_members() {
+        let (mut owner, mut owner_rx) = create_client_with_rx("owner", "Owner", true);
+        let (legacy, mut legacy_rx) = create_client_with_rx("legacy", "Legacy", true);
+        owner.supports_room_administrator = true;
+        let mut room = create_room("room", "owner");
+        room.clients.push("legacy".into());
+        room.administrator_user_id = Some("legacy".into());
+        let clients = HashMap::from([("owner".into(), owner), ("legacy".into(), legacy)]);
+
+        send_room_administrator(&room, &clients, None);
+
+        let message = recv_msg(&mut owner_rx).unwrap();
+        assert_eq!(message.msg_type, ServerMessageType::RoomAdministrator);
+        assert_eq!(message.payload.unwrap()["user_id"], "legacy");
+        assert!(recv_msg(&mut legacy_rx).is_none());
+    }
+}
+
 pub(crate) struct ParticipantListNotification {
     legacy_senders: Vec<crate::messaging::ClientSender>,
     moderation_senders: Vec<crate::messaging::ClientSender>,

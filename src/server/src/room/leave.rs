@@ -57,24 +57,33 @@ fn promote_next_host(
     room: &mut Room,
     clients: &HashMap<String, Client>,
 ) -> Option<WsMessage> {
+    let eligible = |id: &&String| {
+        clients
+            .get(*id)
+            .is_some_and(|client| client.supports_host_transfer)
+    };
     let new_host_id = room
         .clients
         .iter()
         .find(|id| {
-            clients
-                .get(*id)
-                .is_some_and(|client| client.supports_host_transfer)
-        })?
+            eligible(id)
+                && clients.get(*id).is_some_and(|client| {
+                    crate::room::role_of(room, id, client) == crate::room::RoomRole::Administrator
+                })
+        })
+        .or_else(|| room.clients.iter().find(eligible))?
         .clone();
     let host_name = clients
         .get(&new_host_id)
         .map(|client| client.user_name.clone())
         .unwrap_or_default();
     room.host_id = new_host_id.clone();
+    room.administrator_user_id = None;
     room.pending_host_reconnect = None;
     super::access::host_changed(room, clients);
     crate::room::send_room_capabilities(room, clients);
     crate::room::reset_room_permissions_for_host(room, clients);
+    crate::room::send_room_administrator(room, clients, None);
     Some(host_changed_message(room_id, &new_host_id, &host_name))
 }
 
@@ -89,6 +98,7 @@ fn detach_client_from_room(
     let room = rooms.get_mut(&room_id)?;
 
     room.clients.retain(|id| id != client_id);
+    crate::room::send_room_administrator(room, clients, None);
     room.ready_clients.remove(client_id);
     room.statuses.remove(client_id);
     room.tracks.remove(client_id);
@@ -154,6 +164,7 @@ fn begin_host_reconnect_grace(
     let user_id = client.user_id.clone();
     client.room_id = None;
     room.clients.retain(|id| id != client_id);
+    crate::room::send_room_administrator(room, clients, None);
     room.ready_clients.remove(client_id);
     room.statuses.remove(client_id);
     room.tracks.remove(client_id);
@@ -730,6 +741,31 @@ mod tests {
                 { "name": "Later", "is_host": false }
             ])
         );
+    }
+
+    #[test]
+    fn host_leave_prefers_connected_administrator_and_clears_role() {
+        let mut clients = HashMap::new();
+        let mut rooms = HashMap::new();
+        for id in ["host", "guest", "ana-one", "ana-two"] {
+            let user_id = if id.starts_with("ana") { "ana" } else { id };
+            let (mut client, _) = test_helpers::create_client_with_rx(user_id, id, true);
+            client.room_id = Some("room".into());
+            client.supports_host_transfer = true;
+            client.supports_room_administrator = true;
+            clients.insert(id.into(), client);
+        }
+        let mut room = test_helpers::create_room("room", "host");
+        room.clients = ["host", "guest", "ana-one", "ana-two"]
+            .map(str::to_string)
+            .into();
+        room.administrator_user_id = Some("ana".into());
+        rooms.insert("room".into(), room);
+
+        handle_leave("host", &mut clients, &mut rooms).unwrap();
+
+        assert_eq!(rooms["room"].host_id, "ana-one");
+        assert_eq!(rooms["room"].administrator_user_id, None);
     }
 
     #[test]

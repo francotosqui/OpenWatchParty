@@ -13,6 +13,7 @@ const PARTICIPANT_STATUS_FEATURE: &str = "participant_status";
 const PARTICIPANT_TRACKS_FEATURE: &str = "participant_tracks";
 const SHARED_PLAYBACK_FEATURE: &str = "shared_playback_control";
 const ROOM_MODERATION_FEATURE: &str = "room_moderation";
+const ROOM_ADMINISTRATOR_FEATURE: &str = "room_administrator";
 const ROOM_PERMISSIONS_FEATURE: &str = "room_permissions";
 const MEDIA_QUEUE_FEATURE: &str = "media_queue";
 const ROOM_ACCESS_FEATURE: &str = "room_access";
@@ -30,6 +31,7 @@ async fn refresh_room_capabilities(client_id: &str, state: &SharedState) {
     {
         crate::room::send_room_capabilities(room, &state.clients);
         crate::room::send_room_permissions(room, &state.clients, Some(client_id));
+        crate::room::send_room_administrator(room, &state.clients, Some(client_id));
     }
 }
 
@@ -72,6 +74,9 @@ fn declared_features(payload: Option<&serde_json::Value>) -> Option<Vec<String>>
     }
     if declared.contains(&ROOM_MODERATION_FEATURE) {
         supported.push(ROOM_MODERATION_FEATURE.to_string());
+    }
+    if declared.contains(&ROOM_ADMINISTRATOR_FEATURE) {
+        supported.push(ROOM_ADMINISTRATOR_FEATURE.to_string());
     }
     if declared.contains(&ROOM_PERMISSIONS_FEATURE) {
         supported.push(ROOM_PERMISSIONS_FEATURE.to_string());
@@ -160,6 +165,9 @@ async fn handle_jwt_auth(
                     client.supports_room_moderation = features.is_some_and(|features| {
                         features.iter().any(|f| f == ROOM_MODERATION_FEATURE)
                     });
+                    client.supports_room_administrator = features.is_some_and(|features| {
+                        features.iter().any(|f| f == ROOM_ADMINISTRATOR_FEATURE)
+                    });
                     client.supports_room_access = features
                         .is_some_and(|features| features.iter().any(|f| f == ROOM_ACCESS_FEATURE));
                     client.supports_room_permissions = features.is_some_and(|features| {
@@ -226,6 +234,8 @@ async fn handle_identity(
                 .is_some_and(|features| features.iter().any(|f| f == SHARED_PLAYBACK_FEATURE));
             client.supports_room_moderation = features
                 .is_some_and(|features| features.iter().any(|f| f == ROOM_MODERATION_FEATURE));
+            client.supports_room_administrator = features
+                .is_some_and(|features| features.iter().any(|f| f == ROOM_ADMINISTRATOR_FEATURE));
             client.supports_room_access =
                 features.is_some_and(|features| features.iter().any(|f| f == ROOM_ACCESS_FEATURE));
             client.supports_room_permissions = features

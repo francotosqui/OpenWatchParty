@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::types::ServerState;
 
 /// Message types a client can send, as named on the wire.
-pub const CLIENT_MESSAGE_TYPES: [&str; 30] = [
+pub const CLIENT_MESSAGE_TYPES: [&str; 31] = [
     "set_room_access",
     "cancel_join",
     "answer_join",
@@ -22,6 +22,7 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 30] = [
     "ready",
     "leave_room",
     "remove_participant",
+    "set_room_administrator",
     "close_room",
     "player_event",
     "state_update",
@@ -45,7 +46,7 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 30] = [
 ];
 
 /// Message types the server sends, plus `other` for anything not listed.
-pub const SERVER_MESSAGE_TYPES: [&str; 25] = [
+pub const SERVER_MESSAGE_TYPES: [&str; 26] = [
     "room_access",
     "join_requests",
     "join_pending",
@@ -55,6 +56,7 @@ pub const SERVER_MESSAGE_TYPES: [&str; 25] = [
     "error",
     "room_list",
     "room_state",
+    "room_administrator",
     "participants_update",
     "participant_list",
     "participant_statuses",
@@ -74,7 +76,7 @@ pub const SERVER_MESSAGE_TYPES: [&str; 25] = [
 ];
 
 /// Error codes the server sends, plus `other` for anything not listed.
-pub const ERROR_CODES: [&str; 30] = [
+pub const ERROR_CODES: [&str; 32] = [
     "AUTHENTICATION_REQUIRED",
     "AUTHENTICATION_FAILED",
     "AUTHENTICATION_EXPIRED",
@@ -104,6 +106,8 @@ pub const ERROR_CODES: [&str; 30] = [
     "INVALID_ACCESS_PAYLOAD",
     "ROOM_APPROVAL_REQUIRED",
     "INVALID_PERMISSIONS_PAYLOAD",
+    "INVALID_ADMINISTRATOR_PAYLOAD",
+    "ADMINISTRATOR_ALREADY_ASSIGNED",
     "other",
 ];
 
@@ -198,13 +202,17 @@ impl<const N: usize> LabeledCounter<N> {
         }
     }
 
-    /// Counts `value`, or `other` when the list has no such value.
+    /// Counts `value`, or the fixed fallback when the list has no such value.
     fn inc(&self, value: &str) {
         let index = self
             .values
             .iter()
             .position(|known| *known == value)
-            .or_else(|| self.values.iter().position(|known| *known == "other"));
+            .or_else(|| {
+                self.values
+                    .iter()
+                    .position(|known| *known == "other" || *known == "unknown")
+            });
         debug_assert!(index.is_some(), "unknown metric label value {value}");
         if let Some(index) = index {
             self.counts[index].fetch_add(1, Ordering::Relaxed);
@@ -634,6 +642,23 @@ mod room_access_tests {
             assert!(SERVER_MESSAGE_TYPES.contains(&name));
         }
         for code in ["INVALID_ACCESS_PAYLOAD", "ROOM_APPROVAL_REQUIRED"] {
+            assert!(ERROR_CODES.contains(&code));
+        }
+    }
+}
+
+#[cfg(test)]
+mod room_administrator_tests {
+    use super::*;
+
+    #[test]
+    fn administrator_wire_names_are_counted() {
+        assert!(CLIENT_MESSAGE_TYPES.contains(&"set_room_administrator"));
+        assert!(SERVER_MESSAGE_TYPES.contains(&"room_administrator"));
+        for code in [
+            "INVALID_ADMINISTRATOR_PAYLOAD",
+            "ADMINISTRATOR_ALREADY_ASSIGNED",
+        ] {
             assert!(ERROR_CODES.contains(&code));
         }
     }

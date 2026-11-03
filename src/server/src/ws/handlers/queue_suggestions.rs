@@ -159,9 +159,13 @@ pub(in crate::ws) async fn handle_queue_suggestions(
                         by,
                         by_user,
                     }),
-                    Command::Dismiss(id) => {
-                        room.queue.dismiss(&id, &by_user, room.host_id == client_id)
-                    }
+                    Command::Dismiss(id) => room.queue.dismiss(
+                        &id,
+                        &by_user,
+                        clients.get(client_id).is_some_and(|client| {
+                            crate::room::can_control(room, client_id, client)
+                        }),
+                    ),
                     Command::Availability(missing) => {
                         room.queue.report_availability(client_id, missing)
                     }

@@ -380,6 +380,11 @@ pub(super) async fn join_room(
             }
             crate::room::send_room_capabilities(room, &state.clients);
             crate::room::send_room_permissions(room, &state.clients, Some(client_id));
+            if joined {
+                crate::room::send_room_administrator(room, &state.clients, None);
+            } else {
+                crate::room::send_room_administrator(room, &state.clients, Some(client_id));
+            }
             super::queue::send_queue_state(room, &state.clients, Some(client_id));
             if joined {
                 super::chat::send_chat_history(room, &state.clients, client_id);

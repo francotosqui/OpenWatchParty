@@ -184,6 +184,7 @@
       case 'auth_success': h.handleAuthSuccess(msg); break;
       case 'room_capabilities': h.handleRoomCapabilities(msg); break;
       case 'room_permissions': h.handleRoomPermissions(msg); break;
+      case 'room_administrator': h.handleRoomAdministrator(msg); break;
       case 'room_state': h.handleRoomState(msg, video); break;
       case 'participants_update': h.handleParticipantsUpdate(msg); break;
       case 'client_left': h.handleClientLeft(msg); break;
