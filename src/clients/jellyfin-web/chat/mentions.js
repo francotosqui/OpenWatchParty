@@ -122,6 +122,7 @@
     list.id = LIST_ID;
     list.className = 'owp-mention-list';
     list.setAttribute('role', 'listbox');
+    for (const type of ['pointerdown', 'mousedown', 'wheel']) list.addEventListener(type, event => event.stopPropagation?.());
     matches.forEach((participant, index) => {
       const option = document.createElement('div');
       option.id = `owp-mention-option-${index}`;
@@ -139,7 +140,15 @@
     hint.className = 'owp-mention-hint';
     hint.textContent = t('mentionHint');
     list.appendChild(hint);
-    input.closest?.('#owp-chat-input-container')?.appendChild(list) ?? input.parentNode?.appendChild(list);
+    // The chat drop-down cuts what sticks out of it: drawn over the page, above
+    // the input, as the emoji suggestions are.
+    document.body.appendChild(list);
+    const rect = input.getBoundingClientRect?.();
+    if (rect) {
+      list.style.left = `${rect.left}px`;
+      list.style.width = `${rect.width}px`;
+      list.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+    }
     input.setAttribute('aria-expanded', 'true');
     input.setAttribute('aria-controls', LIST_ID);
     highlight();

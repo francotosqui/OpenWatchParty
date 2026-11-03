@@ -12,6 +12,7 @@ require('../chat/mentions.js');
 require('../chat/alerts.js');
 require('../chat/messages.js');
 require('../chat/input.js');
+const realIsChatVisible = OWP.chat.isChatVisible;
 
 let toasts;
 let storage;
@@ -97,7 +98,7 @@ describe('chat alerts', () => {
     assert.equal(bell.getAttribute('aria-expanded'), 'false');
     bell.click();
     assert.equal(bell.getAttribute('aria-expanded'), 'true');
-    const options = wrap.querySelectorAll('[role="menuitemradio"]');
+    const options = document.querySelectorAll('[role="menuitemradio"]');
     assert.equal(options.length, 2);
     assert.equal(options[0].getAttribute('aria-checked'), 'true');
     let focused = null; bell.focus = () => { focused = bell; };
@@ -107,7 +108,85 @@ describe('chat alerts', () => {
     assert.equal(focused, bell);
     assert.ok(bell.classList.contains('owp-chat-bell-on'));
     bell.click();
-    wrap.querySelector('.owp-chat-bell-menu').dispatchEvent({ type: 'keydown', key: 'Escape', preventDefault() {}, stopPropagation() {} });
+    document.getElementById('owp-chat-bell-menu').dispatchEvent({ type: 'keydown', key: 'Escape', preventDefault() {}, stopPropagation() {} });
     assert.equal(bell.getAttribute('aria-expanded'), 'false');
+  });
+
+  // The chat drop-down scrolls and cuts what sticks out of it: with no
+  // messages the menu had no room. It is drawn over the page, below the bell,
+  // as the emoji picker is.
+  it('draws the bell menu over the page, below the bell', () => {
+    globalThis.innerWidth = 1280;
+    const wrap = OWP.chatAlerts.createBell();
+    document.body.appendChild(wrap);
+    const bell = wrap.querySelector('#owp-chat-bell');
+    bell.getBoundingClientRect = () => ({ top: 100, bottom: 124, left: 500, right: 524 });
+    bell.click();
+    const menu = document.getElementById('owp-chat-bell-menu');
+    assert.equal(menu.parentNode, document.body);
+    assert.equal(menu.hidden, false);
+    assert.equal(menu.style.top, '130px');
+    assert.equal(menu.style.right, '756px');
+    OWP.chatAlerts.closeMenu();
+    assert.equal(document.getElementById('owp-chat-bell-menu'), null);
+    assert.equal(bell.getAttribute('aria-expanded'), 'false');
+  });
+
+  it('keeps the menu open for a press on it and closes it for a press elsewhere', () => {
+    const wrap = OWP.chatAlerts.createBell();
+    document.body.appendChild(wrap);
+    const bell = wrap.querySelector('#owp-chat-bell');
+    bell.click();
+    const option = document.querySelector('.owp-chat-bell-option');
+    const press = document.listeners.find(entry => entry.type === 'pointerdown').listener;
+    press({ target: option });
+    assert.equal(bell.getAttribute('aria-expanded'), 'true');
+    press({ target: document.body });
+    assert.equal(bell.getAttribute('aria-expanded'), 'false');
+    assert.equal(document.getElementById('owp-chat-bell-menu'), null);
+  });
+
+  it('lets Escape on the bell close only its menu', () => {
+    const wrap = OWP.chatAlerts.createBell();
+    document.body.appendChild(wrap);
+    const bell = wrap.querySelector('#owp-chat-bell');
+    bell.click();
+    let stopped = false;
+    bell.dispatchEvent({ type: 'keydown', key: 'Escape', preventDefault() {}, stopPropagation() { stopped = true; } });
+    assert.equal(bell.getAttribute('aria-expanded'), 'false');
+    assert.equal(stopped, true);
+    stopped = false;
+    bell.dispatchEvent({ type: 'keydown', key: 'Escape', preventDefault() {}, stopPropagation() { stopped = true; } });
+    assert.equal(stopped, false);
+  });
+
+  // Over the player the panel fades with Jellyfin's controls, chat and all.
+  it('toasts while the player controls hide the open chat', () => {
+    const panel = document.createElement('div');
+    panel.id = OWP.constants.PANEL_ID;
+    const section = document.createElement('div');
+    section.id = 'owp-chat-section';
+    panel.appendChild(section);
+    document.body.appendChild(panel);
+    OWP.chat.isChatVisible = realIsChatVisible;
+    assert.equal(OWP.chat.isChatVisible(), true);
+    panel.classList.add(OWP.constants.PANEL_CONTROLS_HIDDEN_CLASS);
+    assert.equal(OWP.chat.isChatVisible(), false);
+    OWP.chat.receive(message('hola'));
+    assert.equal(toasts.length, 1);
+    assert.equal(OWP.chat.unreadCount, 1);
+  });
+
+  // Outside the panel, so it keeps presses, wheel and keys from the player itself.
+  it('keeps presses, wheel and keys on the bell menu from the player', () => {
+    const wrap = OWP.chatAlerts.createBell();
+    document.body.appendChild(wrap);
+    wrap.querySelector('#owp-chat-bell').click();
+    const menu = document.getElementById('owp-chat-bell-menu');
+    for (const type of ['pointerdown', 'mousedown', 'wheel', 'keydown', 'keyup', 'keypress']) {
+      const event = { type, key: ' ', preventDefault() {}, stopPropagation() { this.stopped = true; } };
+      menu.dispatchEvent(event);
+      assert.equal(event.stopped, true, type);
+    }
   });
 });

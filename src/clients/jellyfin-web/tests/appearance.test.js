@@ -144,7 +144,7 @@ describe('appearance styles', () => {
     // What stays fixed: hairline borders, the visually hidden text, the window
     // widths of the media queries, the places on screen, the margins to the
     // window edges, the animations and the blur.
-    const fixed = /1px solid|width: 1px; height: 1px|@media \(max-width: \d+px\)|top: 72px; right: 20px|bottom: 100px; right: 20px|left: 8px; right: 8px|calc\(100v[wh] - \d+px\)|translateX\(20px\)|blur\(10px\)|--owp-blur: 12px/g;
+    const fixed = /1px solid|width: 1px; height: 1px|@media \(max-width: \d+px\)|top: 72px; right: 20px|bottom: 100px; right: 20px|\.owp-toast-container \{ bottom: 24px; \}|left: 8px; right: 8px|calc\(100v[wh] - \d+px\)|translateX\(20px\)|blur\(10px\)|--owp-blur: 12px/g;
     assert.deepEqual(unscaled.replace(fixed, '').match(/\d+(\.\d+)?px/g), null);
   });
 
@@ -153,7 +153,7 @@ describe('appearance styles', () => {
   });
 
   it('starts at 14 px and 55 %, and turns opaque when less transparency is asked for', () => {
-    assert.match(css, /#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float, \.owp-saved-overlay, #owp-emoji-panel, #owp-emoji-autocomplete \{\s*--owp-scale: 1\.1666/);
+    assert.match(css, /#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float, \.owp-saved-overlay, #owp-emoji-panel, #owp-emoji-autocomplete, #owp-chat-bell-menu, #owp-mention-list \{\s*--owp-scale: 1\.1666/);
     assert.match(css, /--owp-surface-alpha: 0\.55/);
     assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{\s*#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float \{ --owp-surface-alpha: 1 !important; \}/);
   });

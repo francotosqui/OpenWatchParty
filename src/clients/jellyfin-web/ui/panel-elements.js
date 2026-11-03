@@ -100,6 +100,8 @@
     if (!panel) return;
     OWP.emoji?.closePicker?.();
     OWP.emoji?.hideSuggestions?.();
+    OWP.chatAlerts?.closeMenu?.();
+    OWP.mentions?.close?.();
     const active = document.activeElement;
     const hadFocus = !!active && active !== panel && typeof panel.contains === 'function' && panel.contains(active);
     panel.classList.add('hide');

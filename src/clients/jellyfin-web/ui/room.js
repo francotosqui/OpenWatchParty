@@ -194,6 +194,8 @@
     if (open !== 'chat') {
       OWP.emoji?.closePicker?.();
       OWP.emoji?.hideSuggestions?.();
+      OWP.chatAlerts?.closeMenu?.();
+      OWP.mentions?.close?.();
     }
     if (open === 'sync') updateSyncSection();
     if (open === 'chat' && OWP.chat && OWP.chat.isChatVisible()) {

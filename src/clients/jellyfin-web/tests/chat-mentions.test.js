@@ -81,4 +81,27 @@ describe('chat mentions', () => {
     type('@zzz');
     assert.equal(document.getElementById('owp-mention-list'), null);
   });
+
+  // Like the bell's menu, drawn over the page so an empty chat does not cut it.
+  it('draws the list over the page, above the input', () => {
+    globalThis.innerHeight = 720;
+    const container = document.createElement('div'); container.id = 'owp-chat-input-container';
+    const input = document.createElement('input'); input.id = 'owp-chat-input';
+    input.getBoundingClientRect = () => ({ top: 115, bottom: 145, left: 797, right: 1126, width: 329 });
+    container.appendChild(input); document.body.appendChild(container);
+    M().attach(input);
+    input.value = '@test'; input.selectionStart = input.selectionEnd = 5; input.dispatchEvent({ type: 'input' });
+    const list = document.getElementById('owp-mention-list');
+    assert.equal(list.parentNode, document.body);
+    assert.equal(list.style.left, '797px');
+    assert.equal(list.style.width, '329px');
+    assert.equal(list.style.bottom, '609px');
+    for (const type of ['pointerdown', 'mousedown', 'wheel']) {
+      const event = { type, stopPropagation() { this.stopped = true; } };
+      list.dispatchEvent(event);
+      assert.equal(event.stopped, true, type);
+    }
+    M().close();
+    assert.equal(document.getElementById('owp-mention-list'), null);
+  });
 });

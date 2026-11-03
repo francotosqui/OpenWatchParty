@@ -126,7 +126,7 @@
     #owp-guest-lock-label .owp-guest-lock-icon { font-size: 1.15em; }
     /* Appearance settings: text scale, surface opacity and the colors of the
        preset (applyAppearance); these are Glass, the default preset */
-    #${PANEL_ID}, .owp-toast-container, .owp-toast-system, .owp-queue-next, .owp-start-float, .owp-saved-overlay, #owp-emoji-panel, #owp-emoji-autocomplete {
+    #${PANEL_ID}, .owp-toast-container, .owp-toast-system, .owp-queue-next, .owp-start-float, .owp-saved-overlay, #owp-emoji-panel, #owp-emoji-autocomplete, #owp-chat-bell-menu, #owp-mention-list {
       --owp-scale: ${APPEARANCE.textSize.default / APPEARANCE.baseTextSize};
       --owp-surface-alpha: ${APPEARANCE.opacity.default / 100};
       --owp-surface: 38, 38, 36; --owp-surface-deep: 20, 20, 20; --owp-ink: 255, 255, 255; --owp-blur: 12px; --owp-round: 1;
@@ -155,7 +155,7 @@
     #${PANEL_ID} { transition: opacity 0.3s ease-out; }
     #${PANEL_ID}.${PANEL_CONTROLS_HIDDEN_CLASS} { opacity: 0; pointer-events: none; }
     @media (prefers-reduced-motion: reduce) {
-      #${PANEL_ID} { transition: none; }
+      #${PANEL_ID}, .owp-toast-container { transition: none; }
     }
     /* Opened from the header: placed below it (top is set when it opens) */
     #${PANEL_ID}.${PANEL_HEADER_CLASS} { bottom: auto; }
@@ -544,7 +544,6 @@
     #owp-emoji-btn:hover { background: rgba(var(--owp-ink), 0.08); }
     #owp-emoji-btn[aria-expanded="true"] { background: var(--owp-accent-bg); }
     /* Chat toast mode: a bell next to the emoji button, and its small menu */
-    #owp-chat-input-container { position: relative; }
     .owp-chat-bell-wrap { position: relative; flex-shrink: 0; display: flex; }
     .owp-chat-bell {
       display: inline-flex; align-items: center; justify-content: center; height: ${px(24)}; width: ${px(24)}; padding: 0;
@@ -555,7 +554,7 @@
     .owp-chat-bell.owp-chat-bell-on { color: var(--owp-accent); }
     .owp-chat-bell[aria-expanded="true"] { background: var(--owp-accent-bg); color: var(--owp-accent); }
     .owp-chat-bell-menu {
-      position: absolute; right: 0; bottom: calc(100% + ${px(4)}); z-index: 5; padding: ${px(3)}; font-size: ${px(11)};
+      position: fixed; z-index: 21000; padding: ${px(3)}; font-size: ${px(11)};
       background: rgb(var(--owp-surface)); border: 1px solid rgba(var(--owp-ink), 0.12); border-radius: ${round(6)}; box-shadow: 0 ${px(4)} ${px(12)} rgba(0, 0, 0, 0.35);
     }
     .owp-chat-bell-menu[hidden] { display: none; }
@@ -569,7 +568,7 @@
     .owp-chat-bell-option[aria-checked="true"]::after { content: '✓'; }
     /* @-mention suggestions above the chat input */
     .owp-mention-list {
-      position: absolute; left: 0; right: ${px(64)}; bottom: calc(100% + ${px(4)}); z-index: 5; padding: ${px(3)};
+      position: fixed; z-index: 21000; box-sizing: border-box; padding: ${px(3)};
       background: rgb(var(--owp-surface)); border: 1px solid rgba(var(--owp-ink), 0.15); border-radius: ${round(6)}; box-shadow: 0 ${px(4)} ${px(12)} rgba(0, 0, 0, 0.45);
     }
     .owp-mention-option { display: flex; align-items: center; gap: ${px(2)}; padding: ${px(4)} ${px(6)}; border-radius: ${round(4)}; color: var(--owp-text); cursor: pointer; }
@@ -638,7 +637,10 @@
     .owp-toast-container {
       position: fixed; bottom: 100px; right: 20px; z-index: 30000;
       display: flex; flex-direction: column; gap: ${px(8)}; pointer-events: none;
+      transition: bottom 0.3s ease-out;
     }
+    /* While the player's controls are hidden, down in the corner */
+    html.owp-player-controls-hidden .owp-toast-container { bottom: 24px; }
     .owp-toast {
       background: rgba(var(--owp-surface), var(--owp-surface-alpha)); backdrop-filter: blur(var(--owp-blur)); -webkit-backdrop-filter: blur(var(--owp-blur));
       color: var(--owp-text); padding: ${px(8)} ${px(12)};
@@ -728,7 +730,7 @@
       style.id = APPEARANCE_STYLE_ID;
       document.head.appendChild(style);
     }
-    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system, :root .owp-queue-next, :root .owp-start-float, :root .owp-saved-overlay, :root #owp-emoji-panel, :root #owp-emoji-autocomplete {`
+    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system, :root .owp-queue-next, :root .owp-start-float, :root .owp-saved-overlay, :root #owp-emoji-panel, :root #owp-emoji-autocomplete, :root #owp-chat-bell-menu, :root #owp-mention-list {`
       + ` --owp-scale: ${textSize / APPEARANCE.baseTextSize}; --owp-surface-alpha: ${opacity / 100};${colors} }`;
   };
 

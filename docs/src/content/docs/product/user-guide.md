@@ -303,8 +303,9 @@ These appear briefly in the center of the screen:
 
 ### Chat Notifications (Bottom-Right)
 
-When the chat is closed, incoming messages appear as toasts in the bottom-right corner, so they do not cover the room bar:
+When the chat is closed, or out of sight because the player's controls are hidden, incoming messages appear as toasts in the bottom-right corner, so they do not cover the room bar:
 - Shows the sender's username and message
+- Sits above the player's controls, and moves down to the corner while they are hidden
 - Stacks up to 5 messages
 - Click to dismiss, or they fade after 5 seconds
 

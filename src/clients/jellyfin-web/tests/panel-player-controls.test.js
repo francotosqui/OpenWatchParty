@@ -171,6 +171,51 @@ describe('the panel over the player', () => {
     }
   });
 
+  // Messages that came while it was out of sight are read once it is back.
+  it('reads the open chat when it comes back with the controls', () => {
+    const { setControlsHidden } = openOverPlayer(hooks);
+    const { isChatVisible, markRead } = OWP.chat;
+    let reads = 0;
+    OWP.chat.isChatVisible = () => !faded();
+    OWP.chat.markRead = () => { reads += 1; };
+    try {
+      setControlsHidden(true);
+      assert.equal(reads, 0);
+      setControlsHidden(false);
+      assert.equal(reads, 1);
+      setControlsHidden(false);
+      assert.equal(reads, 1);
+    } finally {
+      Object.assign(OWP.chat, { isChatVisible, markRead });
+    }
+  });
+
+  it('closes the chat bell menu when it fades', () => {
+    const { setControlsHidden } = openOverPlayer(hooks);
+    const previous = OWP.chatAlerts;
+    let closes = 0;
+    OWP.chatAlerts = { closeMenu: () => { closes += 1; } };
+    try {
+      setControlsHidden(true);
+      assert.equal(closes, 1);
+    } finally {
+      OWP.chatAlerts = previous;
+    }
+  });
+
+  // Chat toasts sit above Jellyfin's controls, and go down to the corner
+  // while those are hidden.
+  it('lowers the chat toasts while the player controls are hidden', () => {
+    const { setControlsHidden } = openOverPlayer(hooks);
+    const lowered = () => document.documentElement.classList.contains('owp-player-controls-hidden');
+    setControlsHidden(true);
+    assert.equal(lowered(), true);
+    setControlsHidden(false);
+    assert.equal(lowered(), false);
+    const css = document.getElementById(STYLE_ID)?.textContent || (OWP.ui.injectStyles(), document.getElementById(STYLE_ID).textContent);
+    assert.match(css, /html\.owp-player-controls-hidden \.owp-toast-container \{ bottom: 24px; \}/);
+  });
+
   it('watches the class of the player header, and moves to a new header', () => {
     const { header } = openOverPlayer(hooks);
     assert.deepEqual(hooks.headerObserver(header).options, { attributes: true, attributeFilter: ['class'] });
@@ -298,6 +343,19 @@ describe('a press outside the panel', () => {
     assert.equal(event.defaultPrevented, false);
     assert.equal(event.immediatePropagationStopped, undefined);
     assert.equal(document.getElementById(MODERN_HEADER_BTN_ID).getAttribute('aria-expanded'), 'false');
+  });
+
+  // The chat's bell menu and mention list are drawn over the page, outside it.
+  it('stays open for a press on the chat popups drawn over the page', () => {
+    openOverPlayer(hooks);
+    for (const id of ['owp-chat-bell-menu', 'owp-mention-list']) {
+      const popup = element('div', '', { id });
+      const option = element('button');
+      popup.appendChild(option);
+      document.body.appendChild(popup);
+      hooks.fire('pointerdown', { target: option });
+      assert.equal(closed(), false, id);
+    }
   });
 
   it('only closes it on the player picture, so the player does not take it as play or pause', () => {
@@ -532,6 +590,6 @@ describe('panel fade styles', () => {
 
     assert.match(css, new RegExp(`#${PANEL_ID}\\.${PANEL_CONTROLS_HIDDEN_CLASS} \\{ opacity: 0; pointer-events: none; \\}`));
     assert.match(css, new RegExp(`#${PANEL_ID} \\{ transition: opacity 0\\.3s ease-out; \\}`));
-    assert.match(css, new RegExp(`@media \\(prefers-reduced-motion: reduce\\) \\{\\s*#${PANEL_ID} \\{ transition: none; \\}`));
+    assert.match(css, new RegExp(`@media \\(prefers-reduced-motion: reduce\\) \\{\\s*#${PANEL_ID}, \\.owp-toast-container \\{ transition: none; \\}`));
   });
 });

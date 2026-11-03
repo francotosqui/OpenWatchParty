@@ -28,11 +28,13 @@
     return true;
   };
 
-  // The chat is a drop-down of the room bar: it is read only while it is open.
+  // The chat is a drop-down of the room bar: it is read only while it is open
+  // and on screen, not while the panel fades with the player's controls.
   const isChatVisible = () => {
     const chatSection = document.getElementById('owp-chat-section');
     const panel = document.getElementById(OWP.constants.PANEL_ID);
-    return Boolean(chatSection && !chatSection.hidden && panel && !panel.classList.contains('hide'));
+    return Boolean(chatSection && !chatSection.hidden && panel && !panel.classList.contains('hide')
+      && !panel.classList.contains(OWP.constants.PANEL_CONTROLS_HIDDEN_CLASS));
   };
 
   const markRead = () => {
