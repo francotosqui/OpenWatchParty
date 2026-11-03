@@ -17,7 +17,7 @@ mod tracks;
 
 pub(in crate::ws) use administrator::handle_set_room_administrator;
 pub(in crate::ws) use auth::handle_auth;
-pub(in crate::ws) use chat::handle_chat_message;
+pub(in crate::ws) use chat::{handle_chat_message, handle_chat_typing};
 pub(in crate::ws) use create::handle_create_room;
 pub(in crate::ws) use join::handle_join_room;
 pub(in crate::ws) use misc::{

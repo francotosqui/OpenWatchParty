@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::types::ServerState;
 
 /// Message types a client can send, as named on the wire.
-pub const CLIENT_MESSAGE_TYPES: [&str; 35] = [
+pub const CLIENT_MESSAGE_TYPES: [&str; 36] = [
     "set_room_access",
     "cancel_join",
     "answer_join",
@@ -33,6 +33,7 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 35] = [
     "ping",
     "client_log",
     "chat_message",
+    "chat_typing",
     "participant_status",
     "participant_tracks",
     "queue_add",
@@ -50,7 +51,7 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 35] = [
 ];
 
 /// Message types the server sends, plus `other` for anything not listed.
-pub const SERVER_MESSAGE_TYPES: [&str; 30] = [
+pub const SERVER_MESSAGE_TYPES: [&str; 31] = [
     "room_access",
     "join_requests",
     "join_pending",
@@ -76,6 +77,7 @@ pub const SERVER_MESSAGE_TYPES: [&str; 30] = [
     "room_closed",
     "room_left",
     "chat_message",
+    "chat_typing",
     "queue_state",
     "queue_details",
     "start_state",
@@ -701,5 +703,16 @@ mod saved_session_metric_tests {
             server_ts: Some(0),
         });
         assert_eq!(metrics.errors_sent.get("SAVED_SESSION_BUSY"), 1);
+    }
+}
+
+#[cfg(test)]
+mod chat_typing_metric_tests {
+    use super::*;
+
+    #[test]
+    fn chat_typing_wire_names_are_counted() {
+        assert!(CLIENT_MESSAGE_TYPES.contains(&"chat_typing"));
+        assert!(SERVER_MESSAGE_TYPES.contains(&"chat_typing"));
     }
 }

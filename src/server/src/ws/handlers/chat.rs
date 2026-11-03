@@ -213,6 +213,68 @@ pub(in crate::ws) async fn handle_chat_message(
     }
 }
 
+/// A start can be relayed again only after this long, per client.
+const TYPING_RELAY_INTERVAL_MS: u64 = 2_000;
+
+/// Relays "is typing" to the other members that negotiated it. It is
+/// ephemeral: never stored, and anything invalid is dropped without an error.
+pub(in crate::ws) async fn handle_chat_typing(
+    client_id: &str,
+    parsed: &IncomingMessage,
+    state: &SharedState,
+) {
+    let Some(active) = parsed
+        .payload
+        .as_ref()
+        .and_then(|p| p.get("active"))
+        .and_then(|v| v.as_bool())
+    else {
+        return;
+    };
+    let mut locked = state.write().await;
+    let now = now_ms();
+    let crate::types::ServerState { clients, rooms, .. } = &mut *locked;
+    let Some(client) = clients
+        .get_mut(client_id)
+        .filter(|c| c.supports_chat_typing)
+    else {
+        return;
+    };
+    let Some(room) = parsed
+        .room
+        .as_ref()
+        .and_then(|id| rooms.get(id))
+        .filter(|room| room.clients.iter().any(|id| id == client_id))
+    else {
+        return;
+    };
+    if active {
+        if now.saturating_sub(client.last_typing_ms) < TYPING_RELAY_INTERVAL_MS {
+            return;
+        }
+        client.last_typing_ms = now;
+    } else {
+        client.last_typing_ms = 0;
+    }
+    let message = WsMessage {
+        msg_type: ServerMessageType::ChatTyping,
+        room: Some(room.room_id.clone()),
+        client: Some(client_id.to_string()),
+        payload: Some(serde_json::json!({ "username": client.user_name, "active": active })),
+        ts: now,
+        server_ts: Some(now),
+    };
+    let senders: Vec<_> = room
+        .clients
+        .iter()
+        .filter(|id| id.as_str() != client_id)
+        .filter_map(|id| clients.get(id))
+        .filter(|c| c.supports_chat_typing)
+        .map(|c| c.sender.clone())
+        .collect();
+    crate::messaging::send_to_senders(&senders, &message, "chat typing");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -371,6 +433,104 @@ mod tests {
             .payload
             .unwrap();
         assert!(legacy["messages"][0].get("user_id").is_none());
+    }
+
+    fn typing(active: serde_json::Value) -> IncomingMessage {
+        IncomingMessage {
+            msg_type: crate::types::ClientMessageType::ChatTyping,
+            room: Some("room".to_string()),
+            client: None,
+            payload: Some(serde_json::json!({ "active": active })),
+            ts: 0,
+            server_ts: None,
+        }
+    }
+
+    type Rx = tokio::sync::mpsc::Receiver<Result<warp::ws::Message, warp::Error>>;
+
+    /// host and guest negotiated typing; legacy did not; outsider is elsewhere.
+    async fn typing_room() -> (SharedState, Rx, Rx, Rx, Rx) {
+        let state = test_helpers::create_state();
+        let mut locked = state.write().await;
+        let mut receivers = Vec::new();
+        for (id, name, room, typing) in [
+            ("host", "Franco", "room", true),
+            ("guest", "Ana", "room", true),
+            ("legacy", "Bruno", "room", false),
+            ("outsider", "Eve", "other", true),
+        ] {
+            let (mut client, rx) = test_helpers::create_client_with_rx(id, name, true);
+            client.room_id = Some(room.to_string());
+            client.supports_chat_typing = typing;
+            locked.clients.insert(id.to_string(), client);
+            receivers.push(rx);
+        }
+        let mut room = test_helpers::create_room("room", "host");
+        room.clients = vec!["host".into(), "guest".into(), "legacy".into()];
+        locked.rooms.insert("room".to_string(), room);
+        locked.rooms.insert(
+            "other".to_string(),
+            test_helpers::create_room("other", "outsider"),
+        );
+        drop(locked);
+        let mut receivers = receivers.into_iter();
+        (
+            state,
+            receivers.next().unwrap(),
+            receivers.next().unwrap(),
+            receivers.next().unwrap(),
+            receivers.next().unwrap(),
+        )
+    }
+
+    #[tokio::test]
+    async fn typing_relays_to_other_members_with_feature() {
+        let (state, mut host_rx, mut guest_rx, mut legacy_rx, mut outsider_rx) =
+            typing_room().await;
+        handle_chat_typing("host", &typing(serde_json::json!(true)), &state).await;
+        let relayed = test_helpers::recv_msg(&mut guest_rx).unwrap();
+        assert_eq!(relayed.msg_type, ServerMessageType::ChatTyping);
+        assert_eq!(relayed.room.as_deref(), Some("room"));
+        assert_eq!(relayed.client.as_deref(), Some("host"));
+        assert_eq!(
+            relayed.payload.unwrap(),
+            serde_json::json!({ "username": "Franco", "active": true })
+        );
+        assert!(test_helpers::recv_msg(&mut host_rx).is_none());
+        assert!(test_helpers::recv_msg(&mut legacy_rx).is_none());
+        assert!(test_helpers::recv_msg(&mut outsider_rx).is_none());
+    }
+
+    #[tokio::test]
+    async fn typing_ignored_from_non_member_and_without_feature() {
+        let (state, mut host_rx, mut guest_rx, _legacy_rx, mut outsider_rx) = typing_room().await;
+        handle_chat_typing("outsider", &typing(serde_json::json!(true)), &state).await;
+        handle_chat_typing("legacy", &typing(serde_json::json!(true)), &state).await;
+        handle_chat_typing("host", &typing(serde_json::json!("yes")), &state).await;
+        assert!(test_helpers::recv_msg(&mut guest_rx).is_none());
+        assert!(test_helpers::recv_msg(&mut host_rx).is_none());
+        // Ephemeral: no error goes back either.
+        assert!(test_helpers::recv_msg(&mut outsider_rx).is_none());
+    }
+
+    #[tokio::test]
+    async fn typing_true_is_rate_limited_but_false_passes() {
+        let (state, _host_rx, mut guest_rx, _legacy_rx, _outsider_rx) = typing_room().await;
+        handle_chat_typing("host", &typing(serde_json::json!(true)), &state).await;
+        handle_chat_typing("host", &typing(serde_json::json!(true)), &state).await;
+        handle_chat_typing("host", &typing(serde_json::json!(false)), &state).await;
+        let first = test_helpers::recv_msg(&mut guest_rx).unwrap();
+        assert_eq!(first.payload.unwrap()["active"], true);
+        let second = test_helpers::recv_msg(&mut guest_rx).unwrap();
+        assert_eq!(second.payload.unwrap()["active"], false);
+        assert!(test_helpers::recv_msg(&mut guest_rx).is_none());
+    }
+
+    #[tokio::test]
+    async fn typing_is_not_stored_in_history() {
+        let (state, ..) = typing_room().await;
+        handle_chat_typing("host", &typing(serde_json::json!(true)), &state).await;
+        assert!(state.read().await.rooms["room"].chat_history.is_empty());
     }
 
     #[test]
