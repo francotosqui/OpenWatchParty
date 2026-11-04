@@ -38,8 +38,8 @@
                         <h2 class="sectionTitle" data-i18n="activeRooms">Active rooms</h2>
                         <span id="ActiveRoomsLive" class="owp-live owp-live-off" data-i18n="connecting">Connecting…</span>
                     </div>
-                    <p id="ActiveRoomsSummary" class="fieldDescription" style="margin-top:0"></p>
-                    <div id="ActiveRoomsList" aria-live="polite"></div>
+                    <p id="ActiveRoomsSummary" class="fieldDescription" style="margin-top:0" aria-live="polite"></p>
+                    <div id="ActiveRoomsList"></div>
                 </div>
                 <form class="openwatchpartyConfigurationForm">
                     <!-- Authentication Settings -->
@@ -713,6 +713,7 @@
                         state.append(document.createTextNode('·'), titleText);
                     }
                     var time = document.createElement('span');
+                    time.className = 'owp-room-time';
                     time.textContent = this.openFor(room.opened_at_ms, this.snapshot.server_now_ms, this.now() - this.receivedAt);
                     state.append(document.createTextNode('·'), time);
                     body.append(name, people, state);
@@ -736,10 +737,42 @@
                     var summary = this.element('ActiveRoomsSummary');
                     var list = this.element('ActiveRoomsList');
                     if (!summary || !list) return;
-                    summary.textContent = this.summary(rooms);
+                    // Only a real change is announced (the summary is the live region).
+                    var text = this.summary(rooms);
+                    if (summary.textContent !== text) summary.textContent = text;
+                    // Keyboard users keep their place on a room's Close button.
+                    var active = document.activeElement;
+                    var focusedRoom = null;
+                    if (active && list.contains(active) && typeof active.closest === 'function') {
+                        var holder = active.closest('.owp-room');
+                        if (holder) focusedRoom = holder.getAttribute('data-room-id');
+                    }
                     var rows = rooms.map(this.row, this);
                     list.replaceChildren.apply(list, rows);
+                    if (focusedRoom !== null) {
+                        rows.forEach(function(row) {
+                            if (row.getAttribute('data-room-id') !== focusedRoom) return;
+                            var button = row.querySelector('button');
+                            if (button) button.focus();
+                        });
+                    }
                     this.lookupTitles(rooms);
+                },
+
+                // The open time changes every minute; update it in place.
+                refreshTimes: function() {
+                    var self = this;
+                    var list = this.element('ActiveRoomsList');
+                    if (!this.snapshot || !list) return;
+                    var byId = Object.create(null);
+                    (this.snapshot.rooms || []).forEach(function(room) { byId[room.room_id] = room; });
+                    Array.prototype.forEach.call(list.children, function(row) {
+                        var room = byId[row.getAttribute('data-room-id')];
+                        var time = row.querySelector('.owp-room-time');
+                        if (room && time) {
+                            time.textContent = self.openFor(room.opened_at_ms, self.snapshot.server_now_ms, self.now() - self.receivedAt);
+                        }
+                    });
                 },
 
                 lookupTitles: function(rooms) {
@@ -966,7 +999,7 @@
                     this.unsupported = false;
                     this.connect();
                     this.clockTimer = setInterval(function() {
-                        if (self.snapshot) self.render(self.snapshot, self.receivedAt);
+                        self.refreshTimes();
                     }, this.CLOCK_MS);
                 },
 

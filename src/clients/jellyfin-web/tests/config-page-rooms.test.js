@@ -390,6 +390,44 @@ describe('configuration page active rooms', () => {
     assert.ok(env.socket.closed);
   });
 
+  it('updates the open time every 30 s without redrawing the rooms', async () => {
+    const env = await connected();
+    env.receive(env.socket, { type: 'admin_rooms', payload: snapshot([room()]) });
+    const row = env.byId('ActiveRoomsList').children[0];
+    assert.ok(row.textContent.includes('open for 1 h 05 min'));
+    const receivedAt = env.page.receivedAt;
+    env.page.now = () => receivedAt + 60_000;
+
+    env.intervals.find(timer => timer.delay === 30_000).fn();
+
+    const after = env.byId('ActiveRoomsList').children[0];
+    assert.equal(after, row, 'the same row stays on the page');
+    assert.ok(after.textContent.includes('open for 1 h 06 min'));
+  });
+
+  it("keeps keyboard focus on a room's close button when the list changes", async () => {
+    const env = await connected();
+    globalThis.document = env.document;
+    try {
+      env.receive(env.socket, { type: 'admin_rooms', payload: snapshot([room(), room({ room_id: 'r2', name: 'Other' })]) });
+      env.byId('ActiveRoomsList').querySelector('[data-room-id="r2"] button').focus();
+
+      env.receive(env.socket, { type: 'admin_rooms', payload: snapshot([room({ room_id: 'r2', name: 'Other' })]) });
+
+      const focused = env.document.activeElement;
+      assert.equal(focused?.tagName, 'BUTTON');
+      assert.ok(env.byId('ActiveRoomsList').contains(focused), 'the focused button is on the page');
+      assert.equal(focused.closest('.owp-room').getAttribute('data-room-id'), 'r2');
+    } finally {
+      delete globalThis.document;
+    }
+  });
+
+  it('announces the summary, not every redraw of the list', () => {
+    assert.match(configPage, /id="ActiveRoomsSummary"[^>]*aria-live="polite"/);
+    assert.doesNotMatch(configPage, /id="ActiveRoomsList"[^>]*aria-live/);
+  });
+
   it('stops listening when the page is left', async () => {
     const env = await connected();
     env.page.stop();
