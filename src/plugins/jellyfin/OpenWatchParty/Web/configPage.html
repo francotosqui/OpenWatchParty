@@ -707,10 +707,11 @@
                     time.textContent = this.openFor(room.opened_at_ms, this.snapshot.server_now_ms, this.now() - this.receivedAt);
                     state.append(document.createTextNode('·'), time);
                     body.append(name, people, state);
-                    var close = document.createElement('button', { is: 'emby-button' });
-                    close.setAttribute('is', 'emby-button');
+                    // Jellyfin's web components polyfill replaces createElement and
+                    // accepts no options, so the button gets emby-button's classes.
+                    var close = document.createElement('button');
                     close.type = 'button';
-                    close.className = 'raised button-delete owp-room-close';
+                    close.className = 'emby-button raised button-delete owp-room-close';
                     var closeLabel = document.createElement('span');
                     closeLabel.textContent = configT('closeRoom');
                     close.append(closeLabel);
