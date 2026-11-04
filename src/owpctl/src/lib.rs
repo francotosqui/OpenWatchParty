@@ -8,6 +8,7 @@ pub mod jellyfin;
 pub mod maintenance;
 pub mod output;
 pub mod paths;
+pub mod rooms;
 pub mod secrets;
 pub mod state;
 pub mod storage;

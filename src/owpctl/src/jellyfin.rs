@@ -61,6 +61,14 @@ pub struct OpenWatchPartyToken {
     pub session_server_url: String,
 }
 
+// Intentionally not Debug: this contains an administrator credential.
+#[derive(Deserialize)]
+pub struct AdministratorToken {
+    pub token: String,
+    pub session_server_url: Url,
+    pub protocol_version: u64,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct SigningKeyInfo {
     pub issuer: String,
@@ -149,6 +157,11 @@ impl JellyfinClient {
             .header("Authorization", authorization_header(Some(token)))
             .send()?;
         checked_json(response)
+    }
+
+    pub fn administrator_token(&self) -> anyhow::Result<AdministratorToken> {
+        self.get("OpenWatchParty/AdminToken")
+            .context("cannot obtain administrator access; use a signed-in Jellyfin administrator token and an updated plugin with authentication enabled")
     }
 
     pub fn signing_key(&self) -> anyhow::Result<SigningKeyInfo> {

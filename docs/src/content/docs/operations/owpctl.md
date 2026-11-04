@@ -135,6 +135,52 @@ print the URL without launching a browser. Press Ctrl+C in the terminal to stop
 the dashboard. For remote use, forward the printed loopback port over SSH using
 the same local and remote port as described above.
 
+## Active rooms
+
+With a current plugin and session server, a Jellyfin administrator can list or
+close active rooms using the same administrative WebSocket connection as the
+plugin page:
+
+```bash
+owpctl rooms list --api-token-file /run/owp-jellyfin-token
+owpctl --json rooms list --api-token-file /run/owp-jellyfin-token
+owpctl rooms close <room-id> --api-token-file /run/owp-jellyfin-token
+```
+
+The list shows each room's ID and name, Owner, participant names/count,
+playing/paused state, media ID and time open. JSON includes the server timestamp
+and the complete snapshot. An empty list is a successful result.
+
+By default the commands use the Jellyfin URL and public origin saved by
+`owpctl setup`. For an existing deployment that is not managed by owpctl, pass
+`--jellyfin-url https://jellyfin.example` to either subcommand. Jellyfin base
+paths are supported; use the public URL when the reverse proxy's allowed origin
+requires it. The session server URL is returned by the plugin, not guessed.
+
+The protected token file must contain an authenticated Jellyfin administrator's
+**user access token**. A generic server API key without a user identity cannot
+obtain an administrator JWT. The CLI requests a short-lived administrator token
+from `OpenWatchParty/AdminToken`; it never needs the session server's signing
+secret and does not print either credential. An older plugin/server, a
+non-administrator account or insecure server authentication produces an error.
+
+Closing displays the room name, ID and participant count and asks for
+confirmation, defaulting to **No**. After confirmation it obtains a fresh token,
+reconnects and checks that the room still exists; taking time to decide does not
+leave an idle administrative connection open. For scripts, use explicit confirmation:
+
+```bash
+owpctl --json rooms close <room-id> --yes --api-token-file /run/owp-jellyfin-token
+```
+
+`--yes` is required with redirected input or `--json`; without it no close is
+sent. A successful command waits until the server reports that the room is gone
+and returns `{ "closed": true, "room_id": "..." }` in JSON mode. Participants
+receive the same administrator-closed notice as with the plugin page. A room
+being saved stays open and returns an error; retry after the save completes.
+A missing room is an error, and closing never deletes a saved session.
+These commands do not restart or reconfigure Jellyfin or the session server.
+
 ## Maintenance
 
 ```bash

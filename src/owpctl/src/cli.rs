@@ -35,6 +35,39 @@ pub enum Command {
     Uninstall(UninstallArgs),
     Trust(TrustArgs),
     Pair(PairArgs),
+    /// List and close active rooms as a Jellyfin administrator.
+    Rooms(RoomsArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct RoomsArgs {
+    #[command(subcommand)]
+    pub command: RoomsCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum RoomsCommand {
+    /// Show the session server's active rooms.
+    List(RoomConnectionArgs),
+    /// Close one room after confirmation; its members are told why.
+    Close {
+        room_id: String,
+        /// Skip the interactive confirmation (required with --json or redirected input).
+        #[arg(long)]
+        yes: bool,
+        #[command(flatten)]
+        connection: RoomConnectionArgs,
+    },
+}
+
+#[derive(Debug, Args)]
+pub struct RoomConnectionArgs {
+    /// Override the Jellyfin URL from owpctl configuration.
+    #[arg(long)]
+    pub jellyfin_url: Option<url::Url>,
+    /// Read an authenticated Jellyfin administrator's access token from this file.
+    #[arg(long)]
+    pub api_token_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
