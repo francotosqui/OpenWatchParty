@@ -345,6 +345,7 @@ When the chat is closed, or out of sight because the player's controls are hidde
 
 ### "Room closed unexpectedly"
 - The host closed the room, or left when no participant had a compatible client for host transfer
+- A Jellyfin administrator closed it from the plugin page ("The server administrator closed the room")
 - Server may have restarted
 - Create a new room to continue
 
@@ -355,6 +356,24 @@ When the chat is closed, or out of sight because the player's controls are hidde
 
 For more troubleshooting, see [Troubleshooting Guide](/operations/troubleshooting/).
 
+
+## Active rooms (administrators)
+
+Jellyfin administrators see every open room in **Dashboard → Plugins →
+OpenWatchParty**, under **Active rooms**, right below the diagnostics. The list
+updates by itself while the page is open (the green **Live** dot) and shows, for
+each room, the Owner's photo, the room name, the Owner, how many people are in
+it and their names, whether it is playing or paused, what it is watching and how
+long it has been open.
+
+**Close room** asks for confirmation, then closes that room without restarting
+the session server. The people inside leave it and see "The server
+administrator closed the room". A saved session (Owner's **Save and close**) is not
+deleted; a room that is being saved at that moment stays open until the save
+ends.
+
+The section needs authentication (a JWT secret or an active pairing key): in
+insecure development mode it only says so. Regular users never see this list.
 
 ## Private rooms
 

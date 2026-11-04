@@ -97,6 +97,9 @@ const loadConfigPage = (storedConfig, { diagnostics } = {}) => {
   const authStatusCalls = [];
   page.init = async () => {};
   page.runDiagnostics = async () => diagnostics;
+  // The active rooms section talks to the session server; these tests cover
+  // the settings form, so it stays idle (config-page-rooms.test.js covers it).
+  context.OpenWatchPartyActiveRooms.start = () => {};
   page.updateAuthStatus = (target, config, result) => {
     authStatusCalls.push([config, result]);
     updateAuthStatus.call(page, target, config, result);
