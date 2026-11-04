@@ -65,7 +65,8 @@ pub struct OpenWatchPartyToken {
 #[derive(Deserialize)]
 pub struct AdministratorToken {
     pub token: String,
-    pub session_server_url: Url,
+    /// Empty when the plugin uses same-host detection (see `rooms::session_url`).
+    pub session_server_url: String,
     pub protocol_version: u64,
 }
 

@@ -60,11 +60,11 @@ impl Summary for Snapshot {
                 .join(", ");
             let minutes = self.server_now_ms.saturating_sub(room.opened_at_ms) / 60_000;
             text.push_str(&format!(
-                "{}  {}\n  Owner: {} | {} people: {}\n  {} | media: {} | open for {} min\n",
+                "{}  {}\n  Owner: {} | {}: {}\n  {} | media: {} | open for {} min\n",
                 terminal_text(&room.room_id),
                 terminal_text(&room.name),
                 terminal_text(owner),
-                room.participants.len(),
+                people(room.participants.len()),
                 names,
                 if room.playing { "Playing" } else { "Paused" },
                 terminal_text(room.media_id.as_deref().unwrap_or("-")),
@@ -73,6 +73,32 @@ impl Summary for Snapshot {
         }
         text
     }
+}
+
+fn people(count: usize) -> String {
+    if count == 1 {
+        "1 person".to_string()
+    } else {
+        format!("{count} people")
+    }
+}
+
+/// The plugin returns an empty session server URL when it uses same-host
+/// detection; like the web page, connect to the Jellyfin host on port 3000.
+fn session_url(jellyfin: &Url, returned: &str) -> anyhow::Result<Url> {
+    if returned.trim().is_empty() {
+        let scheme = if jellyfin.scheme() == "https" {
+            "wss"
+        } else {
+            "ws"
+        };
+        let host = jellyfin
+            .host_str()
+            .context("the Jellyfin URL has no host")?;
+        return Url::parse(&format!("{scheme}://{host}:3000/ws"))
+            .context("cannot derive the same-host session server URL");
+    }
+    Url::parse(returned).context("plugin returned an invalid session server URL")
 }
 
 // Room/account names come from other users, not the operator's terminal.
@@ -102,9 +128,8 @@ pub fn run(paths: &Paths, args: RoomsArgs, as_json: bool) -> anyhow::Result<()> 
         .as_deref()
         .context("--api-token-file is required for room administration")?;
     let token = JellyfinClient::token_from_file(file)?;
-    let client = JellyfinClient::new(base)?.with_token(token);
-    let access = client.administrator_token()?;
-    let mut session = Session::connect(&origin, access)?;
+    let client = JellyfinClient::new(base.clone())?.with_token(token);
+    let mut session = open_session(&client, &base, &origin)?;
     let snapshot = session.snapshot()?;
     if let Some((room_id, yes)) = closing {
         let room = snapshot
@@ -114,13 +139,13 @@ pub fn run(paths: &Paths, args: RoomsArgs, as_json: bool) -> anyhow::Result<()> 
             .context("Room not found; run `owpctl rooms list` again")?;
         if yes {
             session.close_room(room_id)?;
-        } else if !interactive_close(session, room, &client, &origin, |room| {
+        } else if !interactive_close(session, room, &client, &base, &origin, |room| {
             Ok(dialoguer::Confirm::new()
                 .with_prompt(format!(
-                    "Close '{}' ({}, {} people)? Members will leave the room",
+                    "Close '{}' ({}, {})? Members will leave the room",
                     terminal_text(&room.name),
                     terminal_text(&room.room_id),
-                    room.participants.len()
+                    people(room.participants.len())
                 ))
                 .default(false)
                 .interact()?)
@@ -138,6 +163,7 @@ fn interactive_close(
     session: Session,
     room: &Room,
     client: &JellyfinClient,
+    base: &Url,
     origin: &Url,
     confirm: impl FnOnce(&Room) -> anyhow::Result<bool>,
 ) -> anyhow::Result<bool> {
@@ -147,13 +173,19 @@ fn interactive_close(
     if !confirm(room)? {
         return Ok(false);
     }
-    let mut session = Session::connect(origin, client.administrator_token()?)?;
+    let mut session = open_session(client, base, origin)?;
     let current = session.snapshot()?;
     if !current.rooms.iter().any(|r| r.room_id == room.room_id) {
         bail!("Room not found; it may have closed while awaiting confirmation");
     }
     session.close_room(&room.room_id)?;
     Ok(true)
+}
+
+fn open_session(client: &JellyfinClient, base: &Url, origin: &Url) -> anyhow::Result<Session> {
+    let access = client.administrator_token()?;
+    let url = session_url(base, &access.session_server_url)?;
+    Session::connect(origin, &url, access)
 }
 
 fn connection_urls(paths: &Paths, connection: &RoomConnectionArgs) -> anyhow::Result<(Url, Url)> {
@@ -179,8 +211,7 @@ struct Session {
 }
 
 impl Session {
-    fn connect(origin: &Url, access: AdministratorToken) -> anyhow::Result<Self> {
-        let url = &access.session_server_url;
+    fn connect(origin: &Url, url: &Url, access: AdministratorToken) -> anyhow::Result<Self> {
         if !matches!(url.scheme(), "ws" | "wss")
             || !url.username().is_empty()
             || url.password().is_some()
@@ -338,6 +369,34 @@ mod tests {
     };
 
     #[test]
+    fn same_host_detection_uses_the_jellyfin_host_and_port_3000() {
+        let url = |base: &str, returned: &str| {
+            session_url(&Url::parse(base).unwrap(), returned).map(|url| url.to_string())
+        };
+        assert_eq!(
+            url("http://media.local:8096/", "").unwrap(),
+            "ws://media.local:3000/ws"
+        );
+        assert_eq!(
+            url("https://example.org/jellyfin/", " ").unwrap(),
+            "wss://example.org:3000/ws"
+        );
+        assert_eq!(url("http://[::1]:8096/", "").unwrap(), "ws://[::1]:3000/ws");
+        assert_eq!(
+            url("https://example.org/", "wss://rooms.example.org/ws").unwrap(),
+            "wss://rooms.example.org/ws"
+        );
+        assert!(url("https://example.org/", "not a url").is_err());
+    }
+
+    #[test]
+    fn people_counts_one_person() {
+        assert_eq!(people(1), "1 person");
+        assert_eq!(people(2), "2 people");
+        assert_eq!(people(0), "0 people");
+    }
+
+    #[test]
     fn confirmation_refreshes_access_and_reconnects_before_closing() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let ws_url = format!("ws://{}/ws", listener.local_addr().unwrap());
@@ -396,16 +455,22 @@ mod tests {
         });
         let mut session = Session::connect(
             &origin,
+            &Url::parse(&ws_url).unwrap(),
             AdministratorToken {
                 token: "initial-admin".into(),
-                session_server_url: Url::parse(&ws_url).unwrap(),
+                session_server_url: ws_url.clone(),
                 protocol_version: 1,
             },
         )
         .unwrap();
         let snapshot = session.snapshot().unwrap();
-        let client = JellyfinClient::new(base).unwrap().with_token("user-token");
-        let result = interactive_close(session, &snapshot.rooms[0], &client, &origin, |_| Ok(true));
+        let client = JellyfinClient::new(base.clone())
+            .unwrap()
+            .with_token("user-token");
+        let result =
+            interactive_close(session, &snapshot.rooms[0], &client, &base, &origin, |_| {
+                Ok(true)
+            });
         assert!(result.is_ok(), "{result:?}");
         assert!(result.unwrap());
         endpoint.join().unwrap();

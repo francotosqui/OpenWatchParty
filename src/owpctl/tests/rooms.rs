@@ -286,6 +286,19 @@ fn human_list_keeps_untrusted_names_on_one_terminal_line() {
 }
 
 #[test]
+fn human_list_counts_a_single_person() {
+    let mut entry = room();
+    entry["participants"] = json!([{"user_id":"ana","name":"Ana"}]);
+    let fixture = Fixture::new(vec![entry], None, true);
+    let output = fixture.run(&["list"], false);
+    assert!(output.status.success());
+    assert!(String::from_utf8(output.stdout)
+        .unwrap()
+        .contains("Owner: Ana | 1 person: Ana"));
+    fixture.finish();
+}
+
+#[test]
 fn uses_the_managed_configuration_when_url_is_not_overridden() {
     let fixture = Fixture::new(vec![], None, true);
     let paths =

@@ -155,7 +155,9 @@ By default the commands use the Jellyfin URL and public origin saved by
 `owpctl setup`. For an existing deployment that is not managed by owpctl, pass
 `--jellyfin-url https://jellyfin.example` to either subcommand. Jellyfin base
 paths are supported; use the public URL when the reverse proxy's allowed origin
-requires it. The session server URL is returned by the plugin, not guessed.
+requires it. The session server URL is returned by the plugin; when the plugin
+uses same-host detection, the CLI connects like the web page does, to the
+Jellyfin host on port 3000 (`ws://`, or `wss://` for an HTTPS Jellyfin URL).
 
 The protected token file must contain a Jellyfin administrator credential:
 either a signed-in administrator's **user access token** or a server **API key**
