@@ -268,6 +268,26 @@ describe('configuration page active rooms', () => {
     assert.equal(last.payload.token, 'tok2');
   });
 
+  it('retries a failed token renewal before the token expires', async () => {
+    const env = await connected({ tokenResponses: [
+      { status: 200, body: TOKEN },
+      { status: 503, body: {} },
+      { status: 200, body: { ...TOKEN, token: 'tok3' } }
+    ] });
+    env.timers.find(timer => timer.delay === 240_000).fn();
+    await flush();
+    const retry = env.timers.find(timer => timer.delay === 30_000);
+    assert.ok(retry, 'a failed renewal is retried in 30 s');
+
+    retry.fn();
+    await flush();
+
+    assert.equal(env.fetches.length, 3);
+    const last = env.socket.sent.at(-1);
+    assert.equal(last.type, 'auth');
+    assert.equal(last.payload.token, 'tok3');
+  });
+
   it('explains that authentication is required', async () => {
     const env = setup({
       tokenResponses: [{ status: 409, body: { error: 'Administrator access requires authentication', auth_required: true } }]

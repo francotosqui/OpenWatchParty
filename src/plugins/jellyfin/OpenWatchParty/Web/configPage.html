@@ -610,6 +610,7 @@
             // close any of them. Every name reaches the page as text only.
             var OpenWatchPartyActiveRooms = {
                 REFRESH_BEFORE_SECONDS: 60,
+                RENEW_RETRY_MS: 30000,
                 RETRY_MS: 10000,
                 CLOCK_MS: 30000,
                 started: false,
@@ -899,11 +900,28 @@
                     var self = this;
                     var generation = this.generation;
                     var socket = this.socket;
+                    var current = function() {
+                        return self.started && self.generation === generation && socket && self.socket === socket;
+                    };
+                    // A failed renewal (rate limit, Jellyfin restarting, network)
+                    // is retried while the current token is still valid.
+                    var retry = function() {
+                        if (!current()) return;
+                        clearTimeout(self.refreshTimer);
+                        self.refreshTimer = setTimeout(function() {
+                            self.refreshTimer = null;
+                            self.refresh();
+                        }, self.RENEW_RETRY_MS);
+                    };
                     return this.fetchToken().then(function(result) {
-                        if (!self.started || self.generation !== generation || !socket || self.socket !== socket || !result.ok || !result.body.token) return;
+                        if (!current()) return;
+                        if (!result.ok || !result.body.token) {
+                            retry();
+                            return;
+                        }
                         self.token = result.body;
                         self.sendAuth();
-                    }).catch(function() {});
+                    }).catch(retry);
                 },
 
                 onMessage: function(message) {
