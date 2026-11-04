@@ -444,7 +444,7 @@
     }
     .owp-tracks-label { font-size: ${px(11)}; color: var(--owp-muted); }
     .owp-tracks-value { min-width: 0; overflow-wrap: anywhere; color: var(--owp-text); }
-    .owp-mod-more { margin-inline-start: auto; flex-shrink: 0; width: ${px(26)}; height: ${px(26)}; padding: 0; }
+    .owp-mod-more { margin-inline-start: auto; justify-content: center; flex-shrink: 0; width: ${px(26)}; height: ${px(26)}; padding: 0; }
     .owp-mod-more[aria-expanded="true"] { background: rgba(var(--owp-ink),0.12); }
     .owp-participant.owp-mod-row { flex-wrap: wrap; }
     .owp-mod-actions { flex-basis: 100%; margin: ${px(6)} 0 ${px(2)}; padding: ${px(8)}; border-radius: ${round(8)}; background: rgba(var(--owp-ink),0.06); }
