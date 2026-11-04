@@ -51,8 +51,11 @@ function setup({ tokenResponses = [], getItems, fetchToken } = {}) {
     send(data) { this.sent.push(JSON.parse(data)); }
 
     close() {
+      // Like a browser, closing fires onclose.
+      if (this.closed) return;
       this.closed = true;
       this.readyState = 3;
+      if (this.onclose) this.onclose();
     }
   }
   const timers = [];
@@ -326,6 +329,29 @@ describe('configuration page active rooms', () => {
 
     assert.equal(env.byId('ActiveRoomsSummary').textContent, 'Requires authentication (JWT secret or pairing key)');
     assert.equal(env.byId('ActiveRoomsList').children.length, 0);
+  });
+
+  it('says the session server is unreachable when the connection drops, and clears the rooms', async () => {
+    const env = await connected();
+    env.receive(env.socket, { type: 'admin_rooms', payload: snapshot([room()]) });
+    assert.equal(env.byId('ActiveRoomsList').children.length, 1);
+
+    env.socket.onclose();
+
+    assert.equal(env.byId('ActiveRoomsSummary').textContent, "Couldn't connect to the session server");
+    assert.equal(env.byId('ActiveRoomsList').children.length, 0);
+    assert.ok(env.timers.some(timer => timer.delay === 10_000), 'a retry is scheduled');
+  });
+
+  it('explains a refused administrator token', async () => {
+    const env = await connected();
+    env.receive(env.socket, { type: 'error', payload: { code: 'AUTHENTICATION_FAILED', message: 'Authentication failed' } });
+
+    assert.equal(
+      env.byId('ActiveRoomsSummary').textContent,
+      'The session server refused the administrator token; check that it shares the JWT secret or pairing key with the plugin'
+    );
+    assert.ok(env.socket.closed);
   });
 
   it('stops listening when the page is left', async () => {

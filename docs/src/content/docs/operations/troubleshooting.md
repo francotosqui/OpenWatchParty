@@ -268,6 +268,9 @@ the same way players do, with a five-minute administrator token.
   without signatures there is no way to tell an administrator apart.
 - **"The session server doesn't support this function; update it"**: the
   session server is older than the plugin. Update it to the same release.
+- **"The session server refused the administrator token…"**: the plugin and
+  the session server do not share the same JWT secret or pairing key (the same
+  mismatch that makes players fail). The page retries every 10 seconds.
 - **"Couldn't connect to the session server"**: the page retries every 10
   seconds. Check that your browser reaches the **Session server URL** (the same
   check as for players) and that the reverse proxy forwards `/ws`.
