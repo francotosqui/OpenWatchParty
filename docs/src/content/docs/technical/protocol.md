@@ -1353,7 +1353,8 @@ signed like session tokens (HS256 secret or the active RS256 pairing key). The
 session server accepts it only as an administrator token, and session tokens
 never carry `typ`, so neither can stand in for the other. Without
 authentication (insecure development mode) there are no administrator
-connections.
+connections: an `auth` that declares `room_dashboard` gets
+`AUTHENTICATION_REQUIRED`.
 
 The page sends a normal `auth` with that token and declares the
 `room_dashboard` feature:

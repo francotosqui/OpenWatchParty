@@ -5,7 +5,7 @@ use crate::auth::JwtConfig;
 use crate::messaging::{send_message, send_room_list};
 use crate::types::{IncomingMessage, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
-use log::{info, warn};
+use log::{debug, info, log, warn};
 use std::sync::Arc;
 
 const HOST_TRANSFER_FEATURE: &str = "host_transfer";
@@ -145,6 +145,27 @@ async fn reject_unsupported_protocol_version(client_id: &str, state: &SharedStat
     close_with_policy(client_id, state, "Unsupported protocol version").await;
 }
 
+/// Every administrator sign-in first fails as a session token; logging that as a
+/// warning would make each open rooms page look like a failure to operators.
+fn auth_failure_level(error: &str) -> log::Level {
+    if error == crate::auth::NOT_A_SESSION_TOKEN {
+        log::Level::Debug
+    } else {
+        log::Level::Warn
+    }
+}
+
+fn declares_room_dashboard(payload: &serde_json::Value) -> bool {
+    payload
+        .get("features")
+        .and_then(|features| features.as_array())
+        .is_some_and(|features| {
+            features
+                .iter()
+                .any(|feature| feature.as_str() == Some(ROOM_DASHBOARD_FEATURE))
+        })
+}
+
 async fn handle_jwt_auth(
     client_id: &str,
     token: &str,
@@ -223,7 +244,8 @@ async fn handle_jwt_auth(
             true
         }
         Err(e) => {
-            warn!(
+            log!(
+                auth_failure_level(&e),
                 "Auth failed client_id={client_id} error={:?}",
                 e.to_string()
             );
@@ -249,15 +271,8 @@ async fn handle_admin_auth(
     let Some(user_name) = sanitize_name(&claims.name) else {
         return false;
     };
-    let declares_dashboard = payload
-        .get("features")
-        .and_then(|features| features.as_array())
-        .is_some_and(|features| {
-            features
-                .iter()
-                .any(|feature| feature.as_str() == Some(ROOM_DASHBOARD_FEATURE))
-        });
-    let features = declares_dashboard.then(|| vec![ROOM_DASHBOARD_FEATURE.to_string()]);
+    let features =
+        declares_room_dashboard(payload).then(|| vec![ROOM_DASHBOARD_FEATURE.to_string()]);
     let sender = {
         let mut state = state.write().await;
         let Some(client) = state.clients.get_mut(client_id) else {
@@ -394,6 +409,19 @@ pub(in crate::ws) async fn handle_auth(
     }
 
     if let Some(payload) = &parsed.payload {
+        // Without signatures an administrator cannot be told apart; say so
+        // instead of letting the page take the server for an old one.
+        if !jwt_config.enabled && declares_room_dashboard(payload) {
+            debug!("Rooms page refused: authentication disabled client_id={client_id}");
+            send_error(
+                client_id,
+                state,
+                ErrorCode::AuthenticationRequired,
+                "Administrator access requires authentication on the session server",
+            )
+            .await;
+            return;
+        }
         if let Some(token) = payload.get("token").and_then(|v| v.as_str()) {
             if handle_jwt_auth(
                 client_id,
@@ -510,6 +538,50 @@ mod tests {
             ts: crate::utils::now_ms(),
             server_ts: None,
         }
+    }
+
+    #[test]
+    fn administrator_tokens_tried_as_session_tokens_are_not_warnings() {
+        assert_eq!(
+            auth_failure_level(crate::auth::NOT_A_SESSION_TOKEN),
+            log::Level::Debug
+        );
+        assert_eq!(
+            auth_failure_level("Invalid token: InvalidSignature"),
+            log::Level::Warn
+        );
+    }
+
+    #[tokio::test]
+    async fn an_unauthenticated_server_refuses_the_rooms_page() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("", "", false);
+        state
+            .write()
+            .await
+            .clients
+            .insert("admin".to_string(), client);
+        let insecure = Arc::new(JwtConfig {
+            secret: String::new(),
+            audience: "OpenWatchParty".to_string(),
+            issuer: "Jellyfin".to_string(),
+            enabled: false,
+        });
+
+        handle_auth(
+            "admin",
+            &dashboard_auth_message("any-token"),
+            &state,
+            &insecure,
+        )
+        .await;
+
+        assert_error_code(
+            test_helpers::recv_msg(&mut rx).unwrap(),
+            "AUTHENTICATION_REQUIRED",
+        );
+        let locked = state.read().await;
+        assert!(!locked.clients["admin"].authenticated && !locked.clients["admin"].admin);
     }
 
     #[tokio::test]

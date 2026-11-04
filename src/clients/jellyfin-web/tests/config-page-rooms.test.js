@@ -288,6 +288,22 @@ describe('configuration page active rooms', () => {
     assert.equal(last.payload.token, 'tok3');
   });
 
+  it('explains a session server running without authentication, and stops retrying', async () => {
+    const env = setup();
+    env.page.start();
+    await flush();
+    const socket = env.sockets[0];
+    env.receive(socket, { type: 'client_hello', payload: { client_id: 'c1' } });
+    env.receive(socket, { type: 'error', payload: { code: 'AUTHENTICATION_REQUIRED', message: 'Administrator access requires authentication on the session server' } });
+
+    assert.equal(
+      env.byId('ActiveRoomsSummary').textContent,
+      "The session server runs without authentication; administrator access needs it to share the plugin's JWT secret or pairing key"
+    );
+    assert.ok(socket.closed);
+    assert.ok(!env.timers.some(timer => timer.delay === 10_000), 'no pointless retry');
+  });
+
   it('explains that authentication is required', async () => {
     const env = setup({
       tokenResponses: [{ status: 409, body: { error: 'Administrator access requires authentication', auth_required: true } }]

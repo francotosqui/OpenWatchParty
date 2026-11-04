@@ -348,10 +348,9 @@ fn server_error(code: &str) -> anyhow::Error {
     anyhow::anyhow!(match code {
         "ROOM_SAVE_IN_PROGRESS" => "The room is being saved; try again in a moment",
         "ROOM_NOT_FOUND" => "Room not found; it may already have been closed",
-        "AUTHENTICATION_FAILED"
-        | "AUTHENTICATION_EXPIRED"
-        | "AUTHENTICATION_REQUIRED"
-        | "AUTHENTICATION_TIMEOUT" =>
+        "AUTHENTICATION_REQUIRED" =>
+            "the session server runs without authentication; administrator access needs it to share the plugin's JWT secret or pairing key",
+        "AUTHENTICATION_FAILED" | "AUTHENTICATION_EXPIRED" | "AUTHENTICATION_TIMEOUT" =>
             "administrator authentication failed; obtain a new Jellyfin administrator access token",
         "ADMIN_PERMISSION_REQUIRED" | "ADMIN_CONNECTION_RESTRICTED" =>
             "administrator permission required",
@@ -387,6 +386,16 @@ mod tests {
             "wss://rooms.example.org/ws"
         );
         assert!(url("https://example.org/", "not a url").is_err());
+    }
+
+    #[test]
+    fn explains_a_session_server_without_authentication() {
+        assert!(server_error("AUTHENTICATION_REQUIRED")
+            .to_string()
+            .contains("runs without authentication"));
+        assert!(server_error("AUTHENTICATION_FAILED")
+            .to_string()
+            .contains("administrator authentication failed"));
     }
 
     #[test]

@@ -26,6 +26,10 @@ pub struct Claims {
 /// the active rooms page.
 pub const ADMIN_TOKEN_TYPE: &str = "admin";
 
+/// Why `validate_token` refuses a typed token. An administrator token is first
+/// tried as a session token, so this refusal is expected, not a warning.
+pub const NOT_A_SESSION_TOKEN: &str = "Token is not a session token";
+
 /// Marker carried by invite tickets so they can never be replayed as session
 /// tokens (and vice versa): the two claim sets are not interchangeable.
 pub const INVITE_TICKET_MARKER: &str = "invite";
@@ -228,7 +232,7 @@ impl JwtConfig {
         }
         let claims = self.validate_signed(token)?;
         if claims.typ.is_some() {
-            return Err("Token is not a session token".to_string());
+            return Err(NOT_A_SESSION_TOKEN.to_string());
         }
         Ok(claims)
     }
