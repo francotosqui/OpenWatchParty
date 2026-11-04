@@ -613,6 +613,7 @@
                 RETRY_MS: 10000,
                 CLOCK_MS: 30000,
                 started: false,
+                generation: 0,
                 unsupported: false,
                 socket: null,
                 token: null,
@@ -772,6 +773,7 @@
                 },
 
                 showProblem: function(key) {
+                    this.snapshot = null;
                     var summary = this.element('ActiveRoomsSummary');
                     var list = this.element('ActiveRoomsList');
                     if (summary) summary.textContent = configT(key);
@@ -782,9 +784,13 @@
                 confirmClose: function(room) {
                     var self = this;
                     var count = (room.participants || []).length;
+                    // Dashboard.confirm treats text as HTML; encode the complete
+                    // sentence so names (including entities) remain literal text.
+                    var text = configT(count === 1 ? 'closeRoomConfirmOne' : 'closeRoomConfirmMany', { name: self.roomName(room.name), count: count });
+                    text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                     Dashboard.confirm({
                         title: configT('closeRoom'),
-                        text: configT(count === 1 ? 'closeRoomConfirmOne' : 'closeRoomConfirmMany', { name: self.roomName(room.name), count: count }),
+                        text: text,
                         confirmText: configT('closeRoom'),
                         primary: 'delete'
                     }, configT('closeRoom'), function(confirmed) {
@@ -824,9 +830,10 @@
 
                 connect: function() {
                     var self = this;
+                    var generation = this.generation;
                     this.setLive(false);
                     return this.fetchToken().then(function(result) {
-                        if (!self.started) return;
+                        if (!self.started || self.generation !== generation) return;
                         if (result.status === 409 || result.body.auth_required) {
                             self.showProblem('roomsAuthRequired');
                             return;
@@ -835,7 +842,7 @@
                         self.token = result.body;
                         self.open(self.sessionUrl(result.body));
                     }).catch(function() {
-                        if (!self.started) return;
+                        if (!self.started || self.generation !== generation) return;
                         self.showProblem('roomsUnreachable');
                         self.retry();
                     });
@@ -889,8 +896,10 @@
 
                 refresh: function() {
                     var self = this;
+                    var generation = this.generation;
+                    var socket = this.socket;
                     return this.fetchToken().then(function(result) {
-                        if (!self.started || !self.socket || !result.ok || !result.body.token) return;
+                        if (!self.started || self.generation !== generation || !socket || self.socket !== socket || !result.ok || !result.body.token) return;
                         self.token = result.body;
                         self.sendAuth();
                     }).catch(function() {});
@@ -930,6 +939,7 @@
 
                 stop: function() {
                     this.started = false;
+                    this.generation += 1;
                     clearTimeout(this.refreshTimer);
                     clearTimeout(this.retryTimer);
                     clearInterval(this.clockTimer);

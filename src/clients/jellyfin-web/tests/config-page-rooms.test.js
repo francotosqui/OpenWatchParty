@@ -31,7 +31,7 @@ const flush = async () => {
   for (let i = 0; i < 6; i += 1) await new Promise(resolve => setImmediate(resolve));
 };
 
-function setup({ tokenResponses = [], getItems } = {}) {
+function setup({ tokenResponses = [], getItems, fetchToken } = {}) {
   const document = new FakeDocument();
   document.documentElement.lang = 'en';
   for (const id of ['ActiveRoomsLive', 'ActiveRoomsSummary', 'ActiveRoomsList']) {
@@ -56,6 +56,7 @@ function setup({ tokenResponses = [], getItems } = {}) {
     }
   }
   const timers = [];
+  const intervals = [];
   const fetches = [];
   const responses = [...tokenResponses];
   const confirms = [];
@@ -75,11 +76,11 @@ function setup({ tokenResponses = [], getItems } = {}) {
       return timers.length;
     },
     clearTimeout: () => {},
-    setInterval: () => 0,
+    setInterval: (fn, delay) => { intervals.push({ fn, delay }); return intervals.length; },
     clearInterval: () => {},
     fetch: async (url, options) => {
       fetches.push({ url, options });
-      const next = responses.shift() || { status: 200, body: TOKEN };
+      const next = fetchToken ? await fetchToken() : responses.shift() || { status: 200, body: TOKEN };
       return { ok: next.status >= 200 && next.status < 300, status: next.status, json: async () => next.body };
     },
     ApiClient: {
@@ -98,7 +99,7 @@ function setup({ tokenResponses = [], getItems } = {}) {
   const page = context.OpenWatchPartyActiveRooms;
   const byId = id => document.getElementById(id);
   const receive = (socket, message) => socket.onmessage({ data: JSON.stringify(message) });
-  return { document, page, sockets, timers, fetches, confirms, alerts, byId, receive };
+  return { document, page, sockets, timers, intervals, fetches, confirms, alerts, byId, receive };
 }
 
 async function connected(options) {
@@ -229,6 +230,14 @@ describe('configuration page active rooms', () => {
     assert.deepEqual({ ...last.payload }, { room_id: 'r1' });
   });
 
+  it('escapes room names for the HTML text accepted by Jellyfin confirmation dialogs', async () => {
+    const env = await connected();
+    env.page.confirmClose(room({ name: '<b>Ana & Luz</b> &lt;img&gt;' }));
+
+    assert.equal(env.confirms[0].options.text,
+      'Close “&lt;b&gt;Ana &amp; Luz&lt;/b&gt; &amp;lt;img&amp;gt;”? The 3 people inside leave the room and see “The server administrator closed the room”.');
+  });
+
   it('explains an old session server', async () => {
     const env = setup();
     env.page.start();
@@ -272,6 +281,51 @@ describe('configuration page active rooms', () => {
     env.receive(env.socket, { type: 'error', payload: { code: 'ROOM_SAVE_IN_PROGRESS', message: 'The room is being saved' } });
 
     assert.deepEqual(env.alerts, ['The room is being saved; try again in a moment']);
+  });
+
+  it('ignores an old token fetch after leaving and returning to the page', async () => {
+    const pending = [];
+    const env = setup({ fetchToken: () => new Promise(resolve => pending.push(resolve)) });
+    env.page.start();
+    env.page.stop();
+    env.page.start();
+    pending[1]({ status: 200, body: TOKEN });
+    await flush();
+    pending[0]({ status: 200, body: TOKEN });
+    await flush();
+
+    assert.equal(env.sockets.length, 1);
+    env.page.stop();
+    assert.ok(env.sockets.every(socket => socket.closed));
+  });
+
+  it('ignores a renewal from the previous connection after reconnecting', async () => {
+    const pending = [];
+    const env = await connected();
+    env.page.fetchToken = () => new Promise(resolve => pending.push(resolve));
+    const renewal = env.page.refresh();
+    env.page.stop();
+    env.page.start();
+    pending[1]({ ok: true, body: TOKEN });
+    await flush();
+    const socket = env.sockets.at(-1);
+    env.receive(socket, { type: 'client_hello' });
+    const sentBefore = socket.sent.length;
+    pending[0]({ ok: true, body: { ...TOKEN, token: 'stale-renewal' } });
+    await renewal;
+
+    assert.equal(socket.sent.length, sentBefore);
+    assert.equal(env.page.token.token, 'tok');
+  });
+
+  it('keeps a connection problem visible when the age clock updates', async () => {
+    const env = await connected();
+    env.receive(env.socket, { type: 'admin_rooms', payload: snapshot([room()]) });
+    env.page.showProblem('roomsAuthRequired');
+    env.intervals.find(timer => timer.delay === 30000).fn();
+
+    assert.equal(env.byId('ActiveRoomsSummary').textContent, 'Requires authentication (JWT secret or pairing key)');
+    assert.equal(env.byId('ActiveRoomsList').children.length, 0);
   });
 
   it('stops listening when the page is left', async () => {
