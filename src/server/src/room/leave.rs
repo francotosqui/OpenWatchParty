@@ -166,6 +166,7 @@ fn begin_host_reconnect_grace(
 
     let generation = crate::types::next_host_reconnect_generation();
     let user_id = client.user_id.clone();
+    let user_name = client.user_name.clone();
     client.room_id = None;
     room.clients.retain(|id| id != client_id);
     crate::room::send_room_administrator(room, clients, None);
@@ -179,6 +180,7 @@ fn begin_host_reconnect_grace(
     }
     room.pending_host_reconnect = Some(PendingHostReconnect {
         user_id,
+        user_name,
         generation,
     });
 

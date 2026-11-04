@@ -1,4 +1,4 @@
-use super::super::constants::PROTOCOL_VERSION;
+use super::super::constants::{PROTOCOL_VERSION, ROOM_DASHBOARD_FEATURE};
 use super::super::dispatch::{close_with_policy, send_error, ErrorCode};
 use super::super::validation::sanitize_name;
 use crate::auth::JwtConfig;
@@ -161,6 +161,14 @@ async fn handle_jwt_auth(
             };
             let sender = {
                 let mut state = state.write().await;
+                if state
+                    .clients
+                    .get(client_id)
+                    .is_some_and(|client| client.admin)
+                {
+                    warn!("Session token on an administrator connection client_id={client_id}");
+                    return false;
+                }
                 let sender = state.clients.get(client_id).map(|c| c.sender.clone());
                 if let Some(client) = state.clients.get_mut(client_id) {
                     client.authenticated = true;
@@ -222,6 +230,59 @@ async fn handle_jwt_auth(
             false
         }
     }
+}
+
+/// Authenticates the plugin page of a Jellyfin administrator. Such a
+/// connection never joins a room: it gets the open rooms instead of
+/// `room_list`, and a connection never switches between the two kinds.
+async fn handle_admin_auth(
+    client_id: &str,
+    token: &str,
+    payload: &serde_json::Value,
+    state: &SharedState,
+    jwt_config: &Arc<JwtConfig>,
+    protocol_version: Option<u64>,
+) -> bool {
+    let Ok(claims) = jwt_config.validate_admin_token(token) else {
+        return false;
+    };
+    let Some(user_name) = sanitize_name(&claims.name) else {
+        return false;
+    };
+    let declares_dashboard = payload
+        .get("features")
+        .and_then(|features| features.as_array())
+        .is_some_and(|features| {
+            features
+                .iter()
+                .any(|feature| feature.as_str() == Some(ROOM_DASHBOARD_FEATURE))
+        });
+    let features = declares_dashboard.then(|| vec![ROOM_DASHBOARD_FEATURE.to_string()]);
+    let sender = {
+        let mut state = state.write().await;
+        let Some(client) = state.clients.get_mut(client_id) else {
+            return false;
+        };
+        if (client.authenticated && !client.admin) || client.room_id.is_some() {
+            warn!("Administrator token on a session connection client_id={client_id}");
+            return false;
+        }
+        client.authenticated = true;
+        client.admin = true;
+        client.user_id = claims.sub;
+        client.user_name = user_name.clone();
+        client.session_expires_at = Some(claims.exp as u64);
+        client.authentication_version = client.authentication_version.wrapping_add(1);
+        info!("Administrator authenticated client_id={client_id} user={user_name:?}");
+        client.sender.clone()
+    };
+    send_message(
+        Some(sender),
+        &auth_success_message(client_id, &user_name, protocol_version, features.as_deref()),
+        Some(client_id),
+    );
+    crate::admin::send_admin_rooms_to(client_id, state).await;
+    true
 }
 
 async fn handle_identity(
@@ -346,6 +407,18 @@ pub(in crate::ws) async fn handle_auth(
             {
                 return;
             }
+            if handle_admin_auth(
+                client_id,
+                token,
+                payload,
+                state,
+                jwt_config,
+                declared_version,
+            )
+            .await
+            {
+                return;
+            }
             send_error(
                 client_id,
                 state,
@@ -396,6 +469,135 @@ mod tests {
     fn assert_error_code(message: WsMessage, code: &str) {
         assert_eq!(message.msg_type, ServerMessageType::Error);
         assert_eq!(message.payload.unwrap()["code"], code);
+    }
+
+    fn signed_jwt_config() -> Arc<JwtConfig> {
+        Arc::new(JwtConfig {
+            secret: "test-secret-with-at-least-32-characters".to_string(),
+            audience: "OpenWatchParty".to_string(),
+            issuer: "Jellyfin".to_string(),
+            enabled: true,
+        })
+    }
+
+    fn signed_token(jwt_config: &JwtConfig, sub: &str, typ: Option<&str>) -> String {
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        encode(
+            &Header::default(),
+            &Claims {
+                sub: sub.to_string(),
+                name: "Admin".to_string(),
+                aud: jwt_config.audience.clone(),
+                iss: jwt_config.issuer.clone(),
+                exp: now + 300,
+                iat: now,
+                typ: typ.map(str::to_string),
+            },
+            &EncodingKey::from_secret(jwt_config.secret.as_bytes()),
+        )
+        .unwrap()
+    }
+
+    fn dashboard_auth_message(token: &str) -> IncomingMessage {
+        IncomingMessage {
+            msg_type: crate::types::ClientMessageType::Auth,
+            room: None,
+            client: None,
+            payload: Some(serde_json::json!({
+                "token": token,
+                "features": [crate::ws::constants::ROOM_DASHBOARD_FEATURE]
+            })),
+            ts: crate::utils::now_ms(),
+            server_ts: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn admin_auth_sends_the_rooms_and_no_room_list() {
+        let state = test_helpers::create_state();
+        let (host, _host_rx) = test_helpers::create_client_with_rx("u-host", "Host", true);
+        let (admin, mut rx) = test_helpers::create_client_with_rx("", "", false);
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("admin".to_string(), admin);
+            let mut room = test_helpers::create_room("r1", "host");
+            room.name = "Movie night".to_string();
+            locked.rooms.insert("r1".to_string(), room);
+        }
+        let jwt_config = signed_jwt_config();
+        let token = signed_token(&jwt_config, "u-admin", Some(crate::auth::ADMIN_TOKEN_TYPE));
+
+        handle_auth(
+            "admin",
+            &dashboard_auth_message(&token),
+            &state,
+            &jwt_config,
+        )
+        .await;
+
+        let success = test_helpers::recv_msg(&mut rx).unwrap();
+        assert_eq!(success.msg_type, ServerMessageType::AuthSuccess);
+        assert_eq!(
+            success.payload.unwrap()["features"],
+            serde_json::json!(["room_dashboard"])
+        );
+        let rooms = test_helpers::recv_msg(&mut rx).unwrap();
+        assert_eq!(rooms.msg_type, ServerMessageType::AdminRooms);
+        assert_eq!(rooms.payload.unwrap()["rooms"][0]["name"], "Movie night");
+        assert!(test_helpers::recv_msg(&mut rx).is_none());
+        let locked = state.read().await;
+        let admin = &locked.clients["admin"];
+        assert!(admin.admin && admin.authenticated);
+        assert_eq!(admin.user_id, "u-admin");
+        assert!(admin.session_expires_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn connections_do_not_change_kind() {
+        let jwt_config = signed_jwt_config();
+        let admin_token = signed_token(&jwt_config, "u-admin", Some(crate::auth::ADMIN_TOKEN_TYPE));
+        let session_token = signed_token(&jwt_config, "u-user", None);
+
+        let state = test_helpers::create_state();
+        let (session, mut session_rx) = test_helpers::create_client_with_rx("u-user", "User", true);
+        let (mut admin, mut admin_rx) =
+            test_helpers::create_client_with_rx("u-admin", "Admin", true);
+        admin.admin = true;
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("session".to_string(), session);
+            locked.clients.insert("admin".to_string(), admin);
+        }
+
+        handle_auth(
+            "session",
+            &dashboard_auth_message(&admin_token),
+            &state,
+            &jwt_config,
+        )
+        .await;
+        handle_auth(
+            "admin",
+            &dashboard_auth_message(&session_token),
+            &state,
+            &jwt_config,
+        )
+        .await;
+
+        assert_error_code(
+            test_helpers::recv_msg(&mut session_rx).unwrap(),
+            "AUTHENTICATION_FAILED",
+        );
+        assert_error_code(
+            test_helpers::recv_msg(&mut admin_rx).unwrap(),
+            "AUTHENTICATION_FAILED",
+        );
+        let locked = state.read().await;
+        assert!(!locked.clients["session"].admin);
+        assert_eq!(locked.clients["session"].user_id, "u-user");
+        assert!(locked.clients["admin"].admin);
+        assert_eq!(locked.clients["admin"].user_id, "u-admin");
     }
 
     #[tokio::test]

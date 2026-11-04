@@ -41,3 +41,9 @@ pub(super) const MAX_CLIENT_LOG_MESSAGE_LENGTH: usize = 1000;
 
 // Liveness
 pub(crate) const HEARTBEAT_INTERVAL_MS: u64 = 20_000; // Server ping cadence
+
+/// Feature an administrator page declares; the server echoes it to
+/// administrator connections only.
+pub const ROOM_DASHBOARD_FEATURE: &str = "room_dashboard";
+/// How often administrator connections get the open rooms when they changed.
+pub const ADMIN_ROOMS_INTERVAL_MS: u64 = 2000;

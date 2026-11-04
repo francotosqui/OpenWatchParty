@@ -635,6 +635,7 @@ mod tests {
                 .extend(["second".to_string(), "other".to_string()]);
             room.pending_host_reconnect = Some(PendingHostReconnect {
                 user_id: "blocked-user".to_string(),
+                user_name: "Host".to_string(),
                 generation: 7,
             });
         }

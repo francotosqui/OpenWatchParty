@@ -41,6 +41,7 @@ fn register_client(
         user_id,
         user_name,
         authenticated,
+        admin: false,
         session_expires_at: None,
         authentication_version: 0,
         supports_host_transfer: false,
