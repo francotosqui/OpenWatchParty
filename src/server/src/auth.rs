@@ -16,7 +16,15 @@ pub struct Claims {
     pub iss: String,
     pub exp: usize,
     pub iat: usize,
+    /// Token kind. Session tokens carry none; administrator tokens carry
+    /// `ADMIN_TOKEN_TYPE`, so neither can stand in for the other.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub typ: Option<String>,
 }
+
+/// `typ` of the short tokens the plugin issues to Jellyfin administrators for
+/// the active rooms page.
+pub const ADMIN_TOKEN_TYPE: &str = "admin";
 
 /// Marker carried by invite tickets so they can never be replayed as session
 /// tokens (and vice versa): the two claim sets are not interchangeable.
@@ -215,9 +223,31 @@ impl JwtConfig {
                 iss: self.issuer.clone(),
                 exp: 0,
                 iat: 0,
+                typ: None,
             });
         }
+        let claims = self.validate_signed(token)?;
+        if claims.typ.is_some() {
+            return Err("Token is not a session token".to_string());
+        }
+        Ok(claims)
+    }
 
+    /// Accepts only a signed administrator token (`typ` = `ADMIN_TOKEN_TYPE`).
+    /// Without authentication there is no way to tell an administrator apart,
+    /// so it is always refused then.
+    pub fn validate_admin_token(&self, token: &str) -> Result<Claims, String> {
+        if !self.enabled {
+            return Err("Administrator access requires authentication".to_string());
+        }
+        let claims = self.validate_signed(token)?;
+        if claims.typ.as_deref() != Some(ADMIN_TOKEN_TYPE) {
+            return Err("Token is not an administrator token".to_string());
+        }
+        Ok(claims)
+    }
+
+    fn validate_signed(&self, token: &str) -> Result<Claims, String> {
         let header =
             decode_header(token).map_err(|error| format!("Invalid token header: {error}"))?;
         let mode = auth_mode()?;
@@ -699,12 +729,84 @@ mod tests {
                 iss: "test".to_string(),
                 exp: now,
                 iat: now.saturating_sub(1),
+                typ: None,
             },
             &EncodingKey::from_secret(config.secret.as_bytes()),
         )
         .unwrap();
 
         assert!(config.validate_token(&token).is_err());
+    }
+
+    fn hs256_config() -> JwtConfig {
+        JwtConfig {
+            secret: "test-secret-with-at-least-32-characters-here".to_string(),
+            audience: "test".to_string(),
+            issuer: "test".to_string(),
+            enabled: true,
+        }
+    }
+
+    fn hs256_token(config: &JwtConfig, sub: &str, typ: Option<&str>) -> String {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        encode(
+            &Header::default(),
+            &Claims {
+                sub: sub.to_string(),
+                name: "Admin".to_string(),
+                aud: "test".to_string(),
+                iss: "test".to_string(),
+                exp: now + 300,
+                iat: now,
+                typ: typ.map(str::to_string),
+            },
+            &EncodingKey::from_secret(config.secret.as_bytes()),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn admin_tokens_are_accepted_only_as_admin_tokens() {
+        let config = hs256_config();
+        let token = hs256_token(&config, "admin-user", Some(ADMIN_TOKEN_TYPE));
+
+        let claims = config
+            .validate_admin_token(&token)
+            .expect("an administrator token must verify");
+        assert_eq!(claims.sub, "admin-user");
+        assert!(config.validate_token(&token).is_err());
+    }
+
+    #[test]
+    fn session_tokens_are_not_admin_tokens() {
+        let config = hs256_config();
+        let token = hs256_token(&config, "user", None);
+
+        assert!(config.validate_token(&token).is_ok());
+        assert!(config.validate_admin_token(&token).is_err());
+        let other = hs256_token(&config, "user", Some("invite"));
+        assert!(config.validate_admin_token(&other).is_err());
+    }
+
+    #[test]
+    fn invite_tickets_are_neither_session_nor_admin_tokens() {
+        let config = hs256_config();
+        let (ticket, _) = config.mint_invite_ticket("room", None).unwrap();
+
+        assert!(config.validate_token(&ticket).is_err());
+        assert!(config.validate_admin_token(&ticket).is_err());
+    }
+
+    #[test]
+    fn admin_access_requires_authentication() {
+        let config = JwtConfig {
+            secret: String::new(),
+            audience: "test".to_string(),
+            issuer: "test".to_string(),
+            enabled: false,
+        };
+        assert!(config.validate_admin_token("x").is_err());
     }
 
     // --- RS256 / trust store ------------------------------------------------
@@ -808,6 +910,7 @@ ghwPqeM2CO//6dCav8vYSdem
                 iss: TEST_ISSUER.to_string(),
                 exp,
                 iat,
+                typ: None,
             },
             &EncodingKey::from_rsa_pem(TEST_RSA_PEM.as_bytes()).unwrap(),
         )
@@ -829,6 +932,7 @@ ghwPqeM2CO//6dCav8vYSdem
                 iss: issuer.to_string(),
                 exp: now + 600,
                 iat: now,
+                typ: None,
             },
             &EncodingKey::from_rsa_pem(TEST_RSA_PEM.as_bytes()).unwrap(),
         )
@@ -844,6 +948,35 @@ ghwPqeM2CO//6dCav8vYSdem
         };
         let header = decode_header(token).unwrap();
         config.validate_header(token, &header, AuthMode::Asymmetric, Some(path))
+    }
+
+    #[test]
+    fn rs256_tokens_keep_their_type() {
+        use jsonwebtoken::{encode, EncodingKey};
+        let dir = unique_temp_dir();
+        let path = write_trust_store(&dir, "active", TEST_ISSUER, TEST_AUDIENCE, TEST_RSA_MODULUS);
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = Some(TEST_KID.to_string());
+        let token = encode(
+            &header,
+            &Claims {
+                sub: "admin-1".to_string(),
+                name: "Alice".to_string(),
+                aud: TEST_AUDIENCE.to_string(),
+                iss: TEST_ISSUER.to_string(),
+                exp: now + 300,
+                iat: now,
+                typ: Some(ADMIN_TOKEN_TYPE.to_string()),
+            },
+            &EncodingKey::from_rsa_pem(TEST_RSA_PEM.as_bytes()).unwrap(),
+        )
+        .unwrap();
+
+        let claims = validate_rs256_token(&token, &path).expect("trusted RS256 token must verify");
+        assert_eq!(claims.typ.as_deref(), Some(ADMIN_TOKEN_TYPE));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -999,6 +1132,7 @@ ghwPqeM2CO//6dCav8vYSdem
                 iss: TEST_ISSUER.to_string(),
                 exp: now + 600,
                 iat: now,
+                typ: None,
             },
             &EncodingKey::from_secret(b"a-shared-secret-for-tests-only!!"),
         )
@@ -1187,6 +1321,7 @@ ghwPqeM2CO//6dCav8vYSdem
                 iss: config.issuer.clone(),
                 exp: now + 300,
                 iat: now,
+                typ: None,
             },
             &EncodingKey::from_secret(config.secret.as_bytes()),
         )

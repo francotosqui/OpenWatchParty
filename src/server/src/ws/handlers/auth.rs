@@ -423,6 +423,7 @@ mod tests {
                 iss: jwt_config.issuer.clone(),
                 exp: now + 3600,
                 iat: now,
+                typ: None,
             },
             &EncodingKey::from_secret(jwt_config.secret.as_bytes()),
         )
@@ -511,6 +512,7 @@ mod tests {
                     iss: jwt_config.issuer.clone(),
                     exp: now + 3600,
                     iat: now,
+                    typ: None,
                 },
                 &EncodingKey::from_secret(jwt_config.secret.as_bytes()),
             )
@@ -750,6 +752,7 @@ mod tests {
                     iss: jwt_config.issuer.clone(),
                     exp: now + 3600,
                     iat: now,
+                    typ: None,
                 },
                 &EncodingKey::from_secret(jwt_config.secret.as_bytes()),
             )
@@ -911,6 +914,7 @@ mod tests {
                 iss: jwt_config.issuer.clone(),
                 exp: now + 3600,
                 iat: now,
+                typ: None,
             },
             &EncodingKey::from_secret(jwt_config.secret.as_bytes()),
         )
@@ -954,6 +958,7 @@ mod tests {
                 iss: jwt_config.issuer.clone(),
                 exp: now + 3600,
                 iat: now,
+                typ: None,
             },
             &EncodingKey::from_secret(jwt_config.secret.as_bytes()),
         )
