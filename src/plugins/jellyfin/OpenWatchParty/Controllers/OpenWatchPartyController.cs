@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using MediaBrowser.Common.Api;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -26,6 +27,10 @@ public class OpenWatchPartyController : ControllerBase
     /// the session server and the JavaScript client; see docs/src/content/docs/technical/protocol.md.
     /// </summary>
     internal const int ProtocolVersion = 1;
+    /// <summary>Lifetime of the active rooms page token; the page renews it a minute before.</summary>
+    internal const int AdminTokenTtlSeconds = 300;
+    /// <summary>`typ` claim the session server requires on administrator tokens.</summary>
+    internal const string AdminTokenType = "admin";
 
     private const string JavaScriptContentType = "text/javascript; charset=utf-8";
     private const string ClientAssetCacheControl = "public, max-age=3600";
@@ -337,14 +342,19 @@ public class OpenWatchPartyController : ControllerBase
         return GetTokenForConfiguration(Plugin.Instance?.Configuration);
     }
 
-    internal ActionResult GetTokenForConfiguration(PluginConfiguration? config)
+    /// <summary>
+    /// The checks every token request passes before signing: configuration, session
+    /// destination, the caller's identity and the authentication settings.
+    /// </summary>
+    private ActionResult? CheckTokenRequest(
+        PluginConfiguration config,
+        out string sessionServerUrl,
+        out string userId,
+        out string userName)
     {
-        if (config == null)
-        {
-            return StatusCode(500, new { error = "Plugin not configured" });
-        }
-
-        if (!SessionServerUrlValidator.TryNormalize(config.SessionServerUrl, out var sessionServerUrl, out var sessionServerUrlError))
+        userId = string.Empty;
+        userName = string.Empty;
+        if (!SessionServerUrlValidator.TryNormalize(config.SessionServerUrl, out sessionServerUrl, out var sessionServerUrlError))
         {
             _logger.LogError("Token issuance is blocked by invalid SessionServerUrl: {ValidationError}", sessionServerUrlError);
             return StatusCode(503, new {
@@ -361,10 +371,10 @@ public class OpenWatchPartyController : ControllerBase
         }
 
         // Get user info from the authenticated context
-        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                  ?? User.FindFirst("Jellyfin-UserId")?.Value;
-        var userName = User.FindFirst(ClaimTypes.Name)?.Value
-                    ?? User.Identity?.Name;
+        userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                  ?? User.FindFirst("Jellyfin-UserId")?.Value ?? string.Empty;
+        userName = User.FindFirst(ClaimTypes.Name)?.Value
+                    ?? User.Identity?.Name ?? string.Empty;
 
         // Validate user claims are present
         if (string.IsNullOrEmpty(userId))
@@ -383,6 +393,22 @@ public class OpenWatchPartyController : ControllerBase
                 error = authenticationError,
                 configuration_error = true
             });
+        }
+
+        return null;
+    }
+
+    internal ActionResult GetTokenForConfiguration(PluginConfiguration? config)
+    {
+        if (config == null)
+        {
+            return StatusCode(500, new { error = "Plugin not configured" });
+        }
+
+        var rejection = CheckTokenRequest(config, out var sessionServerUrl, out var userId, out var userName);
+        if (rejection != null)
+        {
+            return rejection;
         }
 
         if (string.IsNullOrWhiteSpace(config.JwtSecret)
@@ -428,6 +454,62 @@ public class OpenWatchPartyController : ControllerBase
             appearance_text_size = config.AppearanceTextSize,
             appearance_preset = config.AppearancePreset,
             invite_ttl_seconds = config.InviteTtlSeconds,
+            protocol_version = ProtocolVersion
+        });
+    }
+
+    /// <summary>
+    /// Generates a short administrator token for the active rooms section of the
+    /// configuration page. Only Jellyfin administrators may request it.
+    /// </summary>
+    /// <response code="200">Returns the administrator token.</response>
+    /// <response code="409">Authentication is not configured, so administrator access is unavailable.</response>
+    /// <response code="429">Rate limit exceeded.</response>
+    [HttpGet("AdminToken")]
+    [Authorize(Policy = Policies.RequiresElevation)]
+    [Produces("application/json")]
+    public ActionResult GetAdminToken()
+    {
+        CleanupExpiredRateLimits();
+
+        return GetAdminTokenForConfiguration(Plugin.Instance?.Configuration);
+    }
+
+    internal ActionResult GetAdminTokenForConfiguration(PluginConfiguration? config)
+    {
+        if (config == null)
+        {
+            return StatusCode(500, new { error = "Plugin not configured" });
+        }
+
+        var rejection = CheckTokenRequest(config, out var sessionServerUrl, out var userId, out var userName);
+        if (rejection != null)
+        {
+            return rejection;
+        }
+
+        if (string.IsNullOrWhiteSpace(config.JwtSecret)
+            && RsaSigningKeyStore.ForPlugin()?.IsActive != true)
+        {
+            return StatusCode(409, new {
+                error = "Administrator access requires authentication",
+                auth_required = true
+            });
+        }
+
+        if (!TokenRequestLimiter.TryAcquire(userId))
+        {
+            _logger.LogWarning("Token rate limit exceeded for user {UserId}", userId);
+            return StatusCode(429, new { error = "Rate limit exceeded. Try again later." });
+        }
+
+        var token = GenerateJwtToken(userId, userName, config, AdminTokenType, AdminTokenTtlSeconds);
+        _logger.LogInformation("Issued an administrator token for the active rooms page to {UserName} ({UserId})", userName, userId);
+
+        return Ok(new {
+            token,
+            expires_in = AdminTokenTtlSeconds,
+            session_server_url = sessionServerUrl,
             protocol_version = ProtocolVersion
         });
     }
@@ -503,8 +585,14 @@ public class OpenWatchPartyController : ControllerBase
         }
     }
 
-    internal static string GenerateJwtToken(string userId, string userName, PluginConfiguration config)
+    internal static string GenerateJwtToken(
+        string userId,
+        string userName,
+        PluginConfiguration config,
+        string? tokenType = null,
+        int? ttlSeconds = null)
     {
+        var ttl = ttlSeconds ?? config.TokenTtlSeconds;
         var keyStore = RsaSigningKeyStore.ForPlugin();
         if (keyStore?.TryLoadActive(out var asymmetricIssuer, out var kid, out var rsa) == true
             && rsa != null)
@@ -512,7 +600,7 @@ public class OpenWatchPartyController : ControllerBase
             using (rsa)
             {
                 var credentials = new SigningCredentials(new RsaSecurityKey(rsa) { KeyId = kid }, SecurityAlgorithms.RsaSha256);
-                return BuildToken(userId, userName, asymmetricIssuer, config.JwtAudience, config.TokenTtlSeconds, credentials, kid);
+                return BuildToken(userId, userName, asymmetricIssuer, config.JwtAudience, ttl, credentials, kid, tokenType);
             }
         }
         return BuildToken(
@@ -520,9 +608,10 @@ public class OpenWatchPartyController : ControllerBase
             userName,
             config.JwtIssuer,
             config.JwtAudience,
-            config.TokenTtlSeconds,
+            ttl,
             GetSigningCredentials(config.JwtSecret),
-            null);
+            null,
+            tokenType);
     }
 
     internal static string BuildToken(
@@ -532,16 +621,20 @@ public class OpenWatchPartyController : ControllerBase
         string audience,
         int ttlSeconds,
         SigningCredentials credentials,
-        string? kid)
+        string? kid,
+        string? tokenType = null)
     {
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Sub, userId),
             new Claim(JwtRegisteredClaimNames.Name, userName),
             new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
+        // Only administrator tokens carry a type: the session server refuses any
+        // typed token as a session token.
+        if (tokenType != null) claims.Add(new Claim("typ", tokenType));
 
         // Note: aud and iss are set via constructor parameters only — adding them
         // to the claims array too would produce JSON arrays instead of strings,
