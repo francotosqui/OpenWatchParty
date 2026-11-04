@@ -937,9 +937,10 @@ Periodic state update relayed from host.
 
 ### `room_closed`
 
-Room was closed because the host explicitly closed it, no transfer-capable member
-remained after the host left or after its reconnect grace period expired, or the room
-became empty. A participant removed by the host gets it too, alone, with one of
+Room was closed because the host explicitly closed it, a Jellyfin administrator
+closed it from the plugin page (reason `Server administrator closed the room`), no
+transfer-capable member remained after the host left or after its reconnect grace
+period expired, or the room became empty. A participant removed by the host gets it too, alone, with one of
 the exact moderation reasons documented under [`remove_participant`](#remove_participant).
 
 ```json
@@ -1118,6 +1119,8 @@ Error response.
 | `PARTICIPANT_NOT_FOUND` | The requested participant is no longer a room member |
 | `INVALID_MODERATION_TARGET` | The host targeted itself or tried to block an empty or host-owned user id |
 | `BLOCKED_FROM_ROOM` | The authenticated user's id is blocked from the requested room |
+| `ADMIN_PERMISSION_REQUIRED` | A connection that did not authenticate with an administrator token sent `admin_close_room` |
+| `ADMIN_CONNECTION_RESTRICTED` | An administrator connection sent anything other than `auth`, `ping` or `admin_close_room` |
 
 ## Sequence Diagram: Complete Session
 
@@ -1335,3 +1338,88 @@ also returns `room_left` with the departed live room in the envelope and an empt
 payload. This acknowledgement lets the client leave an existing room before
 requesting resume without treating local UI reset as proof of server departure.
 Legacy clients receive no new departure acknowledgement.
+
+## Active rooms for administrators (#186)
+
+The plugin page shows Jellyfin administrators the open rooms and lets them close
+any of them. It uses the same `/ws` endpoint as the players, so it works behind
+a proxy that only forwards `/ws` and `/invite`.
+
+### Administrator token
+
+`GET /OpenWatchParty/AdminToken` (Jellyfin elevation required) returns a token
+with the session claims plus `"typ": "admin"`, valid for 300 seconds. It is
+signed like session tokens (HS256 secret or the active RS256 pairing key). The
+session server accepts it only as an administrator token, and session tokens
+never carry `typ`, so neither can stand in for the other. Without
+authentication (insecure development mode) there are no administrator
+connections.
+
+The page sends a normal `auth` with that token and declares the
+`room_dashboard` feature:
+
+```json
+{"type":"auth","payload":{"token":"<admin token>","protocol_version":1,"features":["room_dashboard"]},"ts":0}
+```
+
+`auth_success.features` echoes `["room_dashboard"]` only to administrator
+connections; a server without this feature does not echo it. A connection does
+not change kind: an administrator token on a session connection, or a session
+token on an administrator connection, fails with `AUTHENTICATION_FAILED`. The
+page refreshes the token with another `auth` before it expires, like players do.
+
+An administrator connection never joins a room and does not receive
+`room_list`. It may send only `auth`, `ping` and `admin_close_room`; anything
+else returns `ADMIN_CONNECTION_RESTRICTED`.
+
+### `admin_rooms` (server → administrator)
+
+Sent right after the administrator's `auth_success`, after each
+`admin_close_room`, and every 2 seconds when the rooms changed.
+
+```json
+{
+  "type": "admin_rooms",
+  "payload": {
+    "server_now_ms": 1678900000000,
+    "rooms": [
+      {
+        "room_id": "room-uuid",
+        "name": "Movie night",
+        "opened_at_ms": 1678896100000,
+        "owner": { "user_id": "jellyfin-user-id", "name": "Ana" },
+        "participants": [
+          { "user_id": "jellyfin-user-id", "name": "Ana" },
+          { "user_id": "other-user-id", "name": "Luz" }
+        ],
+        "media_id": "jellyfin-item-id",
+        "playing": true
+      }
+    ]
+  },
+  "ts": 1678900000000
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `server_now_ms` | number | Server time when the snapshot was built, to show how long each room has been open |
+| `rooms[]` | array | Every open room, oldest first |
+| `opened_at_ms` | number | When the room was created or resumed (Unix ms) |
+| `owner` | object or null | The host's account; while the host reconnects, the account the room waits for |
+| `participants` | array | Members in order of arrival |
+| `media_id` | string or null | The room's Jellyfin item |
+| `playing` | boolean | Whether the room is playing |
+
+### `admin_close_room` (administrator → server)
+
+```json
+{"type":"admin_close_room","payload":{"room_id":"room-uuid"},"ts":0}
+```
+
+Closes the room like the host's `close_room`: members receive `room_closed`
+with reason `Server administrator closed the room`, everyone gets the new
+`room_list`, and administrators get the new `admin_rooms`. A missing `room_id`
+returns `ROOM_ID_REQUIRED`, an unknown room `ROOM_NOT_FOUND`, and a room being
+saved `ROOM_SAVE_IN_PROGRESS` (the room stays). A saved session is not touched.
+A non-administrator connection gets `ADMIN_PERMISSION_REQUIRED`.

@@ -9,6 +9,48 @@ use crate::utils::now_ms;
 use log::info;
 use std::collections::HashMap;
 
+/// `room_closed` reason when a Jellyfin administrator closes the room.
+pub const ADMIN_CLOSED_REASON: &str = "Server administrator closed the room";
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum AdminCloseError {
+    NotFound,
+    Saving,
+}
+
+/// Closes any room for a Jellyfin administrator, like the host's own close:
+/// the members are told why and everyone gets the new room list. A room that
+/// is being saved stays until the save ends.
+pub(crate) async fn close_room_as_admin(
+    room_id: &str,
+    state: &crate::types::SharedState,
+) -> Result<(), AdminCloseError> {
+    {
+        let mut locked = state.write().await;
+        match locked.rooms.get(room_id) {
+            None => return Err(AdminCloseError::NotFound),
+            Some(room) if crate::room::is_saving(room) => return Err(AdminCloseError::Saving),
+            Some(_) => {}
+        }
+        let senders = close_room_in_state(room_id, &mut locked).ok_or(AdminCloseError::NotFound)?;
+        let now = crate::utils::now_ms();
+        crate::messaging::send_to_senders(
+            &senders,
+            &crate::types::WsMessage {
+                msg_type: crate::types::ServerMessageType::RoomClosed,
+                room: Some(room_id.to_string()),
+                client: None,
+                payload: Some(serde_json::json!({ "reason": ADMIN_CLOSED_REASON })),
+                ts: now,
+                server_ts: Some(now),
+            },
+            "room closed",
+        );
+    }
+    crate::messaging::broadcast_room_list(state).await;
+    Ok(())
+}
+
 fn notify_room_closed(
     clients_list: &[String],
     locked_clients: &HashMap<String, Client>,

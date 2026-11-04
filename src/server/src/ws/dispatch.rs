@@ -323,7 +323,9 @@ pub(super) async fn client_msg(
     }
 
     match parsed.msg_type {
-        ClientMessageType::AdminCloseRoom => {}
+        ClientMessageType::AdminCloseRoom => {
+            super::handlers::handle_admin_close_room(client_id, &parsed, state).await
+        }
         ClientMessageType::Auth => handle_auth(client_id, &parsed, state, jwt_config).await,
         ClientMessageType::ListRooms => handle_list_rooms(client_id, state).await,
         ClientMessageType::CreateRoom => handle_create_room(client_id, &parsed, state).await,

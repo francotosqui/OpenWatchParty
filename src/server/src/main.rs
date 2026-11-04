@@ -67,6 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tasks::spawn_zombie_cleanup(state.clone(), &app_tasks);
     tasks::spawn_heartbeat(state.clone(), &app_tasks);
+    tasks::spawn_admin_rooms(state.clone(), &app_tasks);
 
     let routes = routes::build_routes(
         state,
