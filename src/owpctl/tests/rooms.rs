@@ -109,6 +109,7 @@ impl Fixture {
                         &mut socket,
                         json!({"type":"admin_rooms","payload":{"server_now_ms":122000,"rooms":[room()]}}),
                     );
+                    assert_still_waiting(&mut socket);
                     send(
                         &mut socket,
                         json!({"type":"admin_rooms","payload":{"server_now_ms":123000,"rooms":[]}}),
@@ -146,6 +147,29 @@ impl Fixture {
             handle.join().unwrap();
         }
     }
+}
+
+/// After a snapshot that still lists the room, a correct client keeps waiting:
+/// it sends nothing and keeps the connection open.
+fn assert_still_waiting(socket: &mut tungstenite::WebSocket<std::net::TcpStream>) {
+    let stream = socket.get_mut();
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_millis(300)))
+        .unwrap();
+    match socket.read() {
+        Err(tungstenite::Error::Io(error))
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+            ) => {}
+        other => panic!(
+            "the client stopped waiting after a snapshot that still lists the room: {other:?}"
+        ),
+    }
+    socket
+        .get_mut()
+        .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+        .unwrap();
 }
 
 fn send(socket: &mut tungstenite::WebSocket<std::net::TcpStream>, value: Value) {

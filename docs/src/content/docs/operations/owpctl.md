@@ -157,9 +157,12 @@ By default the commands use the Jellyfin URL and public origin saved by
 paths are supported; use the public URL when the reverse proxy's allowed origin
 requires it. The session server URL is returned by the plugin, not guessed.
 
-The protected token file must contain an authenticated Jellyfin administrator's
-**user access token**. A generic server API key without a user identity cannot
-obtain an administrator JWT. The CLI requests a short-lived administrator token
+The protected token file must contain a Jellyfin administrator credential:
+either a signed-in administrator's **user access token** or a server **API key**
+(Dashboard → API Keys). With an API key the administrator connection has no user
+identity, so the session server logs the close with an all-zero user ID; use an
+administrator's user token when you want closes attributed to a person. A
+regular user's token is refused. The CLI requests a short-lived administrator token
 from `OpenWatchParty/AdminToken`; it never needs the session server's signing
 secret and does not print either credential. An older plugin/server, a
 non-administrator account or insecure server authentication produces an error.

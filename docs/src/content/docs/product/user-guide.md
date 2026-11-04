@@ -392,6 +392,6 @@ cannot ask to join and must update OpenWatchParty or use an invite link.
 Jellyfin’s native **Skip Intro**, **Skip Recap** and **Skip Credits** buttons follow the room seek permission. Guests without that permission remain with the room, including when Jellyfin is configured to skip automatically.
 
 Operators can also use `owpctl rooms list` and `owpctl rooms close <room-id>`
-with a Jellyfin administrator user access token. The close command asks for
+with a Jellyfin administrator's access token or a server API key. The close command asks for
 confirmation (or requires `--yes` for automation). See
 [Active rooms in owpctl](/operations/owpctl/#active-rooms).
