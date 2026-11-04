@@ -137,6 +137,16 @@ describe('configuration page active rooms', () => {
     }
   });
 
+  it("shows the server's default room name in the page language", () => {
+    const { page, byId, document } = setup();
+    document.documentElement.lang = 'es';
+    page.render(snapshot([room({ name: "Ana's room" }), room({ room_id: 'r2', name: "Luz's room by Ana" })]), page.now());
+
+    const rows = byId('ActiveRoomsList').children;
+    assert.ok(rows[0].textContent.includes('Sala de Ana'));
+    assert.ok(rows[1].textContent.includes("Luz's room by Ana"));
+  });
+
   it('counts one room and one person in the singular', () => {
     const { page, byId } = setup();
     page.render(snapshot([room({ participants: [person('Ana')] })]), page.now());
