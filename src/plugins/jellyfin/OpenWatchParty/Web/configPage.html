@@ -989,7 +989,9 @@
                     $('#HideNativeSyncPlayButton', page).prop('checked', config.HideNativeSyncPlayButton === true);
                     $('#ShowSyncNudgeButton', page).prop('checked', config.ShowSyncNudgeButton === true);
                     setAppearance(page, config);
-                    OpenWatchPartyConfigurationPage.runDiagnostics(false).then(function(diagnostics) {
+                    // The full run also checks the session server, so the badge
+                    // is not left saying ready when that server cannot be reached.
+                    OpenWatchPartyConfigurationPage.runDiagnostics(true).then(function(diagnostics) {
                         if (diagnostics) OpenWatchPartyConfigurationPage.updateAuthStatus(page, config, diagnostics);
                     });
 

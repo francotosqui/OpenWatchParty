@@ -281,6 +281,8 @@ The diagnostics routes require administrator elevation:
   destination instead and expects the server's `client_hello`; that check passes
   without a session version. A failed check is reported in the response rather
   than changing the plugin configuration.
+  The configuration page runs it when it opens, so its badge reflects the
+  session server too; `Status` alone does not contact that server.
 
 The RSA signing-key routes also require administrator elevation:
 
