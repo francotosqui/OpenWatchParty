@@ -247,6 +247,27 @@ describe('room bar', () => {
     assert.deepEqual(openSections(), []);
   });
 
+  // The bell's menu and the mention list are drawn over the page, not in the
+  // drop-down, so they are closed with it.
+  it('closes the chat popups when the chat closes or the panel hides', () => {
+    const previous = { chatAlerts: OWP.chatAlerts, mentions: OWP.mentions };
+    const closed = [];
+    OWP.chatAlerts = { closeMenu: () => closed.push('bell'), createBell: () => document.createElement('div'), markRead() {}, hasUnreadMention: () => false, notify() {} };
+    OWP.mentions = { close: () => closed.push('mentions'), attach() {}, handleKeydown: () => false };
+    try {
+      renderRoom();
+      byId('owp-btn-chat').click();
+      closed.length = 0;
+      byId('owp-btn-people').click();
+      assert.deepEqual(closed, ['bell', 'mentions']);
+      closed.length = 0;
+      OWP.ui.hidePanel();
+      assert.deepEqual(closed, ['bell', 'mentions']);
+    } finally {
+      Object.assign(OWP, previous);
+    }
+  });
+
   it('keeps the open drop-down when the panel is drawn again', () => {
     renderRoom();
     byId('owp-btn-people').click();

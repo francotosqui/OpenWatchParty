@@ -28,21 +28,26 @@
     return true;
   };
 
-  // The chat is a drop-down of the room bar: it is read only while it is open.
+  // The chat is a drop-down of the room bar: it is read only while it is open
+  // and on screen, not while the panel fades with the player's controls.
   const isChatVisible = () => {
     const chatSection = document.getElementById('owp-chat-section');
     const panel = document.getElementById(OWP.constants.PANEL_ID);
-    return Boolean(chatSection && !chatSection.hidden && panel && !panel.classList.contains('hide'));
+    return Boolean(chatSection && !chatSection.hidden && panel && !panel.classList.contains('hide')
+      && !panel.classList.contains(OWP.constants.PANEL_CONTROLS_HIDDEN_CLASS));
   };
 
   const markRead = () => {
     chat.unreadCount = 0;
+    OWP.chatAlerts?.markRead();
     updateBadge();
   };
 
   const updateBadge = () => {
     const badge = document.getElementById('owp-chat-badge');
     const count = chat.unreadCount > 99 ? '99+' : chat.unreadCount;
+    const mentioned = chat.unreadCount > 0 && Boolean(OWP.chatAlerts?.hasUnreadMention());
+    badge?.classList.toggle('owp-chat-badge-mention', mentioned);
     if (badge) {
       if (chat.unreadCount > 0) {
         badge.textContent = count;
@@ -53,7 +58,7 @@
     }
     // The chat button shows only an icon and the badge: name the unread count.
     const button = document.getElementById('owp-btn-chat');
-    if (button) button.setAttribute('aria-label', chat.unreadCount > 0 ? t('chatUnread', { count }) : t('chat'));
+    if (button) button.setAttribute('aria-label', chat.unreadCount > 0 ? t(mentioned ? 'chatUnreadMention' : 'chatUnread', { count }) : t('chat'));
   };
 
   Object.assign(chat, { send, isChatVisible, markRead, updateBadge });

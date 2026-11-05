@@ -216,6 +216,10 @@ class FakeElement extends FakeNode {
     return Object.prototype.hasOwnProperty.call(this.attributes, name) ? this.attributes[name] : null;
   }
 
+  removeAttribute(name) {
+    delete this.attributes[name];
+  }
+
   setAttribute(name, value) {
     this.attributes[name] = String(value);
     if (name === 'id') this.id = String(value);
@@ -313,6 +317,15 @@ class FakeDocument {
 
   querySelectorAll(selector) {
     return this.body.querySelectorAll(selector);
+  }
+
+  addEventListener(type, listener) {
+    this.listeners = this.listeners || [];
+    this.listeners.push({ type, listener });
+  }
+
+  removeEventListener(type, listener) {
+    this.listeners = (this.listeners || []).filter(entry => entry.type !== type || entry.listener !== listener);
   }
 }
 

@@ -144,6 +144,7 @@
       load('ui/toasts.js'),
       load('ui/cards.js'),
       load('ui/panel-elements.js'),
+      load('ui/avatars.js'),
     ]);
     await Promise.all([
       load('ui/lobby.js'),
@@ -167,6 +168,9 @@
     await load('chat/emoji-data.js');
     await Promise.all([
       load('chat/messages.js'),
+      load('chat/typing.js'),
+      load('chat/mentions.js'),
+      load('chat/alerts.js'),
       load('chat/emoji-picker.js'),
       load('chat/input.js'),
     ]);

@@ -24,7 +24,7 @@ The WebSocket protocol has its own version, independent of the product release. 
 
 **Compatibility rules:**
 
-- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `participant_tracks`, `shared_playback_control`, `room_moderation`, `room_permissions`, `media_queue`, `queue_suggestions`, `start_when_ready`, `chat_history` and `room_access`.
+- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `participant_tracks`, `shared_playback_control`, `room_moderation`, `room_permissions`, `media_queue`, `queue_suggestions`, `start_when_ready`, `chat_history`, `chat_typing`, `user_avatars` and `room_access`.
 - The web client validates known message and payload schemas strictly. An unknown server message type or unknown field is warned about and dropped by the client; the session continues. An unknown client request type receives `UNKNOWN_MESSAGE_TYPE`. Do not assume new fields on an existing payload are ignored by every client.
 - A server may send an optional extension only to clients that advertised the corresponding feature, or use a new message whose absence leaves legacy behavior intact. Version 1 remains unchanged for these additive extensions; changing an existing field's meaning or removing/retyping it requires a compatibility review and protocol version change.
 
@@ -66,7 +66,7 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
   "payload": {
     "token": "eyJhbGciOiJIUzI1NiIs...",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "participant_tracks", "shared_playback_control", "room_moderation", "room_permissions", "media_queue", "queue_suggestions", "start_when_ready", "chat_history", "room_access"]
+    "features": ["host_transfer", "participant_status", "participant_tracks", "shared_playback_control", "room_moderation", "room_permissions", "media_queue", "queue_suggestions", "start_when_ready", "chat_history", "chat_typing", "user_avatars", "room_access"]
   },
   "ts": 1678900000000
 }
@@ -76,7 +76,7 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
 |---------------|------|----------|-------------|
 | `token` | string | No | JWT issued by the `/OpenWatchParty/Token` endpoint |
 | `protocol_version` | number | No | Client protocol version; defaults to `1` when omitted |
-| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `participant_tracks`, `shared_playback_control`, `room_moderation`, `room_permissions`, `media_queue`, `queue_suggestions`, `start_when_ready`, `chat_history` and `room_access` |
+| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `participant_tracks`, `shared_playback_control`, `room_moderation`, `room_permissions`, `media_queue`, `queue_suggestions`, `start_when_ready`, `chat_history`, `chat_typing`, `user_avatars` and `room_access` |
 
 On a protocol version mismatch the server answers with `error` (`PROTOCOL_VERSION_UNSUPPORTED`) and closes the connection.
 Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, gets participant ids only when it declared `room_moderation`, and gets `queue_state` only when it declared `media_queue`, and gets `queue_details` only when it declared `queue_suggestions`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged the corresponding feature. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room. A client gets `start_state` only when it declared `start_when_ready`, and the web client sends `readiness` and `start_now` (see [Start when ready](#start-when-ready)) only to a server that acknowledged it.
@@ -414,6 +414,23 @@ Send a text message to the room.
 - `"Chat message too long (max 500 characters)"` - Text exceeds limit
 - `"Room ID required for chat"` - Missing room ID
 
+### `chat_typing`
+
+Says that this member started or stopped typing in the chat. Only accepted from a client that declared `chat_typing`; it is ephemeral, never stored, and anything invalid (not a member, no boolean `active`) is dropped without an error.
+
+```json
+{
+  "type": "chat_typing",
+  "room": "uuid-room-id",
+  "payload": { "active": true },
+  "ts": 1678900000000
+}
+```
+
+**Effects:**
+- Relayed as `chat_typing` to the other members that declared `chat_typing`
+- A start is relayed at most once every 2 s per client; a stop always is. Clients send a start at most every 3 s while typing, and a stop when the field empties or the message is sent
+
 ### `participant_status`
 
 Report how this client is doing, for the room's participants list. Informational only: it never changes playback.
@@ -557,7 +574,7 @@ Sent after a successful `auth` with a JWT, and for feature-aware clients in inse
   "payload": {
     "user_name": "Alice",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "participant_tracks", "shared_playback_control", "room_moderation", "room_permissions", "media_queue", "queue_suggestions", "start_when_ready", "chat_history", "room_access"]
+    "features": ["host_transfer", "participant_status", "participant_tracks", "shared_playback_control", "room_moderation", "room_permissions", "media_queue", "queue_suggestions", "start_when_ready", "chat_history", "chat_typing", "user_avatars", "room_access"]
   },
   "ts": 1678900000000,
   "server_ts": 1678900000000
@@ -588,6 +605,12 @@ List of active rooms.
 ```
 
 Rooms that block the receiving user's id are omitted.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `approval` | boolean | Whether joining needs the host's approval; only for clients that negotiated `room_access` |
+| `host_user_id` | string | The host's Jellyfin user id, for its avatar; only for clients that negotiated `user_avatars`, and only while the host is connected |
+| `host_name` | string | The host's name, under the same conditions as `host_user_id` |
 
 ### `room_state`
 
@@ -697,6 +720,7 @@ Display names of the room's participants, in join order. Sent to the host when t
 | `participants[].id` | string | Participant client id (the same id used by `client_left` and `host_changed`); present only for recipients that negotiated `room_moderation` |
 | `participants[].name` | string | Display name of the participant |
 | `participants[].is_host` | boolean | Whether the participant is the room host |
+| `participants[].user_id` | string | Participant's Jellyfin user id, for its avatar (`/Users/{id}/Images/Primary`); present only for recipients that negotiated `user_avatars` and for authenticated members |
 
 Recipients that did not negotiate `room_moderation` receive the legacy entries with
 only `name` and `is_host`, because older clients reject unknown fields. It is a
@@ -994,11 +1018,29 @@ Chat message broadcast from server.
 |---------------|------|-------------|
 | `username` | string | Sender's display name |
 | `text` | string | Message text |
+| `user_id` | string | Sender's Jellyfin user id, only for clients that declared `user_avatars` (absent without authentication) |
+
+Text such as `@Alice` is a mention: clients highlight it and, when the mention names the reader, show it as such. The server does not interpret it.
 
 **Client processing:**
 1. Add message to local chat history (max 100 messages)
 2. If chat panel not visible, increment unread badge
 3. Render message in chat UI
+
+### `chat_typing`
+
+Someone else in the room started (`active: true`) or stopped typing. Sent only to clients that declared `chat_typing`; `client` is the typing member. Clients hide a start that is not renewed within 5 s.
+
+```json
+{
+  "type": "chat_typing",
+  "room": "uuid-room-id",
+  "client": "uuid-sender-id",
+  "payload": { "username": "Alice", "active": true },
+  "ts": 1678900000000,
+  "server_ts": 1678900000050
+}
+```
 
 ### `chat_history`
 
@@ -1024,7 +1066,8 @@ The room's last chat messages (up to 50, oldest first), sent once to a member th
 | `username` | string | The sender's name, as in `chat_message` |
 | `text` | string | The message |
 | `server_ts` | number | When the server relayed it |
-| `own` | boolean | Whether the joiner's user sent it, from this or an earlier connection (the server compares Jellyfin user ids without sending them) |
+| `own` | boolean | Whether the joiner's user sent it, from this or an earlier connection (the server compares Jellyfin user ids) |
+| `user_id` | string | The sender's Jellyfin user id, only for a joiner that negotiated `user_avatars` |
 
 ### `error`
 

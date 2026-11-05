@@ -194,6 +194,8 @@
     if (open !== 'chat') {
       OWP.emoji?.closePicker?.();
       OWP.emoji?.hideSuggestions?.();
+      OWP.chatAlerts?.closeMenu?.();
+      OWP.mentions?.close?.();
     }
     if (open === 'sync') updateSyncSection();
     if (open === 'chat' && OWP.chat && OWP.chat.isChatVisible()) {
@@ -445,8 +447,17 @@
     emojiBtn.setAttribute('aria-controls', 'owp-emoji-panel');
     emojiBtn.textContent = '😊';
     emojiBtn.onclick = () => OWP.emoji?.togglePicker(input);
-    inputContainer.append(input, emojiBtn, send);
-    chatSection.append(messages, inputContainer);
+    const bell = OWP.chatAlerts?.createBell();
+    inputContainer.append(input, ...(bell ? [bell] : []), emojiBtn, send);
+    const typing = createElement('div', 'owp-chat-typing');
+    typing.id = 'owp-chat-typing';
+    typing.hidden = true;
+    typing.setAttribute('aria-live', 'polite');
+    const dots = createElement('span', 'owp-chat-typing-dots');
+    dots.setAttribute('aria-hidden', 'true');
+    dots.append(createElement('i'), createElement('i'), createElement('i'));
+    typing.append(dots, createElement('span', 'owp-chat-typing-text'));
+    chatSection.append(messages, typing, inputContainer);
 
     const confirm = createElement('div', 'owp-leave-confirm');
     confirm.id = 'owp-leave-confirm';
@@ -468,26 +479,32 @@
     chatInput.addEventListener('keydown', (e) => {
       // The input stops key events from bubbling (so the player ignores
       // typing), so the drop-down's Escape handler is called from here.
+      if (OWP.mentions?.handleKeydown(e)) return;
       if (OWP.emoji?.handleKeydown?.(e)) return;
       if (closeRoomSectionFromKeyboard(e)) return;
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         if (OWP.chat && OWP.chat.send(chatInput.value)) {
           chatInput.value = '';
+          OWP.chatTyping?.stop();
         }
       }
     });
     chatSend.addEventListener('click', () => {
       if (OWP.chat && OWP.chat.send(chatInput.value)) {
         chatInput.value = '';
+        OWP.chatTyping?.stop();
       }
     });
+    chatInput.addEventListener('input', () => OWP.chatTyping?.inputChanged(chatInput.value));
+    OWP.chatTyping?.render();
     if (OWP.chat) {
       OWP.chat.renderAllMessages();
       if (OWP.chat.isChatVisible()) OWP.chat.markRead();
       else OWP.chat.updateBadge();
     }
     if (OWP.emoji?.setupAutocomplete) OWP.emoji.setupAutocomplete(chatInput);
+    OWP.mentions?.attach(chatInput);
   };
 
   Object.assign(views, { renderRoom, setupChatInput, toggleRoomSection, applyRoomSection });

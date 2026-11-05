@@ -144,7 +144,7 @@ describe('appearance styles', () => {
     // What stays fixed: hairline borders, the visually hidden text, the window
     // widths of the media queries, the places on screen, the margins to the
     // window edges, the animations and the blur.
-    const fixed = /1px solid|width: 1px; height: 1px|@media \(max-width: \d+px\)|top: 72px; right: 20px|bottom: 100px; right: 20px|left: 8px; right: 8px|calc\(100v[wh] - \d+px\)|translateX\(20px\)|blur\(10px\)|--owp-blur: 12px/g;
+    const fixed = /1px solid|width: 1px; height: 1px|@media \(max-width: \d+px\)|top: 72px; right: 20px|bottom: 100px; right: 20px|\.owp-toast-container \{ bottom: 24px; \}|left: 8px; right: 8px|calc\(100v[wh] - \d+px\)|translateX\(20px\)|blur\(10px\)|--owp-blur: 12px/g;
     assert.deepEqual(unscaled.replace(fixed, '').match(/\d+(\.\d+)?px/g), null);
   });
 
@@ -153,7 +153,7 @@ describe('appearance styles', () => {
   });
 
   it('starts at 14 px and 55 %, and turns opaque when less transparency is asked for', () => {
-    assert.match(css, /#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float, \.owp-saved-overlay, #owp-emoji-panel, #owp-emoji-autocomplete \{\s*--owp-scale: 1\.1666/);
+    assert.match(css, /#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float, \.owp-saved-overlay, #owp-emoji-panel, #owp-emoji-autocomplete, #owp-chat-bell-menu, #owp-mention-list \{\s*--owp-scale: 1\.1666/);
     assert.match(css, /--owp-surface-alpha: 0\.55/);
     assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{\s*#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float \{ --owp-surface-alpha: 1 !important; \}/);
   });
@@ -189,9 +189,10 @@ describe('appearance styles', () => {
     const panel = css.slice(css.indexOf('#owp-panel, .owp-toast-container'));
     const radii = panel.match(/border-radius: [^;]+/g);
     const others = radii.filter(radius => !/^border-radius: calc\(\d+px \* var\(--owp-scale\) \* var\(--owp-round\)\)$/.test(radius));
-    // The status and sync dots, switch thumb and spinner stay round; the poster count, outside the panel, keeps its own.
+    // The status and sync dots, switch thumb and spinner stay round, as does the
+    // host photo on the home card; the poster count, outside the panel, keeps its own.
     assert.deepEqual([...new Set(others)].sort(), ['border-radius: 0.4em', 'border-radius: 50%']);
-    assert.equal(others.filter(radius => radius === 'border-radius: 50%').length, 5);
+    assert.equal(others.filter(radius => radius === 'border-radius: 50%').length, 6);
     assert.match(css, /--owp-round: 1;/);
   });
 

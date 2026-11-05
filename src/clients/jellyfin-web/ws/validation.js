@@ -46,7 +46,9 @@
     if (!Array.isArray(message.payload)) return 'payload must be an array';
     for (const room of message.payload) {
       if (!object(room)) return 'room_list entries must be objects';
-      if (!onlyKeys(room, ['id', 'name', 'count', 'media_id', 'approval'])) return 'room_list entry has unknown fields';
+      if (!onlyKeys(room, ['id', 'name', 'count', 'media_id', 'approval', 'host_user_id', 'host_name'])) return 'room_list entry has unknown fields';
+      if (!optional(room.host_user_id, jellyfinUserId)) return 'room_list entry host_user_id is invalid';
+      if (!optional(room.host_name, value => string(value, MAX_NAME_LENGTH))) return 'room_list entry host_name is invalid';
       if (!optional(room.approval, value => typeof value === 'boolean')) return 'approval is invalid';
       if (!string(room.id, MAX_ID_LENGTH)) return 'room_list entry id is invalid';
       if (!string(room.name, MAX_ROOM_NAME_LENGTH)) return 'room_list entry name is invalid';
@@ -96,6 +98,9 @@
     return count(message.payload.participant_count) ? null : 'participant_count is invalid';
   };
 
+  const jellyfinUserId = value => typeof value === 'string' && /^[0-9a-f]{32}$/i.test(value.replace(/-/g, ''))
+    && value.length <= 36;
+
   const validateParticipantList = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
     if (!onlyKeys(message.payload, ['participants'])) return 'participant_list has unknown fields';
@@ -103,7 +108,8 @@
     if (!Array.isArray(participants) || participants.length > MAX_PARTICIPANTS) return 'participants is invalid';
     for (const participant of participants) {
       if (!object(participant)) return 'participant entries must be objects';
-      if (!onlyKeys(participant, ['name', 'is_host', 'id'])) return 'participant entry has unknown fields';
+      if (!onlyKeys(participant, ['name', 'is_host', 'id', 'user_id'])) return 'participant entry has unknown fields';
+      if (!optional(participant.user_id, jellyfinUserId)) return 'participant user_id is invalid';
       if (!string(participant.name, MAX_NAME_LENGTH, true)) return 'participant name is invalid';
       if (typeof participant.is_host !== 'boolean') return 'participant is_host is invalid';
       if (!optional(participant.id, value => string(value, MAX_ID_LENGTH))) return 'participant id is invalid';
@@ -207,8 +213,9 @@
 
   const validateChat = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
-    if (!onlyKeys(message.payload, ['username', 'text'])) return 'chat_message has unknown fields';
+    if (!onlyKeys(message.payload, ['username', 'text', 'user_id'])) return 'chat_message has unknown fields';
     if (!string(message.payload.username, MAX_NAME_LENGTH)) return 'chat username is invalid';
+    if (!optional(message.payload.user_id, jellyfinUserId)) return 'chat user_id is invalid';
     return string(message.payload.text, MAX_CHAT_LENGTH) ? null : 'chat text is invalid';
   };
 
@@ -285,12 +292,22 @@
     const { messages } = message.payload;
     if (!Array.isArray(messages) || messages.length > MAX_CHAT_HISTORY) return 'messages is invalid';
     for (const entry of messages) {
-      if (!object(entry) || !onlyKeys(entry, ['client', 'username', 'text', 'server_ts', 'own'])) return 'chat history entry is invalid';
+      if (!object(entry) || !onlyKeys(entry, ['client', 'username', 'text', 'server_ts', 'own', 'user_id'])) return 'chat history entry is invalid';
+      if (!optional(entry.user_id, jellyfinUserId)) return 'chat history entry is invalid';
       if (typeof entry.own !== 'boolean') return 'chat history entry is invalid';
       if (!string(entry.client, MAX_ID_LENGTH) || !string(entry.username, MAX_NAME_LENGTH, true)) return 'chat history entry is invalid';
       if (!string(entry.text, MAX_CHAT_LENGTH) || !timestamp(entry.server_ts)) return 'chat history entry is invalid';
     }
     return null;
+  };
+
+  // Someone in the room started or stopped typing: ephemeral, never stored.
+  const validateChatTyping = (message) => {
+    if (!payloadObject(message)) return 'payload must be an object';
+    if (!onlyKeys(message.payload, ['username', 'active'])) return 'chat_typing has unknown fields';
+    if (!string(message.client, MAX_ID_LENGTH)) return 'chat_typing client is required';
+    if (!string(message.payload.username, MAX_NAME_LENGTH, true)) return 'chat_typing username is invalid';
+    return typeof message.payload.active === 'boolean' ? null : 'chat_typing active is invalid';
   };
 
   const validateError = (message) => {
@@ -340,6 +357,7 @@
     state_update: validateStateUpdate,
     pong: validatePong,
     chat_message: validateChat,
+    chat_typing: validateChatTyping,
     queue_state: validateQueueState,
     queue_details: validateQueueDetails,
     start_state: validateStartState,
@@ -363,6 +381,7 @@
     'player_event',
     'state_update',
     'chat_message',
+    'chat_typing',
     'queue_state',
     'queue_details',
     'start_state',

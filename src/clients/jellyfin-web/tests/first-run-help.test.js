@@ -122,6 +122,63 @@ describe('lobby help and first run', () => {
     delete window.localStorage;
   });
 
+  // A narrow window or the largest text: the buttons must stay in the panel.
+  describe('the lobby header in a narrow panel', () => {
+    let observers;
+    beforeEach(() => {
+      storage.set('owp-help-seen', '1');
+      modernHeader();
+      observers = [];
+      window.ResizeObserver = class {
+        constructor(callback) {
+          this.callback = callback;
+          this.targets = [];
+          observers.push(this);
+        }
+        observe(target) { this.targets.push(target); }
+        disconnect() { this.disconnected = true; }
+      };
+    });
+    afterEach(() => {
+      delete window.ResizeObserver;
+    });
+
+    it('keeps only the status dot, and lets the title shorten, while the buttons do not fit', () => {
+      openLobbyFromHeader();
+      const header = panel().querySelector('.owp-header');
+      const watching = observers.filter(observer => !observer.disconnected && observer.targets.includes(header));
+      assert.equal(watching.length, 1);
+      assert.ok(watching[0].targets.includes(header.querySelector('.owp-header-actions')));
+      // The header's laid-out widths: 360 px of content in a 320 px header,
+      // 300 px once compact.
+      let natural = 360;
+      Object.defineProperty(header, 'clientWidth', { configurable: true, value: 320 });
+      Object.defineProperty(header, 'scrollWidth', { configurable: true, get: () => (header.classList.contains('owp-header-compact') ? 300 : natural) });
+      watching[0].callback([]);
+      assert.equal(header.classList.contains('owp-header-compact'), true);
+      natural = 310;
+      watching[0].callback([]);
+      assert.equal(header.classList.contains('owp-header-compact'), false);
+
+      OWP.ui.injectStyles();
+      const css = document.getElementById(OWP.constants.STYLE_ID).textContent;
+      assert.match(css, /\.owp-header-compact \.owp-ws-status \{ font-size: 0; gap: 0; \}/);
+      assert.match(css, /\.owp-header-compact \.owp-panel-title \{ min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; \}/);
+      assert.match(css, /\.owp-header-compact \.owp-header-actions \{ flex-shrink: 0; \}/);
+    });
+
+    it('watches only the header drawn last', () => {
+      openLobbyFromHeader();
+      const first = panel().querySelector('.owp-header');
+      OWP.ui.render(true);
+      const second = panel().querySelector('.owp-header');
+      assert.notEqual(first, second);
+      const watching = observers.filter(observer => !observer.disconnected);
+      assert.equal(watching.length, 1);
+      assert.ok(watching[0].targets.includes(second));
+    });
+  });
+
   describe('the "?" in the lobby', () => {
     beforeEach(() => {
       storage.set('owp-help-seen', '1');

@@ -9,6 +9,7 @@
 
 
   const CREATE_ROOM_HINT_ID = 'owp-create-hint';
+  const HEADER_COMPACT_CLASS = 'owp-header-compact';
 
 
   // A room starts from what is playing; without it there is nothing to share.
@@ -139,6 +140,27 @@
   };
 
 
+  // In a narrow window or with the largest text the title, the connection
+  // status and the buttons can be wider than the panel. The status then keeps
+  // only its dot (its words stay for screen readers and as its tooltip), and
+  // the title gives way before the buttons would leave the panel.
+  let headerObserver = null;
+  const fitHeader = (header) => {
+    header.classList.remove(HEADER_COMPACT_CLASS);
+    if (header.scrollWidth > header.clientWidth) header.classList.add(HEADER_COMPACT_CLASS);
+  };
+  // Its width changes with the window, the text size and the panel being
+  // shown; the actions' with the status words and the saved-sessions button.
+  const watchHeader = (header, actions) => {
+    headerObserver?.disconnect();
+    headerObserver = null;
+    if (typeof window.ResizeObserver !== 'function') return;
+    headerObserver = new window.ResizeObserver(() => fitHeader(header));
+    headerObserver.observe(header);
+    headerObserver.observe(actions);
+  };
+
+
   const renderLobby = (panel) => {
     const header = createElement('div', 'owp-header');
     header.append(createElement('span', 'owp-panel-title', 'OpenWatchParty'), document.createTextNode(' '));
@@ -170,6 +192,7 @@
     server.id = SERVER_LABEL_ID;
     footer.append(document.createTextNode(t('server')), server);
     panel.replaceChildren(header, createLobbyHelp(), lobby, footer);
+    watchHeader(header, actions);
     applyLobbyHelp();
     ui.updateRoomListUI();
     updateCreateRoomButton();

@@ -29,13 +29,20 @@
     return container;
   };
 
-  const showChatToast = (username, text) => {
+  const showChatToast = (username, text, options = {}) => {
     const container = getToastContainer();
     const toast = document.createElement('div');
-    toast.className = 'owp-toast';
+    toast.className = 'owp-toast' + (options.mention ? ' owp-toast-mention' : '');
+    if (options.mention) {
+      const label = document.createElement('span');
+      label.className = 'owp-toast-label';
+      label.textContent = OWP.i18n.t('mentionedYou');
+      toast.appendChild(label);
+    }
     const usernameEl = document.createElement('span');
     usernameEl.className = 'owp-toast-username';
     usernameEl.textContent = String(username);
+    if (options.mention && OWP.avatars) usernameEl.prepend(OWP.avatars.create(username, options.userId, 'owp-chat-avatar'));
     const textEl = document.createElement('span');
     textEl.className = 'owp-toast-text';
     textEl.textContent = String(text);

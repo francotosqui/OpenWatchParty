@@ -143,6 +143,25 @@ describe('home Watch Parties card', () => {
     assert.notEqual(cards()[0], first);
     assert.deepEqual(cards().map(card => [card.dataset.roomId, card.dataset.mediaId]), [['room-1', NEXT], ['room-2', MEDIA_ID]]);
   });
+
+  it('replaces a card, in place, when its room has a new host', () => {
+    OWP.utils.isHomeView = () => true;
+    const home = document.createElement('div');
+    home.className = 'homeSectionsContainer';
+    document.body.appendChild(home);
+    const ANA = 'aaaaaaaabbbbccccddddeeeeeeeeeeee';
+    const BRUNO = 'bbbbbbbbccccddddeeeeffffffffffff';
+    const show = hostUserId => {
+      OWP.state.rooms = [{ ...room, media_id: null, host_user_id: hostUserId, host_name: 'Ana' }];
+      OWP.ui.renderHomeWatchParties();
+      return home.querySelector('.owp-room-card');
+    };
+    const first = show(ANA);
+    assert.equal(show(ANA), first);
+    const next = show(BRUNO);
+    assert.notEqual(next, first);
+    assert.equal(next.dataset.host, BRUNO);
+  });
 });
 
 describe('joining from the home Watch Parties card', () => {

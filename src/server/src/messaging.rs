@@ -72,12 +72,23 @@ struct RoomListEntry<'a> {
     media_id: &'a Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     approval: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    host_user_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    host_name: Option<&'a str>,
 }
 
+fn non_empty(value: &str) -> Option<&str> {
+    (!value.is_empty()).then_some(value)
+}
+
+/// Builds the room list. `hosts`, given to clients that show avatars, names
+/// each room's connected host by Jellyfin user id and name.
 fn build_room_list_msg(
     rooms: &HashMap<String, Room>,
     user_id: Option<&str>,
     access: bool,
+    hosts: Option<&HashMap<String, Client>>,
 ) -> WsMessage {
     let list: Vec<_> = rooms
         .values()
@@ -85,12 +96,17 @@ fn build_room_list_msg(
             !room.access.unlisted
                 && user_id.is_none_or(|user_id| !room.blocked_users.contains(user_id))
         })
-        .map(|r| RoomListEntry {
-            approval: access.then_some(r.access.approval),
-            id: &r.room_id,
-            name: &r.name,
-            count: r.clients.len(),
-            media_id: &r.media_id,
+        .map(|r| {
+            let host = hosts.and_then(|clients| clients.get(&r.host_id));
+            RoomListEntry {
+                approval: access.then_some(r.access.approval),
+                id: &r.room_id,
+                name: &r.name,
+                count: r.clients.len(),
+                media_id: &r.media_id,
+                host_user_id: host.and_then(|host| non_empty(&host.user_id)),
+                host_name: host.and_then(|host| non_empty(&host.user_name)),
+            }
         })
         .collect();
     WsMessage {
@@ -114,6 +130,9 @@ pub async fn send_room_list(client_id: &str, state: &SharedState) {
         &state.rooms,
         client.map(|client| client.user_id.as_str()),
         client.is_some_and(|client| client.supports_room_access),
+        client
+            .is_some_and(|client| client.supports_user_avatars)
+            .then_some(&state.clients),
     );
     send_message(sender, &msg, Some(client_id));
 }
@@ -123,13 +142,15 @@ pub async fn broadcast_room_list(state: &SharedState) {
     // Only authenticated clients may learn about rooms, matching the gate on
     // `list_rooms` and on the initial room list. In insecure mode every client
     // is marked authenticated, so that deployment keeps its behaviour.
-    let legacy = build_room_list_msg(&state.rooms, None, false);
-    let access = build_room_list_msg(&state.rooms, None, true);
+    // One shared list per combination of the access and avatar features,
+    // built the first time a client needs it.
+    let mut shared: [Option<WsMessage>; 4] = [None, None, None, None];
     for (client_id, client) in state
         .clients
         .iter()
         .filter(|(_, client)| client.authenticated)
     {
+        let hosts = client.supports_user_avatars.then_some(&state.clients);
         if state
             .rooms
             .values()
@@ -139,18 +160,16 @@ pub async fn broadcast_room_list(state: &SharedState) {
                 &state.rooms,
                 Some(&client.user_id),
                 client.supports_room_access,
+                hosts,
             );
             send_message(Some(client.sender.clone()), &msg, Some(client_id));
         } else {
-            send_message(
-                Some(client.sender.clone()),
-                if client.supports_room_access {
-                    &access
-                } else {
-                    &legacy
-                },
-                Some(client_id),
-            );
+            let view = usize::from(client.supports_room_access)
+                | usize::from(client.supports_user_avatars) << 1;
+            let msg = shared[view].get_or_insert_with(|| {
+                build_room_list_msg(&state.rooms, None, client.supports_room_access, hosts)
+            });
+            send_message(Some(client.sender.clone()), msg, Some(client_id));
         }
     }
 }
@@ -237,7 +256,7 @@ mod tests {
     #[test]
     fn build_room_list_msg_empty() {
         let rooms = HashMap::new();
-        let msg = build_room_list_msg(&rooms, None, false);
+        let msg = build_room_list_msg(&rooms, None, false, None);
         assert_eq!(msg.msg_type, ServerMessageType::RoomList);
         let payload = msg.payload.unwrap();
         let list = payload.as_array().unwrap();
@@ -325,7 +344,7 @@ mod tests {
                 chat_history: Default::default(),
             },
         );
-        let msg = build_room_list_msg(&rooms, None, false);
+        let msg = build_room_list_msg(&rooms, None, false, None);
         let list = msg.payload.unwrap();
         let arr = list.as_array().unwrap();
         assert_eq!(arr.len(), 2);
@@ -575,6 +594,52 @@ mod access_tests {
     use super::*;
     use crate::test_helpers;
 
+    // Clients that show avatars learn whose room it is: the host's Jellyfin
+    // user id and name, while that host is connected.
+    #[tokio::test]
+    async fn room_lists_name_the_host_only_for_avatar_clients() {
+        let host_user = "0123456789abcdef0123456789abcdef";
+        let state = test_helpers::create_state();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx(host_user, "Ana", true);
+        host.room_id = Some("room-1".to_string());
+        let (mut avatars, mut avatars_rx) =
+            test_helpers::create_client_with_rx("u-avatars", "Bruno", true);
+        avatars.supports_user_avatars = true;
+        let (legacy, mut legacy_rx) =
+            test_helpers::create_client_with_rx("u-legacy", "Carla", true);
+        {
+            let mut locked = state.write().await;
+            locked.rooms.insert(
+                "room-1".to_string(),
+                test_helpers::create_room("room-1", "host"),
+            );
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("avatars".to_string(), avatars);
+            locked.clients.insert("legacy".to_string(), legacy);
+        }
+        let entry = |rx: &mut mpsc::Receiver<_>| {
+            test_helpers::recv_msg(rx).unwrap().payload.unwrap()[0].clone()
+        };
+
+        broadcast_room_list(&state).await;
+        let named = entry(&mut avatars_rx);
+        assert_eq!(named["host_user_id"], host_user);
+        assert_eq!(named["host_name"], "Ana");
+        let legacy_entry = entry(&mut legacy_rx);
+        assert!(legacy_entry.get("host_user_id").is_none());
+        assert!(legacy_entry.get("host_name").is_none());
+
+        send_room_list("avatars", &state).await;
+        assert_eq!(entry(&mut avatars_rx)["host_user_id"], host_user);
+
+        // A host that is not connected names nobody.
+        state.write().await.clients.remove("host");
+        broadcast_room_list(&state).await;
+        let unnamed = entry(&mut avatars_rx);
+        assert!(unnamed.get("host_user_id").is_none());
+        assert!(unnamed.get("host_name").is_none());
+    }
+
     #[test]
     fn room_lists_hide_unlisted_and_keep_legacy_entries_unchanged() {
         let mut public = test_helpers::create_room("public", "host");
@@ -586,7 +651,7 @@ mod access_tests {
             ("hidden".to_string(), hidden),
         ]);
         for feature in [false, true] {
-            let msg = build_room_list_msg(&rooms, None, feature);
+            let msg = build_room_list_msg(&rooms, None, feature, None);
             let payload = msg.payload.unwrap();
             let entries = payload.as_array().unwrap();
             assert_eq!(entries.len(), 1);

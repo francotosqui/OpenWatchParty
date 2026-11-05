@@ -67,10 +67,8 @@ mod administrator_notification_tests {
 }
 
 pub(crate) struct ParticipantListNotification {
-    legacy_senders: Vec<crate::messaging::ClientSender>,
-    moderation_senders: Vec<crate::messaging::ClientSender>,
-    legacy_message: WsMessage,
-    moderation_message: WsMessage,
+    /// One message per payload variant the members negotiated.
+    groups: Vec<(Vec<crate::messaging::ClientSender>, WsMessage)>,
 }
 
 /// Sent only to clients that negotiated this extension: legacy payloads stay
@@ -239,7 +237,8 @@ mod permission_tests {
 }
 
 /// Builds a `participant_list`: members in join order, with the host flagged
-/// and, for moderation-aware recipients, their client ids.
+/// and, for moderation-aware recipients, their client ids. Avatar-aware
+/// recipients also get each member's Jellyfin user id, when it has one.
 ///
 /// It is a message type of its own, rather than new fields on `room_state` or
 /// `participants_update`, because clients validate those payloads strictly and
@@ -249,6 +248,7 @@ fn participant_list_message(
     room: &Room,
     clients: &HashMap<String, Client>,
     include_ids: bool,
+    include_user_ids: bool,
 ) -> WsMessage {
     let participants: Vec<serde_json::Value> = room
         .clients
@@ -261,6 +261,9 @@ fn participant_list_message(
                 });
                 if include_ids {
                     participant["id"] = serde_json::json!(client_id);
+                }
+                if include_user_ids && !client.user_id.is_empty() {
+                    participant["user_id"] = serde_json::json!(client.user_id);
                 }
                 participant
             })
@@ -280,34 +283,34 @@ pub(crate) fn participant_list_notification(
     room: &Room,
     clients: &HashMap<String, Client>,
 ) -> ParticipantListNotification {
-    let mut legacy_senders = Vec::new();
-    let mut moderation_senders = Vec::new();
+    let mut groups: Vec<((bool, bool), Vec<crate::messaging::ClientSender>)> = Vec::new();
     for client in room.clients.iter().filter_map(|id| clients.get(id)) {
-        if client.supports_room_moderation {
-            moderation_senders.push(client.sender.clone());
-        } else {
-            legacy_senders.push(client.sender.clone());
+        let variant = (
+            client.supports_room_moderation,
+            client.supports_user_avatars,
+        );
+        match groups.iter_mut().find(|(known, _)| *known == variant) {
+            Some((_, senders)) => senders.push(client.sender.clone()),
+            None => groups.push((variant, vec![client.sender.clone()])),
         }
     }
     ParticipantListNotification {
-        legacy_senders,
-        moderation_senders,
-        legacy_message: participant_list_message(room, clients, false),
-        moderation_message: participant_list_message(room, clients, true),
+        groups: groups
+            .into_iter()
+            .map(|((ids, user_ids), senders)| {
+                (
+                    senders,
+                    participant_list_message(room, clients, ids, user_ids),
+                )
+            })
+            .collect(),
     }
 }
 
 pub(crate) fn send_participant_list(notification: &ParticipantListNotification) {
-    crate::messaging::send_to_senders(
-        &notification.legacy_senders,
-        &notification.legacy_message,
-        "participant list",
-    );
-    crate::messaging::send_to_senders(
-        &notification.moderation_senders,
-        &notification.moderation_message,
-        "participant list",
-    );
+    for (senders, message) in &notification.groups {
+        crate::messaging::send_to_senders(senders, message, "participant list");
+    }
 }
 
 pub(crate) fn send_room_participant_list(room: &Room, clients: &HashMap<String, Client>) {
@@ -378,7 +381,7 @@ mod tests {
         let mut room = test_helpers::create_room("room", "host");
         room.clients.push("guest".to_string());
 
-        let message = participant_list_message(&room, &clients, false);
+        let message = participant_list_message(&room, &clients, false, false);
 
         assert_eq!(message.msg_type, ServerMessageType::ParticipantList);
         assert_eq!(message.room.as_deref(), Some("room"));
@@ -394,6 +397,51 @@ mod tests {
     }
 
     #[test]
+    fn participant_list_includes_user_id_only_for_avatar_clients() {
+        let mut clients = HashMap::new();
+        let (mut host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
+        host.supports_room_moderation = true;
+        host.supports_user_avatars = true;
+        let (mut guest, mut guest_rx) = test_helpers::create_client_with_rx("u2", "Ana", true);
+        guest.supports_room_moderation = true;
+        let (legacy, mut legacy_rx) = test_helpers::create_client_with_rx("", "Bruno", true);
+        clients.insert("host".to_string(), host);
+        clients.insert("guest".to_string(), guest);
+        clients.insert("legacy".to_string(), legacy);
+        let mut room = test_helpers::create_room("room", "host");
+        room.clients.push("guest".to_string());
+        room.clients.push("legacy".to_string());
+
+        send_room_participant_list(&room, &clients);
+
+        assert_eq!(
+            test_helpers::recv_msg(&mut host_rx)
+                .unwrap()
+                .payload
+                .unwrap()["participants"],
+            serde_json::json!([
+                { "name": "Franco", "is_host": true, "id": "host", "user_id": "u1" },
+                { "name": "Ana", "is_host": false, "id": "guest", "user_id": "u2" },
+                { "name": "Bruno", "is_host": false, "id": "legacy" }
+            ])
+        );
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx)
+                .unwrap()
+                .payload
+                .unwrap()["participants"][1],
+            serde_json::json!({ "name": "Ana", "is_host": false, "id": "guest" })
+        );
+        assert_eq!(
+            test_helpers::recv_msg(&mut legacy_rx)
+                .unwrap()
+                .payload
+                .unwrap()["participants"][2],
+            serde_json::json!({ "name": "Bruno", "is_host": false })
+        );
+    }
+
+    #[test]
     fn skips_members_without_a_connected_client() {
         let mut clients = HashMap::new();
         let (host, _host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
@@ -401,7 +449,7 @@ mod tests {
         let mut room = test_helpers::create_room("room", "host");
         room.clients.push("gone".to_string());
 
-        let message = participant_list_message(&room, &clients, false);
+        let message = participant_list_message(&room, &clients, false, false);
 
         assert_eq!(
             message.payload.unwrap()["participants"],

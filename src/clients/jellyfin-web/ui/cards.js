@@ -48,7 +48,14 @@
       }
       const join = createElement('button', 'owp-btn secondary', t(pending ? 'cancel' : room.approval ? 'askToJoin' : 'join'));
       join.dataset.roomId = String(room.id);
-      item.append(details, join);
+      // The host's photo before the room name, when the server names the host.
+      if (room.host_user_id && OWP.avatars) {
+        const host = createElement('div', 'owp-room-host');
+        host.append(OWP.avatars.create(room.host_name, room.host_user_id), details);
+        item.append(host, join);
+      } else {
+        item.append(details, join);
+      }
       item.onclick = () => {
         if (pending) { OWP.actions.cancelJoin(); return; }
         // A room without media has nothing to start here. From the player,
@@ -135,6 +142,8 @@
     scalable.append(padder, image, overlay);
 
     const name = createElement('div', 'cardText cardTextCentered cardText-first owp-card-name');
+    // A small photo of the host; without one (no image) it is not shown.
+    if (room.host_user_id && OWP.avatars) name.appendChild(OWP.avatars.create(room.host_name, room.host_user_id, 'owp-card-avatar'));
     name.appendChild(createElement('bdi', '', OWP.i18n.localizeRoomName(room.name)));
     const media = createElement('div', 'cardText cardTextCentered cardText-secondary owp-card-media');
     media.appendChild(createElement('bdi', 'owp-media-title', room.media_id ? t('loading') : t('noMedia')));
@@ -257,6 +266,7 @@
     card.dataset.mediaId = String(room.media_id || '');
     card.dataset.approval = String(Boolean(room.approval));
     card.dataset.count = String(room.count);
+    card.dataset.host = String(room.host_user_id || '');
     card.replaceChildren(buildCardContent(room, index));
     attachMediaInfo(card, room.media_id);
     attachCardHandlers(card, room);

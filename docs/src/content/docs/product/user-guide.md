@@ -25,7 +25,7 @@ Before using OpenWatchParty, ensure your Jellyfin administrator has:
 2. **Find the Watch Party button** - Move the pointer over the video to reveal the player header, then select the **Watch Party** icon (a screen with two viewers) next to **Cast**
 3. **Click to open the panel** - A slide-out panel appears
 4. **Click "Create Room"** - The room is created and named after you (`<you>'s room`)
-5. **Wait for participants** - The room appears in everyone's "Available rooms" list and on the Jellyfin home page
+5. **Wait for participants** - The room appears in everyone's "Available rooms" list and on the Jellyfin home page, with your profile picture
 
 The Watch Party button in the Jellyfin header opens the same panel, but **Create Room** stays disabled, with a hint, until something is playing: a room always starts from the video you are watching.
 
@@ -244,6 +244,10 @@ The chat feature allows you to communicate with other watch party participants i
 - **Earlier messages** - Joining a room shows its last 50 messages, without counting them as unread
 - **Message limit** - Messages are limited to 500 characters
 - **Emoji picker** - Choose from categorized emojis or type shortcodes like `:smile:` with autocomplete suggestions
+- **Profile pictures** - Messages and the participant list show each member's Jellyfin profile picture, or their initial when they have none
+- **Typing indicator** - "Alice is typing…" shows above the input while someone writes
+- **Mentions** - Type `@` to pick a participant; a message that mentions you is highlighted, and while the chat is closed its toast says "Mentioned you" and the badge turns to the accent color
+- **Notifications** - The bell next to the emoji button chooses which messages show a toast while the chat is closed: all messages (default) or mentions only. Every message still counts in the badge. The choice is kept per Jellyfin user in this browser
 
 ### Notes
 - The room keeps its last 50 messages in memory for late joiners; they disappear when the room closes or the server restarts. SERVER lines are local to each client and are not part of this history.
@@ -299,8 +303,9 @@ These appear briefly in the center of the screen:
 
 ### Chat Notifications (Bottom-Right)
 
-When the chat is closed, incoming messages appear as toasts in the bottom-right corner, so they do not cover the room bar:
+When the chat is closed, or out of sight because the player's controls are hidden, incoming messages appear as toasts in the bottom-right corner, so they do not cover the room bar:
 - Shows the sender's username and message
+- Sits above the player's controls, and moves down to the corner while they are hidden
 - Stacks up to 5 messages
 - Click to dismiss, or they fade after 5 seconds
 

@@ -41,13 +41,14 @@
   // `osdHeader-hidden` while the player's controls are hidden.
   const PLAYER_HEADER_SELECTOR = '.osdHeader';
   const PLAYER_CONTROLS_HIDDEN_SELECTOR = '.osdHeader.osdHeader-hidden';
+  const PLAYER_CONTROLS_HIDDEN_ROOT_CLASS = 'owp-player-controls-hidden';
   // The player takes a press on its page as play/pause (by touch, as showing
   // its controls), except on its bottom controls and up-next card. Buttons
   // and fields there do their own thing.
   const PLAYER_PAGE_SELECTOR = '#videoOsdPage';
   const PLAYER_CONTROLS_SELECTOR = '.videoOsdBottom, .upNextContainer, button, a, input, select, textarea, [role="button"]';
   // OWP's own elements outside the panel: a press on them keeps it open.
-  const KEEP_PANEL_OPEN_SELECTOR = `.${HEADER_BTN_CLASS}, .owp-toast-container, .owp-toast-system, #owp-emoji-panel, #owp-emoji-autocomplete`;
+  const KEEP_PANEL_OPEN_SELECTOR = `.${HEADER_BTN_CLASS}, .owp-toast-container, .owp-toast-system, #owp-emoji-panel, #owp-emoji-autocomplete, #owp-chat-bell-menu, #owp-mention-list`;
   const TEXT_FIELD_SELECTOR = 'input, textarea, [contenteditable]';
   const UP_NEXT_SELECTOR = '.owp-queue-next';
 
@@ -176,11 +177,18 @@
   // as it was when they show. It stays while someone is typing in it or the
   // queue's "up next" countdown is in it (the host's Cancel and Next).
   const applyPlayerControls = () => {
+    const controlsHidden = !!document.querySelector(PLAYER_CONTROLS_HIDDEN_SELECTOR);
+    // Chat toasts sit above the controls and go down to the corner without them.
+    document.documentElement.classList.toggle(PLAYER_CONTROLS_HIDDEN_ROOT_CLASS, controlsHidden);
     const panel = document.getElementById(PANEL_ID);
     if (!panel) return;
-    const fade = !!document.querySelector(PLAYER_CONTROLS_HIDDEN_SELECTOR) && !typingInPanel(panel)
-      && !panel.querySelector(UP_NEXT_SELECTOR);
-    if (panel.classList.contains(PANEL_CONTROLS_HIDDEN_CLASS) !== fade) panel.classList.toggle(PANEL_CONTROLS_HIDDEN_CLASS, fade);
+    const fade = controlsHidden && !typingInPanel(panel) && !panel.querySelector(UP_NEXT_SELECTOR);
+    if (panel.classList.contains(PANEL_CONTROLS_HIDDEN_CLASS) === fade) return;
+    panel.classList.toggle(PANEL_CONTROLS_HIDDEN_CLASS, fade);
+    // The bell's menu is drawn over the page and would stay behind alone;
+    // messages that came while the chat was out of sight are read once it is back.
+    if (fade) OWP.chatAlerts?.closeMenu?.();
+    else if (OWP.chat?.isChatVisible?.()) OWP.chat.markRead();
   };
 
   // The header keeps its element and swaps classes when the player opens and
