@@ -3,8 +3,8 @@
   const state = OWP.state;
   const t = OWP.i18n.t;
 
-  // Which chat messages show a floating toast while the chat is closed: all of
-  // them (the default) or only those that mention this member. Kept per
+  // Which chat messages show a floating toast while the chat is out of view:
+  // all of them (the default) or only those that mention this member. Kept per
   // Jellyfin user in this browser; unreadable storage means "all".
   const MODES = ['all', 'mentions'];
   const storageKey = () => `owp-chat-toasts-${state.userId || ''}`;
@@ -23,14 +23,14 @@
     try {
       globalThis.localStorage?.setItem(storageKey(), value);
     } catch {
-      // Storage unavailable: the choice lasts until the menu re-reads it.
+      // Storage unavailable: mode() falls back to "all".
     }
     updateBell();
   };
 
   const hasUnreadMention = () => unreadMention;
 
-  // A new message from someone else while the chat is closed.
+  // A new message from someone else while the chat is out of view.
   const notify = message => {
     if (message.mentionsMe) {
       unreadMention = true;

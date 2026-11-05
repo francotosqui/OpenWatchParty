@@ -577,7 +577,7 @@
     .owp-chat-bell-option:hover { background: rgba(var(--owp-ink), 0.06); }
     .owp-chat-bell-option[aria-checked="true"] { color: var(--owp-accent); }
     .owp-chat-bell-option[aria-checked="true"]::after { content: '✓'; }
-    /* @-mention suggestions above the chat input */
+    /* @-mention suggestions over the page, above or below the chat input */
     .owp-mention-list {
       position: fixed; z-index: 21000; box-sizing: border-box; padding: ${px(3)};
       background: rgb(var(--owp-surface)); border: 1px solid rgba(var(--owp-ink), 0.15); border-radius: ${round(6)}; box-shadow: 0 ${px(4)} ${px(12)} rgba(0, 0, 0, 0.45);
