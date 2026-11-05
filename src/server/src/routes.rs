@@ -900,6 +900,7 @@ mod tests {
                 iss: config.issuer.clone(),
                 exp: expiration as usize,
                 iat: (crate::utils::now_ms() / 1000) as usize,
+                typ: None,
             },
             &EncodingKey::from_secret(config.secret.as_bytes()),
         )
@@ -1271,6 +1272,7 @@ mod tests {
                 iss: config.issuer.clone(),
                 exp: expiration as usize,
                 iat: (crate::utils::now_ms() / 1000) as usize,
+                typ: None,
             },
             &EncodingKey::from_secret(config.secret.as_bytes()),
         )

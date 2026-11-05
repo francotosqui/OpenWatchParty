@@ -124,7 +124,7 @@ pub async fn send_room_list(client_id: &str, state: &SharedState) {
     let client = state
         .clients
         .get(client_id)
-        .filter(|client| client.authenticated);
+        .filter(|client| client.authenticated && !client.admin);
     let sender = client.map(|client| client.sender.clone());
     let msg = build_room_list_msg(
         &state.rooms,
@@ -148,7 +148,7 @@ pub async fn broadcast_room_list(state: &SharedState) {
     for (client_id, client) in state
         .clients
         .iter()
-        .filter(|(_, client)| client.authenticated)
+        .filter(|(_, client)| client.authenticated && !client.admin)
     {
         let hosts = client.supports_user_avatars.then_some(&state.clients);
         if state
@@ -271,6 +271,7 @@ mod tests {
             Room {
                 room_id: "r1".to_string(),
                 name: "Room 1".to_string(),
+                opened_at_ms: 0,
                 host_id: "host1".to_string(),
                 administrator_user_id: None,
                 saved_session_id: None,
@@ -310,6 +311,7 @@ mod tests {
             Room {
                 room_id: "r2".to_string(),
                 name: "Room 2".to_string(),
+                opened_at_ms: 0,
                 host_id: "host2".to_string(),
                 administrator_user_id: None,
                 saved_session_id: None,
@@ -459,6 +461,26 @@ mod tests {
             anon_rx.try_recv().is_err(),
             "unauthenticated clients must not receive the room list"
         );
+    }
+
+    #[tokio::test]
+    async fn admin_connections_are_left_out_of_room_list_broadcasts() {
+        let (user, mut user_rx) = test_helpers::create_client_with_rx("ua", "A", true);
+        let (mut admin, mut admin_rx) = test_helpers::create_client_with_rx("ub", "B", true);
+        admin.admin = true;
+        let mut state = crate::types::ServerState::default();
+        state.clients.insert("a".to_string(), user);
+        state.clients.insert("b".to_string(), admin);
+        let state: SharedState = std::sync::Arc::new(tokio::sync::RwLock::new(state));
+
+        broadcast_room_list(&state).await;
+        send_room_list("b", &state).await;
+
+        assert_eq!(
+            test_helpers::recv_msg(&mut user_rx).unwrap().msg_type,
+            ServerMessageType::RoomList
+        );
+        assert!(admin_rx.try_recv().is_err());
     }
 
     #[tokio::test]

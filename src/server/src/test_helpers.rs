@@ -23,6 +23,7 @@ pub fn create_client_with_rx(
         user_id: user_id.to_string(),
         user_name: user_name.to_string(),
         authenticated,
+        admin: false,
         session_expires_at: None,
         authentication_version: 0,
         supports_host_transfer: false,
@@ -50,6 +51,7 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
     Room {
         room_id: room_id.to_string(),
         name: format!("{host_id}'s room"),
+        opened_at_ms: 0,
         host_id: host_id.to_string(),
         administrator_user_id: None,
         saved_session_id: None,

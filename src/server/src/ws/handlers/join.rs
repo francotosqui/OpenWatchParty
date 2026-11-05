@@ -574,6 +574,7 @@ mod tests {
         room.clients = vec!["guest".to_string()];
         room.pending_host_reconnect = Some(crate::types::PendingHostReconnect {
             user_id: "user-host".to_string(),
+            user_name: "Host".to_string(),
             generation: 1,
         });
         room.permissions = crate::types::RoomPermissions {
@@ -619,6 +620,7 @@ mod tests {
         room.clients = vec!["observer".to_string()];
         room.pending_host_reconnect = Some(crate::types::PendingHostReconnect {
             user_id: "user-host".to_string(),
+            user_name: "Host".to_string(),
             generation: 1,
         });
         room.permissions.seek = true;
@@ -647,6 +649,7 @@ mod tests {
         room.clients.clear();
         room.pending_host_reconnect = Some(crate::types::PendingHostReconnect {
             user_id: "user-host".to_string(),
+            user_name: "Host".to_string(),
             generation: 1,
         });
 
@@ -665,6 +668,7 @@ mod tests {
         room.clients.clear();
         room.pending_host_reconnect = Some(crate::types::PendingHostReconnect {
             user_id: "anonymous".to_string(),
+            user_name: "Host".to_string(),
             generation: 1,
         });
 

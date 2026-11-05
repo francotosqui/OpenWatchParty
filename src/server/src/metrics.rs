@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::types::ServerState;
 
 /// Message types a client can send, as named on the wire.
-pub const CLIENT_MESSAGE_TYPES: [&str; 36] = [
+pub const CLIENT_MESSAGE_TYPES: [&str; 37] = [
     "set_room_access",
     "cancel_join",
     "answer_join",
@@ -47,11 +47,12 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 36] = [
     "queue_availability",
     "readiness",
     "start_now",
+    "admin_close_room",
     "unknown",
 ];
 
 /// Message types the server sends, plus `other` for anything not listed.
-pub const SERVER_MESSAGE_TYPES: [&str; 31] = [
+pub const SERVER_MESSAGE_TYPES: [&str; 32] = [
     "room_access",
     "join_requests",
     "join_pending",
@@ -82,11 +83,12 @@ pub const SERVER_MESSAGE_TYPES: [&str; 31] = [
     "queue_details",
     "start_state",
     "chat_history",
+    "admin_rooms",
     "other",
 ];
 
 /// Error codes the server sends, plus `other` for anything not listed.
-pub const ERROR_CODES: [&str; 40] = [
+pub const ERROR_CODES: [&str; 42] = [
     "AUTHENTICATION_REQUIRED",
     "AUTHENTICATION_FAILED",
     "AUTHENTICATION_EXPIRED",
@@ -126,6 +128,8 @@ pub const ERROR_CODES: [&str; 40] = [
     "SAVED_SESSION_PERMISSION_REQUIRED",
     "SAVED_SESSION_ALREADY_IN_ROOM",
     "ROOM_SAVE_IN_PROGRESS",
+    "ADMIN_PERMISSION_REQUIRED",
+    "ADMIN_CONNECTION_RESTRICTED",
     "other",
 ];
 

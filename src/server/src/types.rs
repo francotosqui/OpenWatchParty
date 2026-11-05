@@ -22,6 +22,9 @@ pub struct Client {
     pub user_id: String,
     pub user_name: String,
     pub authenticated: bool, // Whether client has authenticated via auth message
+    /// An administrator connection from the plugin page: it sees every room,
+    /// joins none and may only close rooms.
+    pub admin: bool,
     /// JWT `exp` as Unix seconds. `None` is reserved for insecure no-auth sessions.
     pub session_expires_at: Option<u64>,
     pub authentication_version: u64,
@@ -69,6 +72,9 @@ pub struct Room {
     pub admitted_users: HashSet<String>,
     pub room_id: String,
     pub name: String,
+    /// When the room was created or resumed (Unix ms), for the active rooms page.
+    #[serde(skip)]
+    pub opened_at_ms: u64,
     pub host_id: String,
     #[serde(skip)]
     pub administrator_user_id: Option<String>,
@@ -172,6 +178,7 @@ pub struct ChatEntry {
 #[derive(Debug, Clone)]
 pub struct PendingHostReconnect {
     pub user_id: String,
+    pub user_name: String,
     pub generation: u64,
 }
 
@@ -284,6 +291,7 @@ pub enum ClientMessageType {
     QueueAvailability,
     Readiness,
     StartNow,
+    AdminCloseRoom,
     #[serde(other)]
     Unknown,
 }
@@ -328,6 +336,7 @@ impl ClientMessageType {
             Self::QueueAvailability => "queue_availability",
             Self::Readiness => "readiness",
             Self::StartNow => "start_now",
+            Self::AdminCloseRoom => "admin_close_room",
             Self::Unknown => "unknown",
         }
     }
@@ -370,6 +379,7 @@ pub enum ServerMessageType {
     QueueDetails,
     StartState,
     ChatHistory,
+    AdminRooms,
 }
 
 impl ServerMessageType {
@@ -408,6 +418,7 @@ impl ServerMessageType {
             Self::QueueDetails => "queue_details",
             Self::StartState => "start_state",
             Self::ChatHistory => "chat_history",
+            Self::AdminRooms => "admin_rooms",
         }
     }
 }
@@ -673,6 +684,7 @@ mod tests {
             QueueAvailability,
             Readiness,
             StartNow,
+            AdminCloseRoom,
         ] {
             let wire = serde_json::to_string(&message_type).unwrap();
             assert_eq!(wire, format!("\"{}\"", message_type.as_str()));
@@ -710,6 +722,7 @@ impl Room {
         Self {
             room_id,
             name,
+            opened_at_ms: now,
             clients: vec![host_id.clone()],
             ready_clients: HashSet::from([host_id.clone()]),
             host_id,

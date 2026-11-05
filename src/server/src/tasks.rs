@@ -155,6 +155,54 @@ pub fn spawn_heartbeat(state: SharedState, tasks: &AppTasks) -> JoinHandle<()> {
     })
 }
 
+/// Sends the open rooms to the administrator connections when they changed
+/// since the last tick. Returns whether it sent them.
+pub(crate) async fn admin_rooms_tick(
+    state: &SharedState,
+    last: &mut Option<Vec<crate::admin::AdminRoom>>,
+) -> bool {
+    let locked = state.read().await;
+    let senders: Vec<_> = locked
+        .clients
+        .values()
+        .filter(|client| client.admin)
+        .map(|client| client.sender.clone())
+        .collect();
+    if senders.is_empty() {
+        *last = None;
+        return false;
+    }
+    let rooms = crate::admin::admin_rooms(&locked);
+    drop(locked);
+    if last.as_ref() == Some(&rooms) {
+        return false;
+    }
+    let message = crate::admin::admin_rooms_message(&rooms, crate::utils::now_ms());
+    crate::messaging::send_to_senders(&senders, &message, "admin rooms");
+    *last = Some(rooms);
+    true
+}
+
+pub fn spawn_admin_rooms(state: SharedState, tasks: &AppTasks) -> JoinHandle<()> {
+    let cancellation = tasks.cancellation_token();
+    tasks.spawn(async move {
+        let mut last = None;
+        loop {
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => break,
+                _ = tokio::time::sleep(Duration::from_millis(
+                    crate::ws::constants::ADMIN_ROOMS_INTERVAL_MS,
+                )) => {}
+            }
+            if cancellation.is_cancelled() {
+                break;
+            }
+            admin_rooms_tick(&state, &mut last).await;
+        }
+    })
+}
+
 /// Removes a session that missed the heartbeat. Its connection task then
 /// ends with the `heartbeat_timeout` close reason. The sweep picks zombies
 /// under a read lock; one that answered since then is kept.
@@ -248,6 +296,44 @@ pub fn shutdown_signal() -> Pin<Box<dyn Future<Output = ()> + Send>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn admin_rooms_tick_sends_only_changes() {
+        let state = crate::test_helpers::create_state();
+        let mut last = None;
+        let (host, _host_rx) = crate::test_helpers::create_client_with_rx("u-host", "Host", true);
+        state.write().await.clients.insert("host".into(), host);
+        let mut room = crate::test_helpers::create_room("r1", "host");
+        room.state.play_state = crate::types::PlayState::Playing;
+        state.write().await.rooms.insert("r1".into(), room);
+
+        assert!(!admin_rooms_tick(&state, &mut last).await);
+        assert!(last.is_none());
+
+        let (mut admin, mut rx) = crate::test_helpers::create_client_with_rx("u-a", "Admin", true);
+        admin.admin = true;
+        state.write().await.clients.insert("admin".into(), admin);
+
+        assert!(admin_rooms_tick(&state, &mut last).await);
+        let first = crate::test_helpers::recv_msg(&mut rx).unwrap();
+        assert_eq!(first.msg_type, crate::types::ServerMessageType::AdminRooms);
+        assert_eq!(first.payload.unwrap()["rooms"][0]["playing"], true);
+
+        assert!(!admin_rooms_tick(&state, &mut last).await);
+        assert!(crate::test_helpers::recv_msg(&mut rx).is_none());
+
+        state
+            .write()
+            .await
+            .rooms
+            .get_mut("r1")
+            .unwrap()
+            .state
+            .play_state = crate::types::PlayState::Paused;
+        assert!(admin_rooms_tick(&state, &mut last).await);
+        let second = crate::test_helpers::recv_msg(&mut rx).unwrap();
+        assert_eq!(second.payload.unwrap()["rooms"][0]["playing"], false);
+    }
 
     #[tokio::test]
     async fn a_zombie_that_answers_before_its_removal_is_kept() {

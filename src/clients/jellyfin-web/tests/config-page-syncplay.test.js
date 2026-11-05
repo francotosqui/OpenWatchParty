@@ -96,7 +96,11 @@ const loadConfigPage = (storedConfig, { diagnostics } = {}) => {
   const updateAuthStatus = page.updateAuthStatus;
   const authStatusCalls = [];
   page.init = async () => {};
-  page.runDiagnostics = async () => diagnostics;
+  const diagnosticsCalls = [];
+  page.runDiagnostics = async (active) => { diagnosticsCalls.push(active); return diagnostics; };
+  // The active rooms section talks to the session server; these tests cover
+  // the settings form, so it stays idle (config-page-rooms.test.js covers it).
+  context.OpenWatchPartyActiveRooms.start = () => {};
   page.updateAuthStatus = (target, config, result) => {
     authStatusCalls.push([config, result]);
     updateAuthStatus.call(page, target, config, result);
@@ -105,6 +109,7 @@ const loadConfigPage = (storedConfig, { diagnostics } = {}) => {
   const settle = () => new Promise(resolve => setImmediate(resolve));
   return {
     fields,
+    diagnosticsCalls,
     saved,
     authStatusCalls,
     authStatus(config, result) {
@@ -129,6 +134,14 @@ const loadConfigPage = (storedConfig, { diagnostics } = {}) => {
     }
   };
 };
+
+describe('configuration page diagnostics on open', () => {
+  it('runs the full diagnostic, which checks the session server, when the page opens', async () => {
+    const form = loadConfigPage({ JwtSecret: 'x' }, { diagnostics: { OverallStatus: 'ready', Checks: [] } });
+    await form.show();
+    assert.deepEqual(form.diagnosticsCalls, [true]);
+  });
+});
 
 describe('configuration page native SyncPlay setting', () => {
   const baseConfig = {

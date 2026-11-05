@@ -136,6 +136,35 @@ curl -H "Authorization: MediaBrowser Token=\"YOUR_API_KEY\"" \
 }
 ```
 
+### GET /OpenWatchParty/AdminToken
+
+Returns a short administrator token for the **Active rooms** section of the
+plugin configuration page. Only Jellyfin administrators may call it
+(`RequiresElevation`); it shares the per-user rate limit of `Token`.
+
+The token has the session claims plus `"typ": "admin"`, is signed like session
+tokens (HS256 secret or the active RS256 pairing key) and lasts 300 seconds.
+The session server accepts it only for administrator connections (see
+[Active rooms for administrators](/technical/protocol/#active-rooms-for-administrators-186));
+it cannot be used to join rooms, and session tokens cannot be used as
+administrator tokens.
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "expires_in": 300,
+  "session_server_url": "wss://media.example/ws",
+  "protocol_version": 1
+}
+```
+
+| Status | Meaning |
+|--------|---------|
+| 200 | Token issued |
+| 409 | `{"error": "Administrator access requires authentication", "auth_required": true}`: no JWT secret and no active pairing key (insecure development mode) |
+| 429 | Rate limit exceeded |
+| 500, 503 | Same configuration errors as `GET /OpenWatchParty/Token` |
+
 ## JWT Token Structure
 
 When authentication is enabled, the generated token contains:
@@ -252,6 +281,8 @@ The diagnostics routes require administrator elevation:
   destination instead and expects the server's `client_hello`; that check passes
   without a session version. A failed check is reported in the response rather
   than changing the plugin configuration.
+  The configuration page runs it when it opens, so its badge reflects the
+  session server too; `Status` alone does not contact that server.
 
 The RSA signing-key routes also require administrator elevation:
 

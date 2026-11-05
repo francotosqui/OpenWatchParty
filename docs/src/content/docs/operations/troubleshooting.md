@@ -162,6 +162,10 @@ See [Configuration: Room queue and lifecycle](/operations/configuration/#room-qu
    - Check host's connection
    - Check server logs for errors
 
+4. **Closed by an administrator**
+   - The notice says "The server administrator closed the room"
+   - The session server logs `Administrator closed room room_id=… admin_user=…`
+
 **Technical details:** See [Architecture - Host Network Disconnect](/technical/architecture/#host-network-disconnect)
 
 ### Authentication Errors
@@ -253,6 +257,27 @@ The health probe runs inside the Jellyfin process, so it resolves the session se
 3. Re-run `Run diagnostics`: `session_http` must report the session server version and protocol, or that the session server answers on the WebSocket, before a watch party can work.
 
 Behind a reverse proxy that sends only `/ws` and `/invite` to the session server, `/health` on that host is Jellyfin's own. The check then connects to the WebSocket destination instead: it passes as "Session server answers on the WebSocket", fails with `SESSION_WEBSOCKET` when the handshake is refused (the HTTP status is shown), and with `SESSION_NOT_OWP` when something else answers there.
+
+### Active rooms section shows a problem
+
+The **Active rooms** section of the plugin page connects to the session server
+the same way players do, with a five-minute administrator token.
+
+- **"Requires authentication (JWT secret or pairing key)"**: the plugin runs in
+  insecure development mode. Configure a JWT secret or activate the pairing key;
+  without signatures there is no way to tell an administrator apart.
+- **"The session server doesn't support this function; update it"**: the
+  session server is older than the plugin. Update it to the same release.
+- **"The session server runs without authentication…"**: the session server has
+  `ALLOW_INSECURE_NO_AUTH` enabled or no JWT secret, while the plugin signs
+  tokens. Give the session server the plugin's JWT secret (or pair it) and turn
+  insecure mode off.
+- **"The session server refused the administrator token…"**: the plugin and
+  the session server do not share the same JWT secret or pairing key (the same
+  mismatch that makes players fail). The page retries every 10 seconds.
+- **"Couldn't connect to the session server"**: the page retries every 10
+  seconds. Check that your browser reaches the **Session server URL** (the same
+  check as for players) and that the reverse proxy forwards `/ws`.
 
 ### HLS Streaming Issues
 

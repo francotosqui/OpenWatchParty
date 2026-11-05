@@ -81,6 +81,8 @@ pub(super) enum ErrorCode {
     SavedSessionPermissionRequired,
     SavedSessionAlreadyInRoom,
     RoomSaveInProgress,
+    AdminPermissionRequired,
+    AdminConnectionRestricted,
 }
 
 pub(super) fn error_message(
@@ -153,6 +155,14 @@ fn authentication_is_valid(client: &crate::types::Client, now_ms: u64) -> bool {
         && client
             .session_expires_at
             .is_none_or(|expiration| expiration.saturating_mul(1000) > now_ms)
+}
+
+async fn is_admin_connection(client_id: &str, state: &SharedState) -> bool {
+    let state = state.read().await;
+    state
+        .clients
+        .get(client_id)
+        .is_some_and(|client| client.admin && client.authenticated)
 }
 
 async fn has_expired_session(client_id: &str, state: &SharedState) -> bool {
@@ -285,7 +295,37 @@ pub(super) async fn client_msg(
         return true;
     }
 
+    let admin = is_admin_connection(client_id, state).await;
+    if admin
+        && !matches!(
+            parsed.msg_type,
+            ClientMessageType::Auth | ClientMessageType::Ping | ClientMessageType::AdminCloseRoom
+        )
+    {
+        send_error(
+            client_id,
+            state,
+            ErrorCode::AdminConnectionRestricted,
+            "Administrator connections can only close rooms",
+        )
+        .await;
+        return false;
+    }
+    if !admin && parsed.msg_type == ClientMessageType::AdminCloseRoom {
+        send_error(
+            client_id,
+            state,
+            ErrorCode::AdminPermissionRequired,
+            "Administrator permission required",
+        )
+        .await;
+        return false;
+    }
+
     match parsed.msg_type {
+        ClientMessageType::AdminCloseRoom => {
+            super::handlers::handle_admin_close_room(client_id, &parsed, state).await
+        }
         ClientMessageType::Auth => handle_auth(client_id, &parsed, state, jwt_config).await,
         ClientMessageType::ListRooms => handle_list_rooms(client_id, state).await,
         ClientMessageType::CreateRoom => handle_create_room(client_id, &parsed, state).await,
@@ -416,6 +456,65 @@ mod tests {
         }
         assert_eq!(count, 100);
         assert!(bytes <= 25_600, "queued pongs retained {bytes} bytes");
+    }
+
+    #[tokio::test]
+    async fn admin_connections_may_only_close_rooms() {
+        let state = test_helpers::create_state();
+        let (mut admin, mut rx) = test_helpers::create_client_with_rx("u-admin", "Admin", true);
+        admin.admin = true;
+        state
+            .write()
+            .await
+            .clients
+            .insert("admin".to_string(), admin);
+        let create = serde_json::json!({ "type": "create_room", "payload": {}, "ts": 0 });
+
+        client_msg(
+            "admin",
+            warp::ws::Message::text(create.to_string()),
+            &state,
+            &insecure_jwt_config(),
+            &crate::tasks::AppTasks::new(),
+        )
+        .await;
+
+        assert_error_code(
+            &test_helpers::recv_msg(&mut rx).unwrap(),
+            "ADMIN_CONNECTION_RESTRICTED",
+        );
+        assert!(state.read().await.rooms.is_empty());
+    }
+
+    #[tokio::test]
+    async fn session_clients_may_not_close_rooms_as_admin() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("u-user", "User", true);
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("user".to_string(), client);
+            locked
+                .rooms
+                .insert("r1".to_string(), test_helpers::create_room("r1", "other"));
+        }
+        let close = serde_json::json!({
+            "type": "admin_close_room", "payload": { "room_id": "r1" }, "ts": 0
+        });
+
+        client_msg(
+            "user",
+            warp::ws::Message::text(close.to_string()),
+            &state,
+            &insecure_jwt_config(),
+            &crate::tasks::AppTasks::new(),
+        )
+        .await;
+
+        assert_error_code(
+            &test_helpers::recv_msg(&mut rx).unwrap(),
+            "ADMIN_PERMISSION_REQUIRED",
+        );
+        assert!(state.read().await.rooms.contains_key("r1"));
     }
 
     #[tokio::test]
@@ -588,6 +687,14 @@ mod tests {
                 "SAVED_SESSION_ALREADY_IN_ROOM",
             ),
             (ErrorCode::RoomSaveInProgress, "ROOM_SAVE_IN_PROGRESS"),
+            (
+                ErrorCode::AdminPermissionRequired,
+                "ADMIN_PERMISSION_REQUIRED",
+            ),
+            (
+                ErrorCode::AdminConnectionRestricted,
+                "ADMIN_CONNECTION_RESTRICTED",
+            ),
         ];
         for (code, expected) in cases {
             assert_eq!(serde_json::to_value(code).unwrap(), expected);

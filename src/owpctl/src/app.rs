@@ -163,6 +163,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             }
             Ok(())
         }
+        Command::Rooms(arguments) => crate::rooms::run(&paths, arguments, cli.json),
         Command::Ui(arguments) => crate::ui::run(paths, arguments),
         Command::Logs(arguments) => {
             if !paths.config_file.exists() {

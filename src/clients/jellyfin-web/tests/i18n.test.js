@@ -72,6 +72,20 @@ describe('localization catalogs', () => {
     assert.equal(localizeRoomClosedReason('Host started a new room'), 'Host started a new room');
   });
 
+  it("translates the server administrator's closing reason", () => {
+    const { localizeRoomClosedReason } = OWP.i18n;
+    const expected = {
+      en: 'The server administrator closed the room',
+      es: 'El administrador del servidor cerró la sala',
+      fr: 'L’administrateur du serveur a fermé le salon',
+      de: 'Der Serveradministrator hat den Raum geschlossen'
+    };
+    for (const [language, text] of Object.entries(expected)) {
+      document.documentElement.lang = language;
+      assert.equal(localizeRoomClosedReason('Server administrator closed the room'), text);
+    }
+  });
+
   it('shows the server default room name in the viewer language, and other names as they are', () => {
     const { localizeRoomName } = OWP.i18n;
     document.documentElement.lang = 'es';
